@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::Context;
 use log::debug;
@@ -27,6 +27,7 @@ pub(crate) fn commit_add_workload(language: &str, workload: &str) -> anyhow::Res
     let git_repo = git2::Repository::open_from_env().context("Failed to open git repository")?;
     let mut index = git_repo.index().context("Failed to get index")?;
 
+    // Add the workload to the index
     index
         .add_all(
             [PathBuf::from("workloads")
@@ -37,7 +38,10 @@ pub(crate) fn commit_add_workload(language: &str, workload: &str) -> anyhow::Res
             None,
         )
         .context("Failed to add workload to index")?;
-
+    // Add the config file to the index
+    index
+        .add_path(PathBuf::from("config.toml").as_path())
+        .context("Failed to add workload to index")?;
     // Commit the changes
     let mut index = git_repo.index().context("Failed to get index")?;
     index.write().context("Failed to write index")?;
@@ -71,6 +75,8 @@ pub(crate) fn commit_remove_workload(language: &str, workload: &str) -> anyhow::
 
     // Commit the changes
     let mut index = git_repo.index().context("Failed to get index")?;
+
+    // Add the workload to the index
     index
         .add_all(
             [PathBuf::from("workloads")
@@ -80,6 +86,11 @@ pub(crate) fn commit_remove_workload(language: &str, workload: &str) -> anyhow::
             git2::IndexAddOption::DEFAULT,
             None,
         )
+        .context("Failed to add workload to index")?;
+
+    // Add the config file to the index
+    index
+        .add_path(PathBuf::from("config.toml").as_path())
         .context("Failed to add workload to index")?;
 
     index.write().context("Failed to write index")?;
@@ -152,4 +163,41 @@ pub(crate) fn change_branch(repo_path: &PathBuf, branch: &str) -> anyhow::Result
         .context("Failed to reset branch")?;
 
     Ok(())
+}
+
+/// Get the hash of a path in a git repository
+pub(crate) fn hash(repo_path: &Path, index_path: &Path) -> anyhow::Result<String> {
+    debug!("repo path: {}", repo_path.display());
+    let git_repo = git2::Repository::open(repo_path).context("Failed to open git repository")?;
+
+    debug!("index path: {}", index_path.display());
+    let mut index = git_repo.index().context("Failed to get index")?;
+    index.clear().context("Failed to clear index")?;
+
+    index
+        .add_all([index_path], git2::IndexAddOption::DEFAULT, None)
+        .context("Failed to add files to index")?;
+
+    debug!(
+        "index {:?}",
+        index
+            .iter()
+            .map(|entry| std::ffi::CString::new(&entry.path[..]).unwrap())
+            .collect::<Vec<_>>()
+    );
+
+    let tree_id = index.write_tree().context("Failed to write tree")?;
+    let tree = git_repo.find_tree(tree_id).context("Failed to find tree")?;
+
+    debug!("tree id: {}", tree.id());
+
+    Ok(tree.id().to_string())
+}
+
+/// Get the hash of the head of a git repository
+pub(crate) fn head_hash(repo_path: &Path) -> anyhow::Result<String> {
+    let git_repo = git2::Repository::open(repo_path).context("Failed to open git repository")?;
+    let head = git_repo.head().context("Failed to get head")?;
+    let head = head.peel_to_commit().context("Failed to peel to commit")?;
+    Ok(head.id().to_string())
 }

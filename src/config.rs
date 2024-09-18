@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use crate::workload::Workload;
+use crate::{store::Store, workload::Workload};
 use anyhow::Context;
 use serde_derive::{Deserialize, Serialize};
 
@@ -12,15 +12,50 @@ pub(crate) struct ExperimentConfig {
     pub name: String,
     pub description: String,
     pub workloads: Vec<Workload>,
+    #[serde(skip)]
+    #[serde(default)]
+    pub path: PathBuf,
 }
 
 impl ExperimentConfig {
-    pub(crate) fn new(name: &str, description: &str) -> Self {
+    pub(crate) fn new(name: &str, description: &str, path: PathBuf) -> Self {
         Self {
             name: name.to_string(),
             description: description.to_string(),
             workloads: vec![],
+            path,
         }
+    }
+
+    pub(crate) fn from_path(path: PathBuf) -> anyhow::Result<Self> {
+        // Check for the config file
+        let config_path = path.join("config.toml");
+        if !config_path.exists() {
+            anyhow::bail!("No experiment found in '{}'", path.display());
+        }
+
+        // Read the config file
+        let config = std::fs::read_to_string(&config_path).context("Failed to read config file")?;
+        let mut config: ExperimentConfig =
+            toml::from_str(&config).context("Failed to parse config file")?;
+        config.path = path;
+
+        Ok(config)
+    }
+
+    pub(crate) fn from_current_dir() -> anyhow::Result<Self> {
+        Self::from_path(std::env::current_dir().context("Failed to get current directory")?)
+    }
+
+    pub(crate) fn from_etna_config(name: &str, etna_config: &EtnaConfig) -> anyhow::Result<Self> {
+        let store = Store::load(&etna_config.store_path())?;
+        let experiment = store
+            .experiments
+            .iter()
+            .find(|e| e.name == name)
+            .context("Failed to find experiment")?;
+
+        Self::from_path(experiment.path.clone())
     }
 }
 
@@ -77,8 +112,7 @@ impl EtnaConfig {
 
     pub(crate) fn save(&self) -> anyhow::Result<()> {
         let config_path = self.config_path();
-        let file = std::fs::File::create(&config_path)
-            .context("Failed to create config file")?;
+        let file = std::fs::File::create(&config_path).context("Failed to create config file")?;
         serde_json::to_writer_pretty(file, self).context("Failed to write config.json")
     }
 }
@@ -91,5 +125,4 @@ impl EtnaConfig {
     pub(crate) fn store_path(&self) -> PathBuf {
         self.etna_dir.join("store.json")
     }
-
 }

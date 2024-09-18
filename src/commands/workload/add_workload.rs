@@ -4,37 +4,35 @@ use anyhow::Context;
 
 use crate::{
     config::{EtnaConfig, ExperimentConfig},
-    git_driver,
+    experiment, git_driver, store,
     workload::Workload,
 };
 
-pub(crate) fn invoke(language: String, workload: String) -> anyhow::Result<()> {
-    // Get the current directory
-    let current_dir = std::env::current_dir().context("Failed to get current directory")?;
-    // Check for the config file
-    let config_path = current_dir.join("config.toml");
-    if !config_path.exists() {
-        anyhow::bail!("No experiment found in '{}'", current_dir.display());
-    }
-
-    // Read the config file
-    let config = std::fs::read_to_string(&config_path).context("Failed to read config file")?;
-    let config: ExperimentConfig =
-        toml::from_str(&config).context("Failed to parse config file")?;
+pub(crate) fn invoke(
+    name: Option<String>,
+    language: String,
+    workload: String,
+) -> anyhow::Result<()> {
+    // Get etna configuration
+    let etna_config = EtnaConfig::get_etna_config().context("Failed to get etna config")?;
+    // Get the current experiment
+    let mut experiment_config = name
+        .context("No experiment name provided")
+        .and_then(|n| ExperimentConfig::from_etna_config(&n, &etna_config))
+        .or_else(|_| ExperimentConfig::from_current_dir())?;
 
     // Check if the workload already exists
-    if config.has_workload(&language, &workload) {
+    if experiment_config.has_workload(&language, &workload) {
         anyhow::bail!("Workload '{}/{}' already exists", language, workload);
     }
 
-    let etna_config = EtnaConfig::get_etna_config().context("Failed to get etna config")?;
     // get etna directory
     let repo_dir = if let Ok(repo_dir) =
         std::env::var("ETNA_REPO_DIR").context("ETNA_REPO_DIR environment variable not set")
     {
         PathBuf::from(repo_dir)
     } else {
-        etna_config.repo_dir
+        etna_config.repo_dir.clone()
     };
 
     // Get the workload path
@@ -46,8 +44,8 @@ pub(crate) fn invoke(language: String, workload: String) -> anyhow::Result<()> {
     }
 
     // Copy the workload to the experiment directory
-    let experiment_path = current_dir;
-    let dest_path = experiment_path
+    let dest_path = experiment_config
+        .path
         .join("workloads")
         .join(&language)
         .join(&workload);
@@ -73,22 +71,39 @@ pub(crate) fn invoke(language: String, workload: String) -> anyhow::Result<()> {
         ))?;
 
     // Add the workload to the config
-    let mut config = config;
-    config.workloads.push(Workload {
+    experiment_config.workloads.push(Workload {
         language: language.clone(),
         name: workload.clone(),
     });
 
     // Write the updated config file
+    let config_path = experiment_config.path.join("config.toml");
     std::fs::write(
         &config_path,
-        toml::to_string(&config).context("Failed to serialize configuration")?,
+        toml::to_string(&experiment_config).context("Failed to serialize configuration")?,
     )
     .context("Failed to write config file")?;
 
     // Create a commit
     git_driver::commit_add_workload(&language, &workload)
         .with_context(|| format!("Failed to commit adding '{language}/{workload}'"))?;
+
+    // Add the snapshot to the store
+    let mut store =
+        store::Store::load(&etna_config.store_path()).context("Failed to load store")?;
+
+    let snapshot = store.take_snapshot(&repo_dir, &experiment_config.path)?;
+
+    store.experiments.push(experiment::Experiment {
+        name: experiment_config.name,
+        description: experiment_config.description,
+        path: experiment_config.path,
+        snapshot,
+    });
+
+    store
+        .save(&etna_config.store_path())
+        .context("Failed to save store")?;
 
     Ok(())
 }

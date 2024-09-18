@@ -6,6 +6,8 @@ mod commands;
 mod config;
 mod experiment;
 mod git_driver;
+mod python_driver;
+mod snapshot;
 mod store;
 mod workload;
 
@@ -31,11 +33,22 @@ enum ExperimentCommand {
         #[clap(short = 'd', long)]
         description: Option<String>,
     },
+    #[clap(name = "run", about = "Run an experiment")]
+    RunExperiment {
+        /// Name of the experiment to run
+        /// [default: current directory]
+        #[clap(short, long)]
+        name: Option<String>,
+    },
 }
 #[derive(Debug, Subcommand)]
 enum WorkloadCommand {
     #[clap(name = "add", about = "Add a workload to the experiment")]
     AddWorkload {
+        /// Name of the experiment
+        /// [default: current directory]
+        #[clap(short, long, default_value = None)]
+        name: Option<String>,
         /// Language of the workload
         /// [default: coq]
         /// [possible_values(coq, haskell, racket)]
@@ -47,6 +60,9 @@ enum WorkloadCommand {
     },
     #[clap(name = "remove", about = "Remove a workload from the experiment")]
     RemoveWorkload {
+        /// Name of the experiment
+        /// [default: current directory]
+        name: Option<String>,
         /// Language of the workload
         /// [default: coq]
         /// [possible_values(coq, haskell, racket)]
@@ -106,14 +122,21 @@ fn main() -> anyhow::Result<()> {
                 overwrite,
                 description,
             } => commands::experiment::new_experiment::invoke(name, path, overwrite, description),
+            ExperimentCommand::RunExperiment { name } => {
+                commands::experiment::run_experiment::invoke(name)
+            }
         },
         Command::Workload(wl) => match wl {
-            WorkloadCommand::AddWorkload { language, workload } => {
-                commands::workload::add_workload::invoke(language, workload)
-            }
-            WorkloadCommand::RemoveWorkload { language, workload } => {
-                commands::workload::remove_workload::invoke(language, workload)
-            }
+            WorkloadCommand::AddWorkload {
+                name,
+                language,
+                workload,
+            } => commands::workload::add_workload::invoke(name, language, workload),
+            WorkloadCommand::RemoveWorkload {
+                name,
+                language,
+                workload,
+            } => commands::workload::remove_workload::invoke(name, language, workload),
         },
         Command::Config(cl) => match cl {
             ConfigCommand::ChangeBranch { branch } => {

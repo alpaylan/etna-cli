@@ -7,7 +7,6 @@ use crate::{
     experiment::Experiment,
     git_driver,
     store::Store,
-    workload::Workload,
 };
 
 /// A new experiment is create in the provided path
@@ -76,13 +75,12 @@ pub(crate) fn invoke(
 
     // Create the config file
     let config_path = experiment_path.join("config.toml");
-    let description =
-        description.unwrap_or_else(|| "A description of the experiment".to_string());
-    let mut config = ExperimentConfig::new(&name, &description);
-    
+    let description = description.unwrap_or_else(|| "A description of the experiment".to_string());
+    let experiment_config = ExperimentConfig::new(&name, &description, experiment_path);
+
     std::fs::write(
         &config_path,
-        toml::to_string(&config).context("Failed to serialize configuration")?,
+        toml::to_string(&experiment_config).context("Failed to serialize configuration")?,
     )
     .context("Failed to create config file")?;
 
@@ -107,31 +105,36 @@ pub(crate) fn invoke(
     ];
 
     for (script, content) in scripts.iter() {
-        let script_path = experiment_path.join(script);
+        let script_path = experiment_config.path.join(script);
         std::fs::write(&script_path, content).context("Failed to create script file")?;
     }
 
     // Create the workloads directory
-    let workloads_path = experiment_path.join("workloads");
+    let workloads_path = experiment_config.path.join("workloads");
     std::fs::create_dir(&workloads_path).context("Failed to create workloads directory")?;
 
     // Create the .gitignore file
-    let gitignore_path = experiment_path.join(".gitignore");
+    let gitignore_path = experiment_config.path.join(".gitignore");
     std::fs::write(&gitignore_path, "").context("Failed to create .gitignore file")?;
 
     // Initialize a git repository
     git_driver::initialize_git_repo(
-        &experiment_path,
+        &experiment_config.path,
         format!("Automated initialization commit for experiment '{}'", name).as_str(),
     )?;
 
     // Update the etna store with the current experiment
     let etna_config = EtnaConfig::get_etna_config()?;
-    let mut etna_store = Store::load(&etna_config.etna_dir.join("store.json"))?;
+    let mut etna_store = Store::load(&etna_config.etna_dir.join("store.json"))
+        .context("Could not load the store")?;
+
+    let snapshot = etna_store.take_snapshot(&etna_config.repo_dir, &experiment_config.path)?;
+
     etna_store.experiments.push(Experiment {
         name,
-        description: config.description,
-        path: experiment_path,
+        description: experiment_config.description,
+        path: experiment_config.path,
+        snapshot,
     });
 
     etna_store.save(&etna_config.etna_dir.join("store.json"))?;

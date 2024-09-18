@@ -17,7 +17,7 @@ pub(crate) fn invoke(overwrite: bool, branch: String) -> anyhow::Result<()> {
     if !etna_dir.exists() {
         std::fs::create_dir(&etna_dir).context("Failed to create .etna directory")?;
     }
-    
+
     // Check if the `config.json` file exists
     let config_path = etna_dir.join("config.json");
     // If it exists, read the configuration, otherwise create it
@@ -81,17 +81,21 @@ pub(crate) fn invoke(overwrite: bool, branch: String) -> anyhow::Result<()> {
 
     debug!("make -C {} install", config.repo_dir.display());
 
-    std::process::Command::new("make")
+    let output = std::process::Command::new("make")
         .args(["-C", &config.repo_dir.display().to_string(), "install"])
-        .status()
+        .output()
         .context(format!(
             "Failed to run ETNA setup script at {}",
             config.repo_dir.display()
         ))?;
 
+    debug!("stdout: {}", String::from_utf8_lossy(&output.stdout));
+    debug!("stderr: {}", String::from_utf8_lossy(&output.stderr));
+
     // Create the `store.json` file
     let store_path = etna_dir.join("store.json");
     if !store_path.exists() {
+        info!("Creating store.json");
         let file = std::fs::File::create(&store_path).context("Failed to create store.json")?;
         serde_json::to_writer_pretty(file, &Store::default())
             .context("Failed to write to store.json")?;
