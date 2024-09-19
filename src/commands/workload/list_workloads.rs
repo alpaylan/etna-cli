@@ -1,8 +1,10 @@
-use std::collections::HashMap;
-
 use anyhow::Context;
+use tabled::settings::{Extract, Style};
 
-use crate::config::{EtnaConfig, ExperimentConfig};
+use crate::{
+    config::{EtnaConfig, ExperimentConfig},
+    workload::Workload,
+};
 
 pub(crate) fn invoke(
     experiment_name: Option<String>,
@@ -23,27 +25,23 @@ pub(crate) fn invoke(
             let mut languages = experiment_config
                 .workloads
                 .iter()
-                .map(|workload| (workload.language.clone(), vec![]))
-                .collect::<HashMap<String, Vec<String>>>();
+                .filter(|workload| language == "all" || language == workload.language)
+                .collect::<Vec<&Workload>>();
 
-            for workload in experiment_config.workloads {
-                languages
-                    .get_mut(&workload.language)
-                    .unwrap()
-                    .push(workload.name);
+            languages.sort_by(|a, b| a.language.cmp(&b.language).then(a.name.cmp(&b.name)));
+
+            let mut table = vec![("Language", "Name")];
+            for workload in languages {
+                table.push((workload.language.as_str(), workload.name.as_str()));
             }
 
-            let languages = languages
-                .iter()
-                .filter(|(lang, _)| language == "all" || language == **lang)
-                .collect::<HashMap<&String, &Vec<String>>>();
+            let mut table = tabled::Table::new(table);
 
-            for (lang, workloads) in languages {
-                println!("{}:", lang);
-                for workload in workloads {
-                    println!("\t{}", workload);
-                }
-            }
+            table
+                .with(Extract::segment(1.., ..))
+                .with(Style::modern_rounded());
+
+            println!("{}", table);
         }
         "available" => {
             anyhow::bail!("'available' kind is not implemented yet");

@@ -121,6 +121,8 @@ enum ConfigCommand {
         #[clap(short, long, default_value = "main")]
         branch: String,
     },
+    #[command(name = "show", about = "Show the current configuration")]
+    Show,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -162,6 +164,7 @@ fn main() -> anyhow::Result<()> {
             ConfigCommand::ChangeBranch { branch } => {
                 commands::config::change_branch::invoke(branch)
             }
+            ConfigCommand::Show => commands::config::show::invoke(),
         },
         Command::Setup { overwrite, branch } => commands::config::setup::invoke(overwrite, branch),
     }
