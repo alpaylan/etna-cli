@@ -1,10 +1,8 @@
 use anyhow::Context;
-use log::{info, warn};
+use log::{debug, info, warn};
 
 use crate::{
-    config::{EtnaConfig, ExperimentConfig},
-    python_driver,
-    store::Store,
+    config::{EtnaConfig, ExperimentConfig}, git_driver, python_driver, store::Store
 };
 
 pub(crate) fn invoke(experiment_name: Option<String>) -> anyhow::Result<()> {
@@ -20,7 +18,7 @@ pub(crate) fn invoke(experiment_name: Option<String>) -> anyhow::Result<()> {
 
     let snapshot = Store::take_snapshot(&mut store, &etna_config, &experiment_config)?;
 
-    let experiment = store.get_experiment(&experiment_config.name)?;
+    let experiment = store.get_experiment_by_name(&experiment_config.name)?;
 
     info!(
         "Taking snapshot for the experiment {}",
@@ -32,11 +30,15 @@ pub(crate) fn invoke(experiment_name: Option<String>) -> anyhow::Result<()> {
             "Updating snapshot for the experiment {}",
             experiment_config.name
         );
+
+        git_driver::print_diff(&snapshot, &experiment.snapshot)?;
+
         let experiment = experiment.with_snapshot(snapshot.clone());
         store.experiments.insert(experiment);
+        store.save(&etna_config.store_path())?;
     }
 
-    python_driver::run_experiment(&experiment_config, snapshot)?;
+    python_driver::run_experiment(&etna_config, &experiment_config, snapshot)?;
 
     Ok(())
 }

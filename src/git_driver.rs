@@ -1,7 +1,10 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::Context;
-use log::debug;
+use log::{debug, warn};
+use tabled::settings::{Extract, Style};
+
+use crate::experiment::ExperimentSnapshot;
 
 pub(crate) fn initialize_git_repo(path: &PathBuf, msg: &str) -> anyhow::Result<()> {
     // Initialize a git repository
@@ -22,9 +25,14 @@ pub(crate) fn initialize_git_repo(path: &PathBuf, msg: &str) -> anyhow::Result<(
     Ok(())
 }
 
-pub(crate) fn commit_add_workload(language: &str, workload: &str) -> anyhow::Result<()> {
+pub(crate) fn commit_add_workload(
+    repo_path: &Path,
+    language: &str,
+    workload: &str,
+) -> anyhow::Result<()> {
     // Add contents of 'workloads/<language>/<workload>' directory to the git repository
-    let git_repo = git2::Repository::open_from_env().context("Failed to open git repository")?;
+    let git_repo = git2::Repository::open(repo_path).context("Failed to open git repository")?;
+
     let mut index = git_repo.index().context("Failed to get index")?;
 
     // Add the workload to the index
@@ -69,9 +77,13 @@ pub(crate) fn commit_add_workload(language: &str, workload: &str) -> anyhow::Res
     Ok(())
 }
 
-pub(crate) fn commit_remove_workload(language: &str, workload: &str) -> anyhow::Result<()> {
+pub(crate) fn commit_remove_workload(
+    repo_path: &Path,
+    language: &str,
+    workload: &str,
+) -> anyhow::Result<()> {
     // Add contents of 'workloads/<language>/<workload>' directory to the git repository
-    let git_repo = git2::Repository::open_from_env().context("Failed to open git repository")?;
+    let git_repo = git2::Repository::open(repo_path).context("Failed to open git repository")?;
 
     // Commit the changes
     let mut index = git_repo.index().context("Failed to get index")?;
@@ -200,4 +212,47 @@ pub(crate) fn head_hash(repo_path: &Path) -> anyhow::Result<String> {
     let head = git_repo.head().context("Failed to get head")?;
     let head = head.peel_to_commit().context("Failed to peel to commit")?;
     Ok(head.id().to_string())
+}
+
+/// Writes out the diff of two git hashes
+pub(crate) fn print_diff(s1: &ExperimentSnapshot, s2: &ExperimentSnapshot) -> anyhow::Result<()> {
+    let mut table = vec![
+        ("".to_string(), "HEAD".to_string(), "snapshot".to_string()),
+        (
+            "experiment".to_string(),
+            s1.experiment.clone(),
+            s2.experiment.clone(),
+        ),
+        ("etna".to_string(), s1.etna.clone(), s2.etna.clone()),
+    ];
+
+    table.extend(
+        s1.scripts
+            .iter()
+            .zip(s2.scripts.iter())
+            .map(|(s1, s2)| (s1.0.clone(), s1.1.clone(), s2.1.clone())),
+    );
+
+    table.extend(
+        s1.workloads
+            .iter()
+            .zip(s2.workloads.iter())
+            .map(|(w1, w2)| {
+                (
+                    w1.0.name.clone() + "-" + &w1.0.language,
+                    w1.1.clone(),
+                    w2.1.clone(),
+                )
+            }),
+    );
+
+    let mut table = tabled::Table::new(table);
+
+    table
+        .with(Extract::segment(1.., ..))
+        .with(Style::modern_rounded());
+
+    warn!("\n{}", table);
+
+    Ok(())
 }

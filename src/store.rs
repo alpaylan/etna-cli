@@ -113,10 +113,44 @@ impl Store {
 }
 
 impl Store {
-    pub(crate) fn get_experiment(&self, name: &str) -> anyhow::Result<&Experiment> {
+    pub(crate) fn get_experiment_by_name(&self, name: &str) -> anyhow::Result<&Experiment> {
+        let experiments = self
+            .experiments
+            .iter()
+            .filter(|experiment| experiment.name == name)
+            .collect::<Vec<&Experiment>>();
+
+        let experiment_hashes = experiments
+            .iter()
+            .map(|experiment| experiment.id.clone())
+            .collect::<Vec<String>>();
+
+        let snapshots = self
+            .snapshots
+            .iter()
+            .filter(|snapshot| {
+                snapshot.typ.is_experiment() && experiment_hashes.contains(&snapshot.hash)
+            })
+            .collect::<Vec<&Snapshot>>();
+
+        let latest_snapshot = snapshots
+            .iter()
+            .max_by(|a, b| a.typ.time().cmp(&b.typ.time()))
+            .context("No snapshots found")?;
+
+        let latest_experiment = self
+            .experiments
+            .iter()
+            .find(|experiment| experiment.id == latest_snapshot.hash)
+            .context("No experiment found")?;
+
+        Ok(latest_experiment)
+    }
+
+    pub(crate) fn get_experiment_by_id(&self, hash: &str) -> anyhow::Result<&Experiment> {
         self.experiments
             .iter()
-            .find(|experiment| experiment.name == name)
+            .find(|experiment| experiment.id == hash)
             .context("Experiment not found")
     }
 }
@@ -125,5 +159,4 @@ impl Store {
 pub(crate) struct Metric {
     pub data: serde_json::Value,
     pub experiment_id: String,
-    pub snapshot_id: String,
 }

@@ -40,6 +40,12 @@ enum ExperimentCommand {
         #[clap(short, long)]
         name: Option<String>,
     },
+    #[clap(name = "show", about = "Show the details of an experiment")]
+    ShowExperiment {
+        /// Hash of the experiment
+        hash: String,
+    },
+
 }
 #[derive(Debug, Subcommand)]
 enum WorkloadCommand {
@@ -91,24 +97,13 @@ enum WorkloadCommand {
 }
 
 #[derive(Debug, Subcommand)]
-enum Command {
-    #[command(subcommand, name = "experiment", about = "Manage experiments")]
-    Experiment(ExperimentCommand),
-    #[command(subcommand, name = "workload", about = "Manage workloads")]
-    Workload(WorkloadCommand),
-    #[command(subcommand, name = "config", about = "Manage etna-cli configuration")]
-    Config(ConfigCommand),
-    #[command(name = "setup", about = "Setup etna-cli")]
-    Setup {
-        /// Overwrite the existing configuration
-        #[clap(short, long, default_value = "false")]
-        overwrite: bool,
-        /// Branch to clone the etna repository
-        #[clap(short, long, default_value = "main")]
-        branch: String,
-        /// Repository path, if already cloned
-        #[clap(long, default_value = None)]
-        repo_path: Option<String>,
+enum StoreCommand {
+    #[clap(name = "write", about = "Write a metric to the store")]
+    Write {
+        /// Experiment ID
+        experiment_id: String,
+        /// Metric as a json string
+        metric: String,
     },
 }
 
@@ -128,6 +123,30 @@ enum ConfigCommand {
     Show,
 }
 
+#[derive(Debug, Subcommand)]
+enum Command {
+    #[command(subcommand, name = "experiment", about = "Manage experiments")]
+    Experiment(ExperimentCommand),
+    #[command(subcommand, name = "workload", about = "Manage workloads")]
+    Workload(WorkloadCommand),
+    #[command(subcommand, name = "store", about = "Manage the etna store")]
+    Store(StoreCommand),
+    #[command(subcommand, name = "config", about = "Manage etna-cli configuration")]
+    Config(ConfigCommand),
+    #[command(name = "setup", about = "Setup etna-cli")]
+    Setup {
+        /// Overwrite the existing configuration
+        #[clap(short, long, default_value = "false")]
+        overwrite: bool,
+        /// Branch to clone the etna repository
+        #[clap(short, long, default_value = "main")]
+        branch: String,
+        /// Repository path, if already cloned
+        #[clap(long, default_value = None)]
+        repo_path: Option<String>,
+    },
+}
+
 fn main() -> anyhow::Result<()> {
     let cli = Args::parse();
     env_logger::builder()
@@ -144,6 +163,9 @@ fn main() -> anyhow::Result<()> {
             } => commands::experiment::new_experiment::invoke(name, path, overwrite, description),
             ExperimentCommand::RunExperiment { name } => {
                 commands::experiment::run_experiment::invoke(name)
+            },
+            ExperimentCommand::ShowExperiment { hash } => {
+                commands::experiment::show_experiment::invoke(hash)
             }
         },
         Command::Workload(wl) => match wl {
@@ -169,6 +191,16 @@ fn main() -> anyhow::Result<()> {
             }
             ConfigCommand::Show => commands::config::show::invoke(),
         },
-        Command::Setup { overwrite, branch, repo_path } => commands::config::setup::invoke(overwrite, branch, repo_path),
+        Command::Setup {
+            overwrite,
+            branch,
+            repo_path,
+        } => commands::config::setup::invoke(overwrite, branch, repo_path),
+        Command::Store(store_command) => match store_command {
+            StoreCommand::Write {
+                experiment_id,
+                metric,
+            } => commands::store::write::invoke(experiment_id, metric),
+        },
     }
 }

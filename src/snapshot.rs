@@ -24,6 +24,33 @@ pub(crate) enum SnapshotType {
     Experiment { time: String },
 }
 
+impl SnapshotType {
+    pub(crate) fn is_experiment(&self) -> bool {
+        matches!(self, Self::Experiment { .. })
+    }
+
+    pub(crate) fn is_workload(&self) -> bool {
+        matches!(self, Self::Workload { .. })
+    }
+
+    pub(crate) fn is_script(&self) -> bool {
+        matches!(self, Self::Script { .. })
+    }
+
+    pub(crate) fn is_etna(&self) -> bool {
+        matches!(self, Self::Etna { .. })
+    }
+
+    pub(crate) fn time(&self) -> i64 {
+        match self {
+            Self::Experiment { time } => chrono::DateTime::parse_from_rfc3339(time)
+                .unwrap()
+                .timestamp() as i64,
+            _ => i64::MIN,
+        }
+    }
+}
+
 impl Snapshot {
     pub(crate) fn head(repo_path: &Path, typ: SnapshotType) -> anyhow::Result<Self> {
         let hash = git_driver::head_hash(repo_path)?;

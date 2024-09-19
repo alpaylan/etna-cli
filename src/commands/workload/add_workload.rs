@@ -86,7 +86,7 @@ pub(crate) fn invoke(
     .context("Failed to write config file")?;
 
     // Create a commit
-    git_driver::commit_add_workload(&language, &workload)
+    git_driver::commit_add_workload(&experiment_config.path, &language, &workload)
         .with_context(|| format!("Failed to commit adding '{language}/{workload}'"))?;
 
     // Add the snapshot to the store

@@ -52,7 +52,7 @@ pub(crate) fn invoke(
     ))?;
 
     // Create a commit
-    git_driver::commit_remove_workload(&language, &workload)
+    git_driver::commit_remove_workload(&experiment_config.path, &language, &workload)
         .with_context(|| format!("Failed to commit removing '{language}/{workload}'"))?;
 
     Ok(())

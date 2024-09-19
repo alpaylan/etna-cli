@@ -84,8 +84,8 @@ pub(crate) fn invoke(
     )
     .context("Failed to create config file")?;
 
-    // Create the default scripts
-    let scripts = [
+    // Create the template files
+    let template_files = [
         (
             "Collect.py",
             std::include_str!("../../../templates/experimentation/Collect.pyt"),
@@ -102,20 +102,23 @@ pub(crate) fn invoke(
             "Visualize.py",
             std::include_str!("../../../templates/experimentation/Visualize.pyt"),
         ),
+        (
+            ".gitignore",
+            std::include_str!("../../../templates/.gitignoret"),
+        ),
     ];
 
-    for (script, content) in scripts.iter() {
-        let script_path = experiment_config.path.join(script);
-        std::fs::write(&script_path, content).context("Failed to create script file")?;
+    for (path, content) in template_files.iter() {
+        let path = experiment_config.path.join(path);
+        std::fs::write(&path, content).context(format!(
+            "Failed to create template file '{}'",
+            path.display()
+        ))?;
     }
 
     // Create the workloads directory
     let workloads_path = experiment_config.path.join("workloads");
     std::fs::create_dir(&workloads_path).context("Failed to create workloads directory")?;
-
-    // Create the .gitignore file
-    let gitignore_path = experiment_config.path.join(".gitignore");
-    std::fs::write(&gitignore_path, "").context("Failed to create .gitignore file")?;
 
     // Initialize a git repository
     git_driver::initialize_git_repo(
