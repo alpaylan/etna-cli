@@ -62,15 +62,31 @@ enum WorkloadCommand {
     RemoveWorkload {
         /// Name of the experiment
         /// [default: current directory]
+        #[clap(short, long, default_value = None)]
         name: Option<String>,
         /// Language of the workload
-        /// [default: coq]
         /// [possible_values(coq, haskell, racket)]
         language: String,
         /// Workload to be removed
-        /// [default: bst]
         /// [possible_values(bst, rbt, stlc, ifc)]
         workload: String,
+    },
+    #[clap(name = "list", about = "List all workloads")]
+    ListWorkloads {
+        /// Name of the experiment
+        /// [default: current directory]
+        #[clap(short, long, default_value = None)]
+        name: Option<String>,
+        /// Language of the workload
+        /// [possible_values(coq, haskell, racket)]
+        /// [default: all]
+        #[clap(short, long, default_value = "all")]
+        language: String,
+        /// Available or experiment workloads
+        /// [possible_values(available, experiment)]
+        /// [default: experiment]
+        #[clap(short, long, default_value = "experiment")]
+        kind: String,
     },
 }
 
@@ -88,7 +104,6 @@ enum Command {
         #[clap(short, long, default_value = "false")]
         overwrite: bool,
         /// Branch to clone the etna repository
-        /// [default: main]
         #[clap(short, long, default_value = "main")]
         branch: String,
     },
@@ -137,6 +152,11 @@ fn main() -> anyhow::Result<()> {
                 language,
                 workload,
             } => commands::workload::remove_workload::invoke(name, language, workload),
+            WorkloadCommand::ListWorkloads {
+                name,
+                language,
+                kind,
+            } => commands::workload::list_workloads::invoke(name, language, kind),
         },
         Command::Config(cl) => match cl {
             ConfigCommand::ChangeBranch { branch } => {

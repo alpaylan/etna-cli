@@ -92,10 +92,11 @@ pub(crate) fn invoke(
     let mut store =
         store::Store::load(&etna_config.store_path()).context("Failed to load store")?;
 
-    let snapshot = store.take_snapshot(&repo_dir, &experiment_config.path)?;
+    let snapshot = store.take_snapshot(&etna_config, &experiment_config)?;
 
-    store.experiments.push(experiment::Experiment {
+    store.experiments.insert(experiment::Experiment {
         name: experiment_config.name,
+        id: snapshot.experiment.clone(),
         description: experiment_config.description,
         path: experiment_config.path,
         snapshot,

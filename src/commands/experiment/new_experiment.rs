@@ -128,10 +128,11 @@ pub(crate) fn invoke(
     let mut etna_store = Store::load(&etna_config.etna_dir.join("store.json"))
         .context("Could not load the store")?;
 
-    let snapshot = etna_store.take_snapshot(&etna_config.repo_dir, &experiment_config.path)?;
+    let snapshot = etna_store.take_snapshot(&etna_config, &experiment_config)?;
 
-    etna_store.experiments.push(Experiment {
+    etna_store.experiments.insert(Experiment {
         name,
+        id: snapshot.experiment.clone(),
         description: experiment_config.description,
         path: experiment_config.path,
         snapshot,

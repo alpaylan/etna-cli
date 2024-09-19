@@ -1,6 +1,7 @@
+use anyhow::Context;
 use log::info;
 
-use crate::git_driver;
+use crate::{git_driver, python_driver};
 
 pub(crate) fn invoke(branch: String) -> anyhow::Result<()> {
     // Get etna configuration
@@ -15,6 +16,12 @@ pub(crate) fn invoke(branch: String) -> anyhow::Result<()> {
     // Change the branch
     git_driver::change_branch(&etna_config.repo_dir, &branch)?;
     info!("Changed the etna repository branch to '{}'", branch);
+
+    // Recompiling the etna repository
+    python_driver::make(&etna_config).context(format!(
+        "Failed to recompile ETNA with the new branch '{}'",
+        branch
+    ))?;
 
     // Update the etna configuration
     etna_config.branch = branch;

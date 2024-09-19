@@ -1,7 +1,7 @@
 use anyhow::Context;
-use log::{debug, info};
+use log::info;
 
-use crate::{config::EtnaConfig, git_driver, store::Store};
+use crate::{config::EtnaConfig, git_driver, python_driver, store::Store};
 
 /// Handles the setup for etna-cli
 /// 1. Create ~/.etna directory if it does not exist
@@ -43,18 +43,6 @@ pub(crate) fn invoke(overwrite: bool, branch: String) -> anyhow::Result<()> {
         git_driver::clone_etna(&config.repo_dir).context("Could not clone ETNA repository")?;
     }
 
-    // Create a venv for the etna repository
-    let etna_venv_dir = config.etna_dir.join(".venv");
-    if !etna_venv_dir.exists() {
-        info!("Setting up a virtual environment for etna...");
-        std::process::Command::new("python3")
-            .arg("-m")
-            .arg("venv")
-            .arg(&etna_venv_dir)
-            .status()
-            .context("Failed to create virtual environment")?;
-    }
-
     // Set the branch
     if config.branch != "main" {
         git2::Repository::open(&config.repo_dir)
@@ -64,33 +52,7 @@ pub(crate) fn invoke(overwrite: bool, branch: String) -> anyhow::Result<()> {
     }
 
     info!("Installing etna...");
-
-    std::env::set_var("VIRTUAL_ENV", &etna_venv_dir);
-    debug!("VIRTUAL_ENV={:?}", std::env::var("VIRTUAL_ENV"));
-
-    std::env::set_var(
-        "PATH",
-        format!(
-            "{}/bin:{}",
-            std::env::var("VIRTUAL_ENV")
-                .context("VIRTUAL_ENV is not present in the environment")?,
-            std::env::var("PATH").context("PATH is not present in the environment")?
-        ),
-    );
-    debug!("PATH={:?}", std::env::var("PATH"));
-
-    debug!("make -C {} install", config.repo_dir.display());
-
-    let output = std::process::Command::new("make")
-        .args(["-C", &config.repo_dir.display().to_string(), "install"])
-        .output()
-        .context(format!(
-            "Failed to run ETNA setup script at {}",
-            config.repo_dir.display()
-        ))?;
-
-    debug!("stdout: {}", String::from_utf8_lossy(&output.stdout));
-    debug!("stderr: {}", String::from_utf8_lossy(&output.stderr));
+    python_driver::make(&config).context("Failed to install etna")?;
 
     // Create the `store.json` file
     let store_path = etna_dir.join("store.json");

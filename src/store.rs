@@ -1,21 +1,20 @@
-use std::{
-    collections::HashSet,
-    path::{Path, PathBuf},
-};
+use std::{collections::HashSet, path::PathBuf};
 
 use anyhow::{Context, Ok};
 use serde_derive::{Deserialize, Serialize};
 
 use crate::{
+    config::{EtnaConfig, ExperimentConfig},
     experiment::{Experiment, ExperimentSnapshot},
-    snapshot::{self, Snapshot},
+    snapshot::{self, Snapshot, SnapshotType},
+    workload::Workload,
 };
 
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub(crate) struct Store {
     pub metrics: Vec<Metric>,
     pub snapshots: HashSet<Snapshot>,
-    pub experiments: Vec<Experiment>,
+    pub experiments: HashSet<Experiment>,
 }
 
 impl Store {
@@ -23,7 +22,7 @@ impl Store {
         Store {
             metrics: Vec::new(),
             snapshots: HashSet::new(),
-            experiments: Vec::new(),
+            experiments: HashSet::new(),
         }
     }
 
@@ -46,36 +45,69 @@ impl Store {
 
     pub(crate) fn take_snapshot(
         &mut self,
-        etna_repo_dir: &Path,
-        experiment_path: &Path,
+        etna_config: &EtnaConfig,
+        experiment_config: &ExperimentConfig,
     ) -> anyhow::Result<ExperimentSnapshot> {
-        let etna_snapshot = snapshot::Snapshot::head(etna_repo_dir, snapshot::SnapshotType::Etna)
-            .context("Failed to take etna snapshot")?;
+        let etna_snapshot = snapshot::Snapshot::head(
+            &etna_config.repo_dir,
+            SnapshotType::Etna {
+                branch: etna_config.branch.clone(),
+            },
+        )
+        .context("Failed to take etna snapshot")?;
 
         self.snapshots.insert(etna_snapshot.clone());
 
+        let experiment_snapshot = snapshot::Snapshot::take(
+            &experiment_config.path,
+            &PathBuf::from("*"),
+            snapshot::SnapshotType::Experiment {
+                time: chrono::Utc::now().to_rfc3339(),
+            },
+        )
+        .context("Failed to take experiment snapshot")?;
+
+        self.snapshots.insert(experiment_snapshot.clone());
+
         let collection_script_snapshot = snapshot::Snapshot::take(
-            experiment_path,
+            &experiment_config.path,
             &PathBuf::from("Collect.py"),
-            snapshot::SnapshotType::CollectionScript,
+            snapshot::SnapshotType::Script {
+                name: "Collect.py".to_string(),
+            },
         )
         .context("Failed to take Collect.py snapshot")?;
 
         self.snapshots.insert(collection_script_snapshot.clone());
 
-        let workload_snapshot = snapshot::Snapshot::take(
-            experiment_path,
-            &PathBuf::from("workloads").join("*"),
-            snapshot::SnapshotType::Workload,
-        )
-        .context("Failed to take workloads snapshot")?;
+        let workload_snapshots: Vec<(Workload, String)> = experiment_config
+            .workloads
+            .iter()
+            .map(|workload| {
+                let workload_snapshot = snapshot::Snapshot::take(
+                    &experiment_config.path,
+                    &PathBuf::from("workloads")
+                        .join(PathBuf::from(&workload.language))
+                        .join(PathBuf::from(&workload.name))
+                        .join("*"),
+                    snapshot::SnapshotType::Workload {
+                        name: workload.name.clone(),
+                        language: workload.language.clone(),
+                    },
+                )
+                .context("Failed to take workloads snapshot")?;
+                self.snapshots.insert(workload_snapshot.clone());
 
-        self.snapshots.insert(workload_snapshot.clone());
+                Ok((workload.clone(), workload_snapshot.hash))
+            })
+            .filter_map(Result::ok)
+            .collect();
 
         Ok(ExperimentSnapshot {
+            experiment: experiment_snapshot.hash,
             etna: etna_snapshot.hash,
-            collection_script: collection_script_snapshot.hash,
-            workload: workload_snapshot.hash,
+            scripts: vec![("Collect.py".to_string(), collection_script_snapshot.hash)],
+            workloads: workload_snapshots,
         })
     }
 }
@@ -86,25 +118,6 @@ impl Store {
             .iter()
             .find(|experiment| experiment.name == name)
             .context("Experiment not found")
-    }
-
-    pub(crate) fn get_experiment_mut(&mut self, name: &str) -> anyhow::Result<&mut Experiment> {
-        self.experiments
-            .iter_mut()
-            .find(|experiment| experiment.name == name)
-            .context("Experiment not found")
-    }
-
-    pub(crate) fn update_snapshot(
-        &mut self,
-        experiment_name: &str,
-        snapshot: ExperimentSnapshot,
-    ) -> anyhow::Result<()> {
-        let experiment = self.get_experiment_mut(experiment_name)?;
-
-        experiment.snapshot = snapshot;
-
-        Ok(())
     }
 }
 

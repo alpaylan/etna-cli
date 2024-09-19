@@ -12,14 +12,16 @@ pub(crate) struct Snapshot {
     pub hash: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
 pub(crate) enum SnapshotType {
     #[serde(rename = "etna")]
-    Etna,
-    #[serde(rename = "collection_script")]
-    CollectionScript,
+    Etna { branch: String },
+    #[serde(rename = "script")]
+    Script { name: String },
     #[serde(rename = "workload")]
-    Workload,
+    Workload { name: String, language: String },
+    #[serde(rename = "experiment")]
+    Experiment { time: String },
 }
 
 impl Snapshot {
