@@ -48,7 +48,7 @@ enum WorkloadCommand {
         /// Name of the experiment
         /// [default: current directory]
         #[clap(short, long, default_value = None)]
-        name: Option<String>,
+        experiment: Option<String>,
         /// Language of the workload
         /// [default: coq]
         /// [possible_values(coq, haskell, racket)]
@@ -63,7 +63,7 @@ enum WorkloadCommand {
         /// Name of the experiment
         /// [default: current directory]
         #[clap(short, long, default_value = None)]
-        name: Option<String>,
+        experiment: Option<String>,
         /// Language of the workload
         /// [possible_values(coq, haskell, racket)]
         language: String,
@@ -76,7 +76,7 @@ enum WorkloadCommand {
         /// Name of the experiment
         /// [default: current directory]
         #[clap(short, long, default_value = None)]
-        name: Option<String>,
+        experiment: Option<String>,
         /// Language of the workload
         /// [possible_values(coq, haskell, racket)]
         /// [default: all]
@@ -143,20 +143,20 @@ fn main() -> anyhow::Result<()> {
         },
         Command::Workload(wl) => match wl {
             WorkloadCommand::AddWorkload {
-                name,
+                experiment,
                 language,
                 workload,
-            } => commands::workload::add_workload::invoke(name, language, workload),
+            } => commands::workload::add_workload::invoke(experiment, language, workload),
             WorkloadCommand::RemoveWorkload {
-                name,
+                experiment,
                 language,
                 workload,
-            } => commands::workload::remove_workload::invoke(name, language, workload),
+            } => commands::workload::remove_workload::invoke(experiment, language, workload),
             WorkloadCommand::ListWorkloads {
-                name,
+                experiment,
                 language,
                 kind,
-            } => commands::workload::list_workloads::invoke(name, language, kind),
+            } => commands::workload::list_workloads::invoke(experiment, language, kind),
         },
         Command::Config(cl) => match cl {
             ConfigCommand::ChangeBranch { branch } => {

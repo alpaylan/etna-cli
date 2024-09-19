@@ -8,17 +8,18 @@ use crate::{
 };
 
 pub(crate) fn invoke(
-    name: Option<String>,
+    experiment_name: Option<String>,
     language: String,
     workload: String,
 ) -> anyhow::Result<()> {
     // Get etna configuration
     let etna_config = EtnaConfig::get_etna_config().context("Failed to get etna config")?;
     // Get the current experiment
-    let mut experiment_config = name
-        .context("No experiment name provided")
+    let mut experiment_config = experiment_name
+        .ok_or(anyhow::anyhow!("No experiment name provided"))
         .and_then(|n| ExperimentConfig::from_etna_config(&n, &etna_config))
-        .or_else(|_| ExperimentConfig::from_current_dir())?;
+        .or_else(|_| ExperimentConfig::from_current_dir())
+        .context("No experiment name is provided, and the current directory is not an experiment directory")?;
 
     // Check if the workload already exists
     if !experiment_config.has_workload(&language, &workload) {

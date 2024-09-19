@@ -16,7 +16,7 @@ pub(crate) fn run_experiment(
 pub(crate) fn make(etna_config: &EtnaConfig) -> anyhow::Result<()> {
     // Create a venv for the etna repository
     let etna_venv_dir = etna_config.etna_dir.join(".venv");
-    
+
     if !etna_venv_dir.exists() {
         info!("Setting up a virtual environment for etna...");
         std::process::Command::new("python3")
@@ -53,6 +53,6 @@ pub(crate) fn make(etna_config: &EtnaConfig) -> anyhow::Result<()> {
 
     debug!("stdout: {}", String::from_utf8_lossy(&output.stdout));
     debug!("stderr: {}", String::from_utf8_lossy(&output.stderr));
-    
+
     Ok(())
 }
