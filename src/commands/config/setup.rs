@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use anyhow::Context;
 use log::info;
 
@@ -5,10 +7,15 @@ use crate::{config::EtnaConfig, git_driver, python_driver, store::Store};
 
 /// Handles the setup for etna-cli
 /// 1. Create ~/.etna directory if it does not exist
-/// 1. Create ~/.etna/config.json file
-/// 1. Clone and install the etna repository and set the ETNA_DIR environment variable
-/// 1. Create ~/.etna/store.json file
-pub(crate) fn invoke(overwrite: bool, branch: String) -> anyhow::Result<()> {
+/// 2. Create ~/.etna/config.json file
+/// 3. Clone and install the etna repository
+/// 4. Create ~/.etna/store.json file
+pub(crate) fn invoke(
+    overwrite: bool,
+    branch: String,
+    repo_path: Option<String>,
+) -> anyhow::Result<()> {
+    info!("Setting up etna-cli");
     // Get the home directory
     let home_dir = dirs::home_dir().context("Failed to get home directory")?;
     let etna_dir = home_dir.join(".etna");
@@ -37,17 +44,36 @@ pub(crate) fn invoke(overwrite: bool, branch: String) -> anyhow::Result<()> {
         return Ok(());
     }
 
-    info!("Cloning etna...");
-    // Check if etna repository is cloned, otherwise clone it
-    if !config.repo_dir.exists() {
-        git_driver::clone_etna(&config.repo_dir).context("Could not clone ETNA repository")?;
+    if let Some(repo_path) = repo_path {
+        info!("Using existing repository path '{}'", repo_path);
+        let repo_path = PathBuf::from(repo_path);
+        if !repo_path.exists() {
+            anyhow::bail!("Repository path does not exist");
+        }
+        config.repo_dir = repo_path;
+    } else {
+        info!("Cloning etna...");
+        // Check if etna repository is cloned, otherwise clone it
+        if !config.repo_dir.exists() {
+            git_driver::clone_etna(&config.repo_dir).context("Could not clone ETNA repository")?;
+        }
     }
 
     // Set the branch
     if config.branch != "main" {
+        info!("Changing branch to '{}'", config.branch);
+        // Fetch the latest changes
         git2::Repository::open(&config.repo_dir)
             .context("Failed to open ETNA repository")?
-            .set_head_detached(git2::Oid::from_str(&config.branch)?)
+            .find_remote("origin")
+            .context("Failed to find remote")?
+            .fetch(&[&config.branch], None, None)
+            .context("Failed to fetch remote")?;
+
+        // Set the branch
+        git2::Repository::open(&config.repo_dir)
+            .context("Failed to open ETNA repository")?
+            .set_head(&format!("refs/remotes/origin/{}", config.branch))
             .context("Failed to set branch")?;
     }
 

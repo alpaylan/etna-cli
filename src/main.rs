@@ -106,6 +106,9 @@ enum Command {
         /// Branch to clone the etna repository
         #[clap(short, long, default_value = "main")]
         branch: String,
+        /// Repository path, if already cloned
+        #[clap(long, default_value = None)]
+        repo_path: Option<String>,
     },
 }
 
@@ -166,6 +169,6 @@ fn main() -> anyhow::Result<()> {
             }
             ConfigCommand::Show => commands::config::show::invoke(),
         },
-        Command::Setup { overwrite, branch } => commands::config::setup::invoke(overwrite, branch),
+        Command::Setup { overwrite, branch, repo_path } => commands::config::setup::invoke(overwrite, branch, repo_path),
     }
 }
