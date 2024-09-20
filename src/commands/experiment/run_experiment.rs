@@ -1,5 +1,5 @@
 use anyhow::Context;
-use log::{debug, info, warn};
+use log::{info, warn};
 
 use crate::{
     config::{EtnaConfig, ExperimentConfig}, git_driver, python_driver, store::Store

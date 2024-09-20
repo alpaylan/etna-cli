@@ -42,8 +42,14 @@ enum ExperimentCommand {
     },
     #[clap(name = "show", about = "Show the details of an experiment")]
     ShowExperiment {
-        /// Hash of the experiment
-        hash: String,
+        /// Hash or name of the experiment
+        hash_or_name: String,
+        /// Is the provided string a hash or a name
+        #[clap(short = 'n', long, default_value = "false")]
+        is_name: bool,
+        /// Show all the experiments
+        #[clap(short = 'a', long, default_value = "false")]
+        show_all: bool,
     },
 
 }
@@ -164,8 +170,8 @@ fn main() -> anyhow::Result<()> {
             ExperimentCommand::RunExperiment { name } => {
                 commands::experiment::run_experiment::invoke(name)
             },
-            ExperimentCommand::ShowExperiment { hash } => {
-                commands::experiment::show_experiment::invoke(hash)
+            ExperimentCommand::ShowExperiment { hash_or_name, is_name, show_all } => {
+                commands::experiment::show_experiment::invoke(hash_or_name, is_name, show_all)
             }
         },
         Command::Workload(wl) => match wl {

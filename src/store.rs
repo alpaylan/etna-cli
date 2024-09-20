@@ -147,6 +147,13 @@ impl Store {
         Ok(latest_experiment)
     }
 
+    pub(crate) fn get_all_experiments_by_name(&self, name: &str) -> Vec<&Experiment> {
+        self.experiments
+            .iter()
+            .filter(|experiment| experiment.name == name)
+            .collect::<Vec<&Experiment>>()
+    }
+
     pub(crate) fn get_experiment_by_id(&self, hash: &str) -> anyhow::Result<&Experiment> {
         self.experiments
             .iter()

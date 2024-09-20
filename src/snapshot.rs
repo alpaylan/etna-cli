@@ -29,18 +29,6 @@ impl SnapshotType {
         matches!(self, Self::Experiment { .. })
     }
 
-    pub(crate) fn is_workload(&self) -> bool {
-        matches!(self, Self::Workload { .. })
-    }
-
-    pub(crate) fn is_script(&self) -> bool {
-        matches!(self, Self::Script { .. })
-    }
-
-    pub(crate) fn is_etna(&self) -> bool {
-        matches!(self, Self::Etna { .. })
-    }
-
     pub(crate) fn time(&self) -> i64 {
         match self {
             Self::Experiment { time } => chrono::DateTime::parse_from_rfc3339(time)
