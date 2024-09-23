@@ -167,3 +167,109 @@ pub(crate) struct Metric {
     pub data: serde_json::Value,
     pub experiment_id: String,
 }
+
+pub(crate) trait Queriable {
+    fn query(&self, store: &Store) -> anyhow::Result<Vec<String>>;
+}
+
+pub(crate) enum SpecializedQuery {
+    Experiment(ExperimentQuery),
+    Metric(MetricQuery),
+    Snapshot(SnapshotQuery),
+}
+
+impl Queriable for SpecializedQuery {
+    fn query(&self, store: &Store) -> anyhow::Result<Vec<String>> {
+        match self {
+            SpecializedQuery::Experiment(query) => query.query(store),
+            SpecializedQuery::Metric(query) => query.query(store),
+            SpecializedQuery::Snapshot(query) => query.query(store),
+        }
+    }
+}
+
+pub(crate) enum ExperimentQuery {
+    Id(String),
+    NameLast(String),
+    NameAll(String),
+}
+
+impl Queriable for ExperimentQuery {
+    fn query(&self, store: &Store) -> anyhow::Result<Vec<String>> {
+        match self {
+            ExperimentQuery::Id(hash) => {
+                let experiment = store.get_experiment_by_id(hash)?;
+                Ok(vec![serde_json::to_string(experiment)?])
+            }
+            ExperimentQuery::NameLast(name) => {
+                let experiment = store.get_experiment_by_name(name)?;
+                Ok(vec![serde_json::to_string(experiment)?])
+            }
+            ExperimentQuery::NameAll(name) => {
+                let experiments = store.get_all_experiments_by_name(name);
+                experiments
+                    .iter()
+                    .map(|e| serde_json::to_string(e).context("Failed to serialize experiment"))
+                    .collect()
+            }
+        }
+    }
+}
+
+pub(crate) enum MetricQuery {
+    ByExperimentId(String),
+}
+
+impl Queriable for MetricQuery {
+    fn query(&self, store: &Store) -> anyhow::Result<Vec<String>> {
+        match self {
+            MetricQuery::ByExperimentId(hash) => {
+                let metrics = store
+                    .metrics
+                    .iter()
+                    .filter(|metric| metric.experiment_id == *hash)
+                    .collect::<Vec<&Metric>>();
+
+                metrics
+                    .iter()
+                    .map(|m| serde_json::to_string(m).context("Failed to serialize metric"))
+                    .collect()
+            }
+        }
+    }
+}
+
+pub(crate) enum SnapshotQuery {
+    ByName(String),
+    ByHash(String),
+}
+
+impl Queriable for SnapshotQuery {
+    fn query(&self, store: &Store) -> anyhow::Result<Vec<String>> {
+        match self {
+            SnapshotQuery::ByName(name) => {
+                let snapshots = store
+                    .snapshots
+                    .iter()
+                    .filter(|snapshot| snapshot.typ.name().unwrap_or("".to_string()) == *name)
+                    .collect::<Vec<&Snapshot>>();
+
+                snapshots
+                    .iter()
+                    .map(|s| serde_json::to_string(s).context("Failed to serialize snapshot"))
+                    .collect()
+            }
+            SnapshotQuery::ByHash(hash) => {
+                let snapshot = store
+                    .snapshots
+                    .iter()
+                    .find(|snapshot| snapshot.hash == *hash)
+                    .context("Snapshot not found")?;
+
+                Ok(vec![
+                    serde_json::to_string(snapshot).context("Failed to serialize snapshot")?
+                ])
+            }
+        }
+    }
+}

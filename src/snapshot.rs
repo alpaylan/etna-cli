@@ -33,8 +33,16 @@ impl SnapshotType {
         match self {
             Self::Experiment { time } => chrono::DateTime::parse_from_rfc3339(time)
                 .unwrap()
-                .timestamp() as i64,
+                .timestamp(),
             _ => i64::MIN,
+        }
+    }
+
+    pub(crate) fn name(&self) -> anyhow::Result<String> {
+        match self {
+            Self::Script { name } => Ok(name.clone()),
+            Self::Workload { name, .. } => Ok(name.clone()),
+            _ => anyhow::bail!("name() is not supported for {:?}", self),
         }
     }
 }
