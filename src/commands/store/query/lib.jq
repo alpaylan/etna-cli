@@ -24,14 +24,22 @@ def last_experiment_by_name (name):
 
 def metrics_by_experiment_id (id): .metrics[] | select(.experiment_id == id);
 
-def metrics_by_field_match (field; value): 
-    .metrics
-    | map(select(.data[field] == value))
-    ;
-
 def metrics_by_json_object (json): 
     .metrics
     | map(select(.data | contains(json)));
 
 def metrics_by_json_string (json_string): 
     metrics_by_json_object(json_string | fromjson);
+
+def snapshots_by_json_object (json): 
+    .snapshots
+    | map(select(.typ | contains(json)));
+
+def snapshots_by_json_string (json_string):
+    snapshots_by_json_object(json_string | fromjson);
+
+def snapshots_by_name (name): 
+    snapshots_by_json_object({name: name});
+
+def snapshot_by_hash (hash): 
+    .snapshots[] | select(.hash == hash);
