@@ -240,8 +240,7 @@ enum ConfigCommand {
     )]
     ChangeBranch {
         /// Branch to clone the etna repository
-        /// [default: main]
-        #[clap(short, long, default_value = "main")]
+        #[clap(short, long)]
         branch: String,
     },
     #[command(name = "show", about = "Show the current configuration")]
