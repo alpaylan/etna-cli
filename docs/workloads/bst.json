@@ -2,249 +2,309 @@
 [
     {
         "mutations": ["insert_1"],
+        "description": "Always returns a tree with only the new key-value pair, ignoring the structure of the existing tree. This breaks the BST property as it discards previous data.",
         "tasks": [
             {
-                "counterexample": "",
-                "property": "InsertPost"
+                "counterexample": "((T (E) 0 0 (E)) 1 0 0)",
+                "property": "InsertPost",
+                "explanation": "After inserting key 1, the tree should contain both keys 0 and 1. Instead, the mutation always returns a tree with only the new key-value pair, discarding the previous tree. This violates the postcondition that insertion should preserve existing keys."
             },
             {
-                "counterexample": "",
-                "property": "InsertModel"
+                "counterexample": "((E) 0 0)",
+                "property": "InsertModel",
+                "explanation": " Inserting into an empty tree should yield a tree with the new key. The mutation does this, but it also does this for non-empty trees, which is incorrect."
             },
             {
-                "counterexample": "",
-                "property": "DeleteInsert"
+                "counterexample": "((E) 0 0 0)",
+                "property": "DeleteInsert",
+                "explanation": "After deleting and then inserting the same key, the tree should be restored. The mutation ignores the previous structure, so restoration fails."
             },
             {
-                "counterexample": "",
-                "property": "InsertInsert"
+                "counterexample": "((E) 0 0 0 0)",
+                "property": "InsertInsert",
+                "explanation": "Inserting the same key twice should update the value, not duplicate or discard previous data. The mutation always creates a new single-node tree."
             },
             {
-                "counterexample": "",
-                "property": "InsertUnion"
+                "counterexample": "((E) (E) 0 0)",
+                "property": "InsertUnion",
+                "explanation": " Union should combine both trees. The mutation ignores both and returns only the new key."
             },
             {
-                "counterexample": "",
-                "property": "UnionDeleteInsert"
+                "counterexample": "((E) (E) 0 0)",
+                "property": "UnionDeleteInsert",
+                "explanation": "After union, delete, and insert, the tree should reflect all operations. The mutation discards all previous structure."
             }
         ]
     },
     {
         "mutations": ["insert_2"],
+        "description": "Only inserts to the left subtree if the new key is less than the current node's key. Otherwise, it replaces the value at the current node with the new value, but never inserts to the right subtree. As a result, duplicate keys are updated, but any key greater than the current node is ignored.",
         "tasks": [
             {
-                "counterexample": "",
-                "property": "InsertPost"
+                "counterexample": "((T (E) 0 1 (E)) 1 1 0)",
+                "property": "InsertPost",
+                "explanation": " Inserting key 1 should add it to the right, but this mutation never inserts to the right, so key 1 is ignored."
             },
             {
-                "counterexample": "",
-                "property": "InsertModel"
+                "counterexample": "((E) 0 0)",
+                "property": "InsertModel",
+                "explanation": "Inserting into an empty tree works, but for non-empty trees, keys greater than the root are ignored."
             },
             {
-                "counterexample": "",
-                "property": "InsertDelete"
+                "counterexample": "((E) 0 0 0)",
+                "property": "InsertDelete",
+                "explanation": "After deleting and inserting, the tree should be restored. Here, keys greater than the root are ignored, so restoration fails."
             },
             {
-                "counterexample": "",
-                "property": "DeleteInsert"
+                "counterexample": "((E) 0 0 0)",
+                "property": "DeleteInsert",
+                "explanation": "The mutation fails to restore the tree if the key is greater than the root."
             },
             {
-                "counterexample": "",
-                "property": "InsertInsert"
+                "counterexample": "((E) 0 0 0 0)",
+                "property": "InsertInsert",
+                "explanation": "Inserting the same key twice should update the value, but the mutation only updates if the key matches the root."
             },
             {
-                "counterexample": "",
-                "property": "InsertUnion"
+                "counterexample": "((E) (E) 0 0)",
+                "property": "InsertUnion",
+                "explanation": "Union should combine both trees, but the mutation ignores keys greater than the root."
             },
             {
-                "counterexample": "",
-                "property": "UnionDeleteInsert"
+                "counterexample": "((E) (E) 0 0)",
+                "property": "UnionDeleteInsert",
+                "explanation": "After union, delete, and insert, the mutation fails to maintain the correct structure for keys greater than the root."
             }
         ]
     },
     {
         "mutations": ["insert_3"],
+        "description": "Performs a standard binary search tree insertion, but if the new key matches the current node's key, the value is not updated. ",
         "tasks": [
             {
-                "counterexample": "",
-                "property": "InsertPost"
+                "counterexample": "((T (E) 1 1 (E)) 1 1 0)",
+                "property": "InsertPost",
+                "explanation": "Inserting a key that already exists should update its value. This mutation does not update the value if the key matches, violating the postcondition."
             },
             {
-                "counterexample": "",
-                "property": "InsertModel"
+                "counterexample": "((E) 0 0)",
+                "property": "InsertModel",
+                "explanation": "Inserting into an empty tree works, but duplicate keys are not updated."
             },
             {
-                "counterexample": "",
-                "property": "InsertDelete"
+                "counterexample": "((E) 0 0 0)",
+                "property": "InsertDelete",
+                "explanation": "After deleting and inserting, the tree should be restored, but duplicate keys are not updated."
             },
             {
-                "counterexample": "",
-                "property": "InsertInsert"
+                "counterexample": "((E) 0 0 0 0)",
+                "property": "InsertInsert",
+                "explanation": "Inserting the same key twice should update the value, but the mutation does not."
             },
             {
-                "counterexample": "",
-                "property": "InsertUnion"
+                "counterexample": "((E) (E) 0 0)",
+                "property": "InsertUnion",
+                "explanation": "Union should combine both trees, but duplicate keys are not updated."
             },
             {
-                "counterexample": "",
-                "property": "UnionDeleteInsert"
+                "counterexample": "((E) (E) 0 0)",
+                "property": "UnionDeleteInsert",
+                "explanation": "After union, delete, and insert, duplicate keys are not updated."
             }
         ]
     },
     {
         "mutations": ["delete_4"],
+        "description": "When deleting, the operation only returns the subtree where the target is found, if it exists, instead of reconstructing the tree",
         "tasks": [
             {
-                "counterexample": "",
-                "property": "DeleteModel"
+                "counterexample": "((T (E) 0 0 (E)) 0)",
+                "property": "DeleteModel",
+                "explanation": "Deleting a key should reconstruct the tree without that key. This mutation only returns the subtree where the key is found, losing the rest of the tree."
             },
             {
-                "counterexample": "",
-                "property": "DeletePost"
+                "counterexample": "((T (E) 0 0 (E)) 1 0)",
+                "property": "DeletePost",
+                "explanation": "Deleting a non-existent key should leave the tree unchanged, but the mutation discards parts of the tree"
             },
             {
-                "counterexample": "",
-                "property": "DeleteDelete"
+                "counterexample": "(E) 0 0)",
+                "property": "DeleteDelete",
+                "explanation": "Deleting from an empty tree should do nothing, but the mutation does not handle this correctly as it only returns the subtree where it searches for the target."
             },
             {
-                "counterexample": "",
-                "property": "DeleteInsert"
+                "counterexample": "((E) 0 0 0)",
+                "property": "DeleteInsert",
+                "explanation": "After deleting and inserting, the tree should be restored, but the mutation loses the original structure."
             },
             {
-                "counterexample": "",
-                "property": "DeleteUnion"
+                "counterexample": "((E) (E) 0)",
+                "property": "DeleteUnion",
+                "explanation": "Union after delete should combine trees, but the mutation discards the structure."
             },
             {
-                "counterexample": "",
-                "property": "InsertDelete"
+                "counterexample": "((E) 0 0 0)",
+                "property": "InsertDelete",
+                "explanation": "Insert then delete should restore the original tree, but the mutation loses structure as it only returns the subtree where it searches for the target."
             },
             {
-                "counterexample": "",
-                "property": "UnionDeleteInsert"
+                "counterexample": "((E) (E) 0 0)",
+                "property": "UnionDeleteInsert",
+                "explanation": "After union, delete, and insert, the mutation loses structure."
             }
         ]
     },
     {
         "mutations": ["delete_5"],
+        "description": "Swaps the direction of comparison for deletion: Deletes from the left subtree if the current node's key is less than the target and from the right subtree if the current node's key is greater than the target.",
         "tasks": [
             {
-                "counterexample": "",
-                "property": "DeleteModel"
+                "counterexample": "((T (E) 0 0 (E)) 0)",
+                "property": "DeleteModel",
+                "explanation": "The mutation swaps comparison direction, so it deletes from the wrong subtree, violating the model."
             },
             {
-                "counterexample": "",
-                "property": "DeletePost"
+                "counterexample": "((T (E) 0 0 (T (E) 1 0 (E))) 1 1)",
+                "property": "DeletePost",
+                "explanation": "Deleting key 1 should remove it, but the mutation tries to delete from the wrong subtree."
             },
             {
-                "counterexample": "",
-                "property": "DeleteDelete"
+                "counterexample": "((E) 0 0)",
+                "property": "DeleteDelete",
+                "explanation": "Deleting from an empty tree should do nothing, but the mutation does not handle this correctly as it swaps the direction of comparison."
             },
             {
-                "counterexample": "",
-                "property": "DeleteInsert"
+                "counterexample": "((E) 0 0 0)",
+                "property": "DeleteInsert",
+                "explanation": "After deleting and inserting, the tree should be restored, but the mutation loses the original structure due to incorrect deletion direction."
             },
             {
-                "counterexample": "",
-                "property": "DeleteUnion"
+                "counterexample": "((E) (E) 0)",
+                "property": "DeleteUnion",
+                "explanation": "Union after delete should combine trees, but the mutation deletes from the wrong subtree, losing structure."
             },
             {
-                "counterexample": "",
-                "property": "UnionDeleteInsert"
+                "counterexample": "((E) (E) 0 0)",
+                "property": "UnionDeleteInsert",
+                "explanation": "After union, delete, and insert, the mutation loses structure due to incorrect deletion direction."
             }
         ]
     },
     {
         "mutations": ["union_6"],
+        "description": "Combines two trees by always nesting the second tree as the right child of the first, without properly merging keys or maintaining the binary search tree property.",
         "tasks": [
             {
-                "counterexample": "",
-                "property": "UnionValid"
+                "counterexample": "((E) (E))",
+                "property": "UnionValid",
+                "explanation": " Union should produce a valid BST, but this mutation always nests the second tree as the right child, breaking BST invariants."
             },
             {
-                "counterexample": "",
-                "property": "UnionPost"
+                "counterexample": "((E) (E) 0)",
+                "property": "UnionPost",
+                "explanation": "The result should contain all keys from both trees, but this mutation only nests the second tree, losing keys from the first."
             },
             {
-                "counterexample": "",
-                "property": "UnionModel"
+                "counterexample": "((E) (E))",
+                "property": "UnionModel",
+                "explanation": "The union should merge both trees, but the mutation does not. It only nests the second tree as the right child, violating the model."
             },
             {
-                "counterexample": "",
-                "property": "DeleteUnion"
+                "counterexample": "((E) (E) 0)",
+                "property": "DeleteUnion",
+                "explanation": "After delete and union, the result should be correct, but the mutation breaks structure. "
             },
             {
-                "counterexample": "",
-                "property": "InsertUnion"
+                "counterexample": "((E) (E) 0 0)",
+                "property": "InsertUnion",
+                "explanation": "After insert and union, the result should be correct, but the mutation breaks structure."
             },
             {
-                "counterexample": "",
-                "property": "UnionDeleteInsert"
+                "counterexample": "((E) (E) 0 0)",
+                "property": "UnionDeleteInsert",
+                "explanation": "After union and delete, the result should be correct, but the mutation does not maintain the structure of the trees."
             },
             {
-                "counterexample": "",
-                "property": "UnionUnionAssoc"
+                "counterexample": "((E) (E) (E))",
+                "property": "UnionUnionAssoc",
+                "explanation": "Union should be associative, but the mutation is not."
             }
         ]
     },
     {
         "mutations": ["union_7"],
+        "description": "Merges two trees by first checking if the root values are the same; if so, it merges their left and right subtrees. If the root value of the first tree is less than that of the second, it attaches the second tree as the right child of the first. Otherwise, it swaps the trees and continues the process recursively.",
         "tasks": [
             {
-                "counterexample": "",
-                "property": "UnionValid"
+                "counterexample": "((E) (E))",
+                "property": "UnionValid",
+                "explanation": " Union should produce a valid BST, but this mutation does not if root values differ."
             },
             {
-                "counterexample": "",
-                "property": "UnionPost"
+                "counterexample": "((E) (E) 0)",
+                "property": "UnionPost",
+                "explanation": ""
             },
             {
-                "counterexample": "",
-                "property": "UnionModel"
+                "counterexample": "((E) (E))",
+                "property": "UnionModel",
+                "explanation": ""
             },
             {
-                "counterexample": "",
-                "property": "DeleteUnion"
+                "counterexample": "((E) (E) 0)",
+                "property": "DeleteUnion",
+                "explanation": ""
             },
             {
-                "counterexample": "",
-                "property": "InsertUnion"
+                "counterexample": "((E) (E) 0 0)",
+                "property": "InsertUnion",
+                "explanation": ""
             },
             {
-                "counterexample": "",
-                "property": "UnionDeleteInsert"
+                "counterexample": "((E) (E) 0 0)",
+                "property": "UnionDeleteInsert",
+                "explanation": ""
             },
             {
-                "counterexample": "",
-                "property": "UnionUnionAssoc"
+                "counterexample": "((E) (E) (E))",
+                "property": "UnionUnionAssoc",
+                "explanation": ""
             }
         ]
     },
     {
         "mutations": ["union_8"],
+        "description": "If the root values of both trees are equal, their left and right subtrees are merged respectively. If the root value of the first tree is less than that of the second, the left subtree of the first is merged with all nodes in the second tree that have smaller values, while the right subtree is merged with the remainder. If neither condition holds, the trees are swapped and the process recurses.",
         "tasks": [
             {
-                "counterexample": "",
-                "property": "UnionPost"
+                "counterexample": "((E) (E) 0)",
+                "property": "UnionPost",
+                "explanation": ""
             },
             {
-                "counterexample": "",
-                "property": "UnionModel"
+                "counterexample": "((E) (E))",
+                "property": "UnionModel",
+                "explanation": ""
             },
             {
-                "counterexample": "",
-                "property": "DeleteUnion"
+                "counterexample": "((E) (E) 0)",
+                "property": "DeleteUnion",
+                "explanation": ""
             },
             {
-                "counterexample": "",
-                "property": "InsertUnion"
+                "counterexample": "((E) (E) 0 0)",
+                "property": "InsertUnion",
+                "explanation": ""
             },
             {
-                "counterexample": "",
-                "property": "UnionDeleteInsert"
+                "counterexample": "((E) (E) 0 0)",
+                "property": "UnionDeleteInsert",
+                "explanation": ""
             },
             {
-                "counterexample": "",
-                "property": "UnionUnionAssoc"
+                "counterexample": "((E) (E) (E))",
+                "property": "UnionUnionAssoc",
+                "explanation": ""
             }
         ]
     }
