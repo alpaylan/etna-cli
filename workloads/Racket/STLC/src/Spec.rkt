@@ -6,6 +6,7 @@
 (define (assumes p1 p2)
   (match p1
     [(nothing) nothing]
+    [#f nothing]
     [(just #f) nothing]
     [(just #t) p2]
     [#t p2]

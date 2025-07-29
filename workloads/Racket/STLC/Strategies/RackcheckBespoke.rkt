@@ -5,15 +5,23 @@
 (require rackcheck)
 (require data/maybe)
 
+(define (truthy? x)
+  (match x
+    [(nothing) #t]
+    [#t #t]
+    [(just #t) #t]
+    [(just #f) #f]
+    [#f #f]))
+
 (define test_prop_SinglePreserve
   (property prop_SinglePreserve ([e gSized])
-            (equal? (prop_SinglePreserve e) (just #t)))
+            (truthy? (prop_SinglePreserve e)))
   )
 
 
 (define test_prop_MultiPreserve
   (property prop_MultiPreserve ([e gSized])
-            (equal? (prop_MultiPreserve e) (just #t)))
+            (truthy? (prop_MultiPreserve e)))
   )
 
 (provide test_prop_SinglePreserve

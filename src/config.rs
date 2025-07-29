@@ -60,6 +60,18 @@ impl ExperimentConfig {
 
         Self::from_path(experiment.path.clone())
     }
+
+    pub(crate) fn from_name(name: &str) -> anyhow::Result<Self> {
+        let etna_config = EtnaConfig::get_etna_config()?;
+        Self::from_etna_config(name, &etna_config)
+    }
+
+    pub(crate) fn from_maybe_name(name: Option<&str>) -> anyhow::Result<Self> {
+        match name {
+            Some(name) => Self::from_name(name),
+            None => Self::from_current_dir(),
+        }
+    }
 }
 
 impl ExperimentConfig {

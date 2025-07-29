@@ -15,7 +15,19 @@ Inductive Typ :=
 #[export] Instance dec_type (t1 t2 : Typ) : Dec (t1 = t2).
 Proof. dec_eq. Defined.
 
-Derive (Show, Sized) for Typ.
+Derive (Sized) for Typ.
+
+Local Open Scope string_scope.
+
+#[global] Instance ShowTyp : Show Typ :=
+  { show := fun t =>
+    let fix show (t: Typ) : string :=
+      match t with
+      | TBool => "(TBool)"
+      | TFun t1 t2 => "(TFun " ++ show t1 ++ " " ++ show t2 ++ ")"
+      end
+    in show t
+  }. 
 
 Inductive Expr :=
 | Var   : nat -> Expr
@@ -24,7 +36,25 @@ Inductive Expr :=
 | App   : Expr -> Expr -> Expr
 .
 
-Derive (Show, Sized) for Expr.
+Derive (Sized) for Expr.
+
+Definition sexp (b: bool) : string :=
+  if b then "#t" else "#f".
+
+#[global] Instance ShowExpr : Show Expr :=
+{| 
+show := fun e =>
+    let fix aux (e: Expr) : string :=
+    match e with
+    | Var n => "(Var " ++ show n ++ ")"
+    | Bool b => "(Bool " ++ sexp b ++ ")"
+    | Abs t e' => "(Abs " ++ show t ++ " " ++ aux e' ++ ")"
+    | App e1 e2 => "(App " ++ aux e1 ++ " " ++ aux e2 ++ ")"
+    end
+    in aux e
+|}.
+
+Local Close Scope string_scope.
 
 Definition Ctx := list Typ.
 
@@ -80,16 +110,16 @@ Definition shift  (d: Z) (ex: Expr) : Expr :=
             else Var (Z.to_nat ((Z.of_nat n) + d))
 *)
             (*!! shift_var_none *)
+            (*!
             Var n
+            *)
             (*!! shift_var_all *)
             (*!
             Var (Z.to_nat (Z.of_nat n + d))
             *)
             (*!! shift_var_leq *)
-            (*!
             if (Z.leb (Z.of_nat n) c) then Var n
             else Var (Z.to_nat (Z.of_nat n + d)) 
-            *)
             (* !*)
         | Bool b => 
             Bool b

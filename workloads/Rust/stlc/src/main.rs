@@ -1,5 +1,4 @@
 
-use stlc::implementation::Expr;
 use stlc::spec;
 use stlc::strategies::bespoke::ExprOpt;
 
@@ -11,14 +10,14 @@ fn main() {
         eprintln!("Usage: {} <tool> <property>", args[0]);
         eprintln!("Available tools: quickcheck");
         eprintln!(
-            "For available properties, check https://github.com/alpaylan/etna-cli/blob/main/docs/workloads/stlc.md"
+            "Available properties: SinglePreserve, MultiPreserve"
         );
         return;
     }
     let tool = args[1].as_str();
     let property = args[2].as_str();
 
-    let num_tests = 20000;
+    let num_tests = 200_000_000;
     let mut qc = quickcheck::QuickCheck::new()
         .tests(num_tests)
         .max_tests(num_tests * 2)

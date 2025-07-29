@@ -37,14 +37,14 @@
    (define props
      `(
        ; Rackcheck properties
-       ("rc:test_prop_SinglePreserve"   . ,rc:test_prop_SinglePreserve)
-       ("rc:test_prop_MultiPreserve"    . ,rc:test_prop_MultiPreserve)
+       ("rc:SinglePreserve"   . ,rc:test_prop_SinglePreserve)
+       ("rc:MultiPreserve"    . ,rc:test_prop_MultiPreserve)
        ; Proplang properties
-       ("pl:test_prop_SinglePreserve"   . ,pl:test_prop_SinglePreserve)
-       ("pl:test_prop_MultiPreserve"    . ,pl:test_prop_MultiPreserve)
+       ("pl:SinglePreserve"   . ,pl:test_prop_SinglePreserve)
+       ("pl:MultiPreserve"    . ,pl:test_prop_MultiPreserve)
        ; Parallel properties
-       ("prl:test_prop_SinglePreserve"   . ,prl:test_prop_SinglePreserve)
-       ("prl:test_prop_MultiPreserve"    . ,prl:test_prop_MultiPreserve)
+       ("prl:SinglePreserve"   . ,prl:test_prop_SinglePreserve)
+       ("prl:MultiPreserve"    . ,prl:test_prop_MultiPreserve)
        )
      )
 

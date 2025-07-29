@@ -18,8 +18,8 @@ Axiom qctest_map : OCamlString -> unit.
 Extract Constant qctest_map => "
 fun test_name ->
   let test_map = [
-    (""test_prop_SinglePreserve"", qctest_test_prop_SinglePreserve);
-    (""test_prop_MultiPreserve"", qctest_test_prop_MultiPreserve)
+    (""SinglePreserve"", qctest_test_prop_SinglePreserve);
+    (""MultiPreserve"", qctest_test_prop_MultiPreserve)
   ] in
   let test = List.assoc test_name test_map in
   test ()

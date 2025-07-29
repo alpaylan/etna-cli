@@ -8,6 +8,7 @@ Strategies/BespokeGenerator.v
 Strategies/TypeBasedGenerator.v
 Strategies/SpecificationBasedGenerator.v
 Strategies/TypeBasedFuzzer.v
+Runners/BespokeGenerator_sampler.v
 Runners/BespokeGenerator_test_runner.v
 Runners/TypeBasedGenerator_test_runner.v
 Runners/SpecificationBasedGenerator_test_runner.v

@@ -3,14 +3,14 @@ use std::{fmt::Display, io::Write};
 use ab_glyph::{Font, FontRef, ScaleFont as _};
 use anyhow::Context as _;
 use image::{Rgb, RgbImage};
-use imageproc::{drawing::draw_filled_rect_mut, rect::Rect};
+use imageproc::{drawing::{draw_filled_rect_mut, draw_line_segment_mut}, rect::Rect};
 use itertools::Itertools;
 use serde_json::{Map, Value};
 
 use crate::{
     config::{EtnaConfig, ExperimentConfig},
-    experiment::Test,
-    store::Store,
+    experiment::{Experiment, Test},
+    store::{Metric, Store},
 };
 
 #[derive(Debug, Clone, Copy, clap::ValueEnum)]
@@ -28,6 +28,37 @@ impl Display for MetricType {
             MetricType::Tests => write!(f, "tests"),
             MetricType::Shrinks => write!(f, "shrinks"),
             MetricType::Time => write!(f, "time"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, clap::ValueEnum)]
+pub enum AggregationType {
+    Sum,
+    Avg,
+}
+
+impl Display for AggregationType {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            AggregationType::Sum => write!(f, "sum"),
+            AggregationType::Avg => write!(f, "avg"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, clap::ValueEnum)]
+pub enum VisualizationType {
+    Bucket,
+    Bar,
+    Line,
+}
+impl Display for VisualizationType {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            VisualizationType::Bucket => write!(f, "bucket"),
+            VisualizationType::Bar => write!(f, "bar"),
+            VisualizationType::Line => write!(f, "line"),
         }
     }
 }
@@ -65,7 +96,6 @@ pub(crate) fn write_row<W: std::io::Write>(
     writer.write_all(b"\n").context("Failed to write newline")
 }
 
-/// Visualize the results of an experiment for a given set of tests.
 pub fn invoke(
     experiment_name: Option<String>,
     figure_name: String,
@@ -73,26 +103,66 @@ pub fn invoke(
     groupby: Vec<String>,
     aggby: Vec<String>,
     metric: MetricType,
-    mut buckets: Vec<f64>,
+    buckets: Vec<f64>,
+    typ_: VisualizationType,
 ) -> anyhow::Result<()> {
     log::trace!("visualizing experiment with name '{:?}'", experiment_name);
-    let etna_config = EtnaConfig::get_etna_config()?;
 
     if tests.is_empty() {
         anyhow::bail!("No tests provided. Please specify at least one test to run.");
     }
 
-    let experiment_config = match experiment_name {
-        Some(name) => ExperimentConfig::from_etna_config(&name, &etna_config).context(format!(
-            "Failed to get experiment config for '{}'",
-            name
-        )),
-        None => ExperimentConfig::from_current_dir().context("No experiment name is provided, and the current directory is not an experiment directory"),
-    }?;
+    let experiment_config = ExperimentConfig::from_maybe_name(experiment_name.as_deref())
+        .context("Failed to load experiment configuration")?;
 
-    let store = Store::load(&experiment_config.store)?;
+    let store: Store = Store::load(&experiment_config.store)?;
 
     let experiment = store.get_experiment_by_name(&experiment_config.name)?;
+
+    let agg_metrics = get_agg_metrics(experiment, &store, &figure_name, &tests, &aggby)?;
+
+    log::trace!("Aggregated metrics: {:#?}", agg_metrics);
+
+    log::trace!("Number of aggregated metrics: {}", agg_metrics.len());
+
+    log::trace!("Groupby fields: {:#?}", groupby);
+
+    match typ_ {
+        VisualizationType::Bucket => draw_bucket_chart(
+            &experiment,
+            &figure_name,
+            agg_metrics,
+            groupby,
+            aggby,
+            metric,
+            buckets,
+        ),
+        VisualizationType::Bar => {
+            draw_bar_chart(
+                experiment_name,
+                figure_name,
+                tests,
+                groupby,
+                AggregationType::Sum, // Assuming sum for bar chart
+                aggby,
+                AggregationType::Avg, // Assuming avg for bar chart
+                metric,
+            )
+        }
+        VisualizationType::Line => {
+            // Placeholder for line chart implementation
+            anyhow::bail!("Line chart visualization is not implemented yet.");
+        }
+    }
+}
+
+fn get_agg_metrics(
+    experiment: &Experiment,
+    store: &Store,
+    figure_name: &str,
+    tests: &[String],
+    aggby: &[String],
+) -> anyhow::Result<Vec<serde_json::Map<std::string::String, serde_json::Value>>> {
     let figures_path = experiment.path.join("figures");
 
     let raw_data_path = figures_path.join(format!("{}_raw.csv", figure_name));
@@ -304,10 +374,18 @@ pub fn invoke(
 
     log::trace!("Aggregated metrics: {:#?}", agg_metrics);
 
-    log::trace!("Number of aggregated metrics: {}", agg_metrics.len());
+    Ok(agg_metrics)
+}
 
-    log::trace!("Groupby fields: {:#?}", groupby);
-
+fn draw_bucket_chart(
+    experiment: &Experiment,
+    figure_name: &str,
+    agg_metrics: Vec<Map<String, Value>>,
+    groupby: Vec<String>,
+    aggby: Vec<String>,
+    metric: MetricType,
+    mut buckets: Vec<f64>,
+) -> anyhow::Result<()> {
     let mut groups = groupby
         .iter()
         .map(|g| {
@@ -325,13 +403,12 @@ pub fn invoke(
 
     // Remove empty groups, meaning groups that filter no metrics.
     groups.retain(|g| {
-        agg_metrics
-            .iter()
-            .any(|m| {
-                groupby.iter().enumerate().all(|(i, g_)| {
-                    m.get(g_).is_some_and(|v| g[i] == v)
-                })
-            })
+        agg_metrics.iter().any(|m| {
+            groupby
+                .iter()
+                .enumerate()
+                .all(|(i, g_)| m.get(g_).is_some_and(|v| g[i] == v))
+        })
     });
 
     // The following code creates the sizes of the image;
@@ -689,4 +766,243 @@ fn draw_buckets_line(
 
         x += bucket_width;
     }
+}
+
+/// Draw bar charts for the given data.
+/// The bars will show the total of a metric, aggregated
+pub fn draw_bar_chart(
+    experiment_name: Option<String>,
+    figure_name: String,
+    tests: Vec<String>,
+    groupby: Vec<String>,
+    group: AggregationType,
+    aggby: Vec<String>,
+    agg: AggregationType,
+    metric: MetricType,
+) -> anyhow::Result<()> {
+    log::trace!("Drawing bar chart for experiment '{:?}'", experiment_name);
+
+    if tests.is_empty() {
+        anyhow::bail!("No tests provided. Please specify at least one test to run.");
+    }
+
+    let experiment_config = ExperimentConfig::from_maybe_name(experiment_name.as_deref())
+        .context("Failed to load experiment configuration")?;
+    let store = Store::load(&experiment_config.store)?;
+    let experiment = store.get_experiment_by_name(&experiment_config.name)?;
+
+    let agg_metrics = get_agg_metrics(experiment, &store, &figure_name, &tests, &aggby)?;
+
+    let mut groups = groupby
+        .iter()
+        .map(|g| {
+            agg_metrics
+                .iter()
+                .map(|m| {
+                    m.get(g)
+                        .unwrap_or_else(|| panic!("Groupby field '{g}' not found"))
+                })
+                .unique()
+                .collect::<Vec<_>>()
+        })
+        .multi_cartesian_product()
+        .collect::<Vec<Vec<_>>>();
+
+    // Remove empty groups, meaning groups that filter no metrics.
+    groups.retain(|g| {
+        agg_metrics.iter().any(|m| {
+            groupby
+                .iter()
+                .enumerate()
+                .all(|(i, g_)| m.get(g_).is_some_and(|v| g[i] == v))
+        })
+    });
+
+    // The following code creates the sizes of the image;
+    // Image width is fixed at 4000px.
+    let height = 8000.0;
+    // The ratio of the height is calculated based on the number of groups.
+    let ratio = 2.0 * (0.99_f64.powi(groups.len() as i32));
+    let width = (height / ratio).round();
+    // The width of each bar is calculated based on the number of groups.
+    // The margins between the bars are 10% of the bar width.
+    // For N groups, the width of the image is;
+    // width  = N * bar_width + 0.5 * bar_width.
+    // --> bar_width = width / (N + 0.5).
+    let bar_width = width / (groups.len() as f64 + 0.5);
+    // The margin between the bars is 10% of the bar width.
+    let hmargin = bar_width * 0.1;
+    let vmargin = bar_width * 0.5;
+
+    let mut image = RgbImage::new(width as u32, height as u32);
+
+    draw_filled_rect_mut(
+        &mut image,
+        Rect::at(0, 0).of_size(width as u32, height as u32),
+        Rgb([255, 255, 255]),
+    );
+
+    let colors = [
+        Rgb([0x00, 0x00, 0x00]), // black
+        Rgb([0x90, 0x0D, 0x0D]), // red
+        Rgb([0xDC, 0x5F, 0x00]), // orange
+        Rgb([0x24, 0x37, 0x63]), // blue
+        Rgb([0x43, 0x6E, 0x4F]), // green
+        Rgb([0x47, 0x09, 0x38]), // purple
+        Rgb([0xD6, 0x1C, 0x4E]), // pink
+        Rgb([0x33, 0x47, 0x56]), // dark blue
+        Rgb([0x29, 0x00, 0x01]), // dark brown
+        Rgb([0x00, 0x00, 0x00]), // black
+    ];
+
+    let mut max = 0.0;
+
+    for (i, group) in groups.iter().enumerate() {
+        let group_metrics = agg_metrics
+            .iter()
+            .filter(|m| {
+                groupby
+                    .iter()
+                    .enumerate()
+                    .all(|(i, g)| m.get(g).is_some_and(|v| group[i] == v))
+            })
+            .collect::<Vec<_>>();
+
+        // get total of the metric for the group
+        let total = group_metrics.iter().fold(0.0, |acc, m| {
+            acc + m
+                .get(metric.to_string().as_str())
+                .and_then(serde_json::Value::as_f64)
+                .unwrap_or(0.0)
+        });
+
+        if total > max {
+            max = total;
+        }
+    }
+
+    // Draw the vertical line at the left side of the image
+    let line_color = Rgb([0x00, 0x00, 0x00]); // black
+    let line_rect = Rect::at(vmargin as i32, 0).of_size(20, (height - hmargin) as u32);
+    draw_filled_rect_mut(&mut image, line_rect, line_color);
+
+    // Draw the horizontal line at the bottom of the image
+    let horizontal_line_rect = Rect::at(vmargin as i32, (height - hmargin) as i32)
+        .of_size(width as u32, 20);
+    draw_filled_rect_mut(&mut image, horizontal_line_rect, line_color);
+
+    // Tick marks on the vertical line
+    let tick_count = 10;
+    // get the order of magnitude of the max value
+    let order = max.log10().ceil();
+    // find the closest 10th value to the max
+    let closest_tenth = (max / 10f64.powf(order - 1.0)).ceil() * 10f64.powf(order - 1.0);
+    let tick_step = closest_tenth / tick_count as f64;
+    log::trace!(
+        "Max value: {}, Order: {}, Closest tenth: {}, Tick step: {}",
+        max,
+        order,
+        closest_tenth,
+        tick_step
+    );
+    // Draw tick marks and labels on the vertical line
+    for i in 0..=tick_count {
+        log::trace!(
+            "Drawing tick mark for value {} at index {}",
+            i as f64 * tick_step,
+            i
+        );
+        let tick_value = i as f64 * tick_step;
+        let tick_y = height - hmargin - (tick_value / max) * (height - 2.0 * vmargin);
+        log::trace!(
+            "Tick value: {}, Tick X:{}, Tick Y: {}",
+            tick_value, (vmargin * 0.75) as i32, tick_y
+        );
+        let tick_rect = Rect::at((vmargin * 0.75) as i32, tick_y as i32)
+            .of_size((vmargin  * 0.25) as u32, 20);
+        draw_filled_rect_mut(&mut image, tick_rect, line_color);
+        // Draw the tick label
+        let label = format!("{:.2}", tick_value);
+        let font = ab_glyph::FontRef::try_from_slice(include_bytes!(
+            "../../../assets/SourceCodePro-Medium.ttf"
+        ))
+        .expect("Failed to load font");
+        let scale = bar_width * 0.1;
+        let (text_width, text_height) = rendered_text_width_and_height(&label, &font, scale);
+        let text_x = vmargin  * 0.75 - text_width - 5.0; // 5px padding
+        let text_y = tick_y + (2.0 - text_height) / 2.0; // Center the text vertically
+        log::trace!(
+            "Drawing tick label '{}' at ({}, {}) with color {:?}",
+            label,
+            text_x,
+            text_y,
+            line_color
+        );
+        imageproc::drawing::draw_text_mut(
+            &mut image,
+            line_color,
+            text_x as i32,
+            text_y as i32,
+            scale as f32,
+            &font,
+            &label,
+        );
+    }
+
+    for (i, group) in groups.iter().enumerate() {
+        log::trace!("Processing group {i}: {:?}", group);
+        let group_metrics = agg_metrics
+            .iter()
+            .filter(|m| {
+                groupby
+                    .iter()
+                    .enumerate()
+                    .all(|(i, g)| m.get(g).is_some_and(|v| group[i] == v))
+            })
+            .collect::<Vec<_>>();
+
+        // get total of the metric for the group
+        let total = group_metrics.iter().fold(0.0, |acc, m| {
+            acc + m
+                .get(metric.to_string().as_str())
+                .and_then(serde_json::Value::as_f64)
+                .unwrap_or(0.0)
+        });
+
+        log::trace!("Total for group {i}: {}", total);
+        if total == 0.0 {
+            log::warn!("Total for group {i} is 0, skipping");
+            continue; // Skip groups with no data
+        }
+        // let bar_width = (width - 2.0 * hmargin) / groups.len() as f64;
+        let bar_height = (total / max) * (height - 2.0 * hmargin);
+        let x = vmargin + i as f64 * bar_width;
+        let y = height - hmargin - bar_height;
+        log::trace!(
+            "Drawing bar for group {i} at ({}, {}) with size ({}, {}) and color {:?}",
+            x,
+            y,
+            bar_width,
+            bar_height,
+            colors[i % colors.len()]
+        );
+        let rect = Rect::at(x as i32, y as i32).of_size(bar_width as u32, bar_height as u32);
+        log::trace!(
+            "Drawing rectangle for group {i} at ({}, {}) with size ({}, {}) and color {:?}",
+            x,
+            y,
+            bar_width,
+            bar_height,
+            colors[i % colors.len()]
+        );
+        draw_filled_rect_mut(&mut image, rect, colors[i % colors.len()]);
+    }
+
+    let name = format!("{}_{}.png", figure_name, metric.to_string());
+
+    let path = experiment.path.join("figures").join(name);
+    log::info!("Saving image to: {}", path.display());
+    image.save(path).expect("Failed to save image");
+
+    Ok(())
 }

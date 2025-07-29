@@ -1,5 +1,4 @@
 {
-    
     "check_steps": [
         {
             "Command": {
@@ -59,16 +58,37 @@
                     }
                 },
                 "generator": {
-                    "Command": {
-                        "command": "$workload_path/$strategy_test_runner.native",
-                        "args": [
-                            "$property"
-                        ],
-                        "params": [
-                            "workload_path",
-                            "property",
-                            "strategy"
-                        ]
+                    "Match": {
+                        "value": "cross",
+                        "options": {
+                            "false": {
+                                "Command": {
+                                    "command": "$workload_path/$strategy_test_runner.native",
+                                    "args": [
+                                        "$property"
+                                    ],
+                                    "params": [
+                                        "workload_path",
+                                        "property",
+                                        "strategy"
+                                    ]
+                                }
+                            },
+                            "true": {
+                                "Command": {
+                                    "command": "$workload_path/$strategy_sampler.native",
+                                    "args": [
+                                        "$property",
+                                        "1000"
+                                    ],
+                                    "params": [
+                                        "workload_path",
+                                        "property",
+                                        "strategy"
+                                    ]
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -76,7 +96,8 @@
     },
     "tags": {
         "BespokeGenerator": [
-            "generator"
+            "generator",
+            "sampler"
         ],
         "SpecificationBasedGenerator": [
             "generator"
@@ -94,6 +115,9 @@
         ],
         "fuzzer": [
             "TypeBasedFuzzer"
+        ],
+        "sampler": [
+            "BespokeGenerator"
         ]
     }
 }

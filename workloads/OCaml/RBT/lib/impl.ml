@@ -51,11 +51,11 @@ let rec insert (k : key) (v : value) (t : rbt) : rbt =
     match (x, vx, t) with
     | x, vx, E ->
         (*! *)
+(*!
         T (R, E, x, vx, E)
+*)
         (*!! miscolor_insert *)
-        (*!
           T (B, E, x, vx, E)
-        *)
         (* !*)
     | x, vx, T (rb, a, y, vy, b) ->
         let _ = ignore (rb, a, y, vy, b, ins) in

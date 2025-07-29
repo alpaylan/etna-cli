@@ -34,7 +34,7 @@ let gen_Q_Bespoke =
     list_size (int_bound 20) (pair (int_bound 100) (int_bound 100))
   in
   let xs = List.sort_uniq (fun (k1, _) (k2, _) -> (compare k1 k2)) xs in
-  let tree = List.fold_left (fun acc (k, v) -> insert k v acc) E xs in
+  let tree = List.fold_left (fun acc (k, v) -> insert_correct k v acc) E xs in
   return tree
 
 

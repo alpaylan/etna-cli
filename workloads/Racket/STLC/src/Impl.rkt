@@ -6,51 +6,40 @@
 (require racket/struct)
 
 (struct TBool () 
-  #:methods gen:custom-write
-  [(define write-proc
-     (make-constructor-style-printer
-      (lambda (obj) 'TBool)
-      (lambda (obj) '())))])
+    #:property prop:custom-write
+  (lambda (p port mode)
+      (fprintf port "(TBool)"))
+  #:transparent)
       
 (struct TFun (t1 t2) 
-  #:methods gen:custom-write
-  [(define write-proc
-    (make-constructor-style-printer
-      (lambda (obj) 'TFun)
-      (lambda (obj)
-        (list (TFun-t1 obj) (TFun-t2 obj)))))])
+    #:property prop:custom-write
+  (lambda (p port mode)
+      (fprintf port "(TFun ~a ~a)" (TFun-t1 p) (TFun-t2 p)))
+  #:transparent)
 
 (struct Var (nat) 
-  #:methods gen:custom-write
-  [(define write-proc
-    (make-constructor-style-printer
-      (lambda (obj) 'Var)
-      (lambda (obj)
-        (list (Var-nat obj)))))])
+#:property prop:custom-write
+  (lambda (p port mode)
+      (fprintf port "(Var ~a)" (Var-nat p)))
+  #:transparent)
         
 (struct Bool (bool) 
-  #:methods gen:custom-write
-  [(define write-proc
-    (make-constructor-style-printer
-      (lambda (obj) 'Bool)
-      (lambda (obj)
-        (list (Bool-bool obj)))))])
+    #:property prop:custom-write
+    (lambda (p port mode)
+        (fprintf port "(Bool ~a)" (Bool-bool p)))
+    #:transparent)
         
 (struct Abs (t1 e2)
-  #:methods gen:custom-write
-  [(define write-proc
-    (make-constructor-style-printer
-      (lambda (obj) 'Abs)
-      (lambda (obj)
-        (list (Abs-t1 obj) (Abs-e2 obj)))))])
-        
+    #:property prop:custom-write
+    (lambda (p port mode)
+        (fprintf port "(Abs ~a ~a)" (Abs-t1 p) (Abs-e2 p)))
+    #:transparent)
+
 (struct App (e1 e2) 
-  #:methods gen:custom-write
-  [(define write-proc
-    (make-constructor-style-printer
-      (lambda (obj) 'App)
-      (lambda (obj)
-        (list (App-e1 obj) (App-e2 obj)))))])
+    #:property prop:custom-write
+    (lambda (p port mode)
+        (fprintf port "(App ~a ~a)" (App-e1 p) (App-e2 p)))
+    #:transparent)
 
 (define expr? (lambda (x) (or (Var? x) (Bool? x) (Abs? x) (App? x))))
 (define typ? (lambda (x) (or (TBool? x) (TFun? x))))
@@ -83,7 +72,9 @@
     (match e 
         [(Var n) (
             #|! |#
+#|!
             if (< n c) (Var n) (Var (+ n d))
+|#
             #|!! shift_var_none |#
             #|!
 Var n
@@ -93,19 +84,17 @@ Var n
 Var (+ n d)
             |#
             #|!! shift_var_leq |#
-            #|!
 if (<= n c) (Var n) (Var (+ n d))
-            |#
             #| !|#
             )]
         [(Bool b) (Bool b)]
         [(Abs t e) (
             #|! |#
-#|!
             Abs t (shift_ (+ c 1) e d)
-|#
             #|!! shift_abs_no_incr |#
+            #|!
             Abs t (shift_ c e d)
+            |#
             #| !|#
         )]
         [(App e1 e2) (App (shift_ c e1 d) (shift_ c e2 d))]

@@ -1,12 +1,20 @@
+use std::fmt::Display;
+
 use serde::{Deserialize, Serialize};
-
-
-
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum Typ {
     TBool,
     TFun(Box<Typ>, Box<Typ>),
+}
+
+impl Display for Typ {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Typ::TBool => write!(f, "(TBool)"),
+            Typ::TFun(param, ret) => write!(f, "(TFun {} {})", param, ret),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -24,6 +32,17 @@ impl Expr {
             Expr::Bool(_) => 1,
             Expr::Abs(_, body) => 1 + body.size(),
             Expr::App(func, arg) => 1 + func.size() + arg.size(),
+        }
+    }
+}
+
+impl Display for Expr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Expr::Var(i) => write!(f, "(Var {})", i),
+            Expr::Bool(b) => write!(f, "(Bool {})", if *b { "#t" } else { "#f" }),
+            Expr::Abs(typ, body) => write!(f, "(Abs {} {})", typ, body),
+            Expr::App(func, arg) => write!(f, "(App {} {})", func, arg),
         }
     }
 }
@@ -71,30 +90,30 @@ pub fn shift(d: i32, expr: &Expr) -> Expr {
         match e {
             Var(i) => {
                 /*| */
+/*|
                 if *i < c { Var(*i) } else { Var(*i + d) }
+*/
                 /*|| shift_var_none */
                 /*|
                 Var(*i)
                 */
                 /*|| shift_var_all */
                 /*|
-                Var(((*i as isize) + d) as usize)
+                Var(*i + d)
                 */
                 /*|| shift_var_leq */
-                /*|
-                if *i as isize <= c { Var(*i) }
-                else { Var(((*i as isize) + d) as usize) }
-                */
+                if *i <= c { Var(*i) }
+                else { Var(*i + d) }
                 /* |*/
             }
             Bool(b) => Bool(*b),
             Abs(typ, body) => {
                 /*| */
-/*|
-                                Abs(typ.clone(), Box::new(go(c + 1, body, d)))
-*/
+                                                Abs(typ.clone(), Box::new(go(c + 1, body, d)))
                 /*|| shift_abs_no_incr */
+                /*|
                 Abs(typ.clone(), Box::new(go(c, body, d)))
+                */
                 /* |*/
             }
             App(func, arg) => App(Box::new(go(c, func, d)), Box::new(go(c, arg, d))),
@@ -140,34 +159,40 @@ pub fn subst(n: i32, s: &Expr, e: &Expr) -> Expr {
 pub fn subst_top(s: &Expr, e: &Expr) -> Expr {
     /*| */
     shift(-1, &subst(0, &shift(1, s), e))
-    /*|| subst_top_no_shift */
+    /*|| substTop_no_shift */
     /*|
     subst(0, s, e)
     */
-    /*|| subst_top_no_shift_back */
+    /*|| substTop_no_shift_back */
     /*|
-    | subst(0, &shift(1, s), e)
+    subst(0, &shift(1, s), e)
     */
     /* |*/
 }
 
 pub fn pstep(expr: &Expr) -> Option<Expr> {
     match expr {
-        Abs(t, e) => {
+        Expr::Abs(t, e) => {
             let ep = pstep(e)?;
-            Some(Abs(t.clone(), Box::new(ep)))
+            Some(Expr::Abs(t.clone(), Box::new(ep)))
         }
-        App(box Abs(_, box e1), box e2) => {
-            let e1p = pstep(e1).unwrap_or(e1.clone());
-            let e2p = pstep(e2).unwrap_or(e2.clone());
+
+        Expr::App(box Expr::Abs(_, box e1), box e2) => {
+            let e1p = pstep(e1).unwrap_or_else(|| e1.clone());
+            let e2p = pstep(e2).unwrap_or_else(|| e2.clone());
             Some(subst_top(&e2p, &e1p))
         }
-        App(box e1, box e2) => {
-            let e1p = pstep(e1)?;
-            let e2p = pstep(e2)?;
-            Some(App(Box::new(e1p), Box::new(e2p)))
-        }
-        Var(_) | Bool(_) => None,
+
+        Expr::App(box e1, box e2) => match (pstep(e1), pstep(e2)) {
+            (None, None) => None,
+            (me1, me2) => {
+                let new_e1 = me1.unwrap_or_else(|| e1.clone());
+                let new_e2 = me2.unwrap_or_else(|| e2.clone());
+                Some(Expr::App(Box::new(new_e1), Box::new(new_e2)))
+            }
+        },
+
+        Expr::Var(_) | Expr::Bool(_) => None,
     }
 }
 
