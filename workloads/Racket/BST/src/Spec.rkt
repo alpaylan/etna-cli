@@ -24,7 +24,7 @@
 (define (tree->list t)
   (match t
     [(E) null]
-    [(T l k v r) (append (tree->list l) (list (cons k v)) (tree->list r))]))
+    [(T l k v r) (append (tree->list l) (list (list k v)) (tree->list r))]))
 
 ;; (or bool 'nothing) -> (or bool 'nothing)
 (define (assumes p1 p2)
@@ -67,7 +67,7 @@
 #| ----------- |#
 
 (define (tree-equiv? t1 t2)
-  (equal? (tree->list t1) (tree->list t2)))
+  (just (equal? (tree->list t1) (tree->list t2))))
 
 #| ----------- |#
 
@@ -88,20 +88,20 @@
 #| -- Validity Properties. |#
 
 (define (prop_InsertValid t k v)
-  (assumes (BST? t) (BST? (insert k v t)))
+  (assumes (BST? t) (just (BST? ((insert k v t)))))
   )
 
 (define (prop_DeleteValid t k)
-  (assumes (BST? t) (BST? (delete k t)))
+  (assumes (BST? t) (just (BST? (delete k t))))
   )
 
 (define (prop_UnionValid t1 t2)
   (assumes
-   (match (list (BST? t1) (BST? t2))
-     [(list (just #t) (just #t)) (just #t)]
+   (match (cons (BST? t1) (BST? t2))
+     [(cons #t #t) #t]
      [* (nothing)]
      )
-   (BST? (union t1 t2)))
+   (just (BST? (union t1 t2))))
   )
 
 #| ----------- |#
@@ -123,7 +123,7 @@
 (define (prop_UnionPost t1 t2 k)
   (assumes
    (match (cons (BST? t1) (BST? t2))
-     [(cons (just #t) (just #t)) (just #t)]
+     [(cons #t #t) #t]
      [* (nothing)]
      )
    (let ([search-union (find k (union t1 t2))]
@@ -202,7 +202,7 @@
 
 (define (prop_UnionModel t1 t2)
   (assumes (match (cons (BST? t1) (BST? t2))
-             [(cons (just #t) (just #t)) (just #t)]
+             [(cons #t #t) #t]
              [* (nothing)]
              )
            (just (equal? (tree->list (union t1 t2))
@@ -234,7 +234,7 @@
 
 (define (prop_InsertUnion t1 t2 k v)
   (assumes (match (cons (BST? t1) (BST? t2))
-             [(cons (just #t) (just #t)) (just #t)]
+             [(cons #t #t) #t]
              [* (nothing)]
              )
            (tree-equiv? (insert k v (union t1 t2)) (union (insert k v t1) t2))
@@ -273,7 +273,7 @@
 
 (define (prop_UnionUnionAssoc t1 t2 t3)
   (assumes (and (BST? t1) (BST? t2) (BST? t3))
-           (equal? (union (union t1 t2) t3) (union t1 (union t2 t3)))
+           (just (equal? (union (union t1 t2) t3) (union t1 (union t2 t3))))
            )
   )
 
