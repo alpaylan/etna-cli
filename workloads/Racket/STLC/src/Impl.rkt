@@ -72,19 +72,20 @@
     (match e 
         [(Var n) (
             #|! |#
-#|!
             if (< n c) (Var n) (Var (+ n d))
-|#
             #|!! shift_var_none |#
             #|!
-Var n
+                Var n
             |#
+
             #|!! shift_var_all |#
             #|!
-Var (+ n d)
+                Var (+ n d)
             |#
             #|!! shift_var_leq |#
-if (<= n c) (Var n) (Var (+ n d))
+            #|!
+                if (<= n c) (Var n) (Var (+ n d))
+            |#
             #| !|#
             )]
         [(Bool b) (Bool b)]
@@ -93,7 +94,7 @@ if (<= n c) (Var n) (Var (+ n d))
             Abs t (shift_ (+ c 1) e d)
             #|!! shift_abs_no_incr |#
             #|!
-            Abs t (shift_ c e d)
+                Abs t (shift_ c e d)
             |#
             #| !|#
         )]

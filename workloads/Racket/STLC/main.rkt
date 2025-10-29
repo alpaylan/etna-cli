@@ -22,7 +22,7 @@
    (define search-key (string-append strategy ":" property))
    ; Dynamically load the property from the strategy file
 
-   (define tests 4000000)
+   (define tests 500000)
    (define config (make-config #:tests tests #:deadline (+ (current-inexact-milliseconds) (* 240 1000))))
 
    (define (check-rackcheck-property p) (check-property config p))

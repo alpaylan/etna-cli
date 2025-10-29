@@ -12,24 +12,16 @@
             (lambda (maybe-x)
               (match maybe-x
                 [(nothing) (gen:const nothing)]
-                [(just x) (f x)]
-                )
-              ))
-  )
-
+                [(just x) (f x)]))))
 
 (define/contract (list-pop ls index)
   (-> (listof any/c) exact-integer? (values any/c (listof any/c)))
-  (let ([index (+ index 1)])
-    (if (> index (length ls))
+    (if (> (+ index 1) (length ls))
         (values (raise-argument-error) ls)
-        (match/values (split-at ls index)
-                      [(l1 l2) (values (last l1) (append (take l1 (- (length l1) 1)) l2))]
-                      )
-        )
-    ))
-
-
+        (match-let ([(cons weight gen) (list-ref ls index)])
+          (if (= weight 1)
+            (values gen (drop ls index))
+            (values gen (list-set ls index (cons (- weight 1) gen)))))))
 
 (define (backtrack gs)
   (define (backtrack-iter gs)
@@ -42,86 +34,62 @@
                       (lambda (x)
                         (match x
                           [(nothing) (backtrack-iter gs2)]
-                          [(just x) (gen:const (just x))]
-                          )
-                        )
-                      )
-            )
-          )
-        ))
-  (backtrack-iter gs)
-  )
-
-
+                          [(just x) (gen:const (just x))])))))))
+  (backtrack-iter gs))
 
 (define (gen:var ctx t p r)
   (match ctx
     ['() r]
     [(cons t2 ctx2) (if (equal? t t2)
                         (gen:var ctx2 t (+ p 1) (cons p r))
-                        (gen:var ctx2 t (+ p 1) r))]
-    )
-  )
+                        (gen:var ctx2 t (+ p 1) r))]))
 
 (define (gen:vars ctx t)
   (let [(var-nats (gen:var ctx t 0 '()))]
-    (map (lambda (p) (gen:const (just (Var p)))) var-nats)
-    )
-  )
+    (map (lambda (p) (gen:const (just (Var p)))) var-nats)))
 
-
-(define (gen:zero env tau)
+(define (gen:one env tau)
   (match tau
     [(TBool) (gen:bind gen:boolean (lambda (b) (gen:const (just (Bool b)))))]
-    [(TFun T1 T2) (gen:bind-opt (gen:zero (cons T1 env) T2)
-                                (lambda (e) (gen:const (just (Abs T1 e)))))]
-    )
-  )
+    [(TFun T1 T2) (gen:bind-opt (gen:one (cons T1 env) T2)
+                                (lambda (e) (gen:const (just (Abs T1 e)))))]))
 
-(define gen:typ
-  (gen:frequency
-   `(
-     (2 . ,(gen:const (TBool)))
-     (1 . ,(gen:bind (gen:delay gen:typ)
-                     (lambda (T1) (gen:bind (gen:delay gen:typ)
-                                            (lambda (T2) (gen:const (TFun T1 T2)))))
-                     )
-        )
-     )
-   ))
+(define (gen:typ size)
+  (match size
+    [0 (gen:const (TBool))]
+    [n (gen:one-of-total nothing 
+                        (list 
+                          (gen:typ (quotient n 2)) 
+                          (gen:bind 
+                            (gen:delay (gen:typ (quotient n 2)))
+                              (lambda (T1) (gen:bind (gen:delay (gen:typ (quotient n 2)))
+                                               (lambda (T2) (gen:const (TFun T1 T2))))))))]))
 
 (define/contract (gen:one-of-total fallback gs)
   (-> any/c (listof gen?) gen?)
   (if (null? gs)
       (gen:const fallback)
-      (apply gen:choice gs)
-      )
-  )
+      (apply gen:choice gs)))
 
 (define/contract (gen:expr env tau sz)
   (-> (listof typ?) typ? number? gen?)
   (match sz
-    [0 (backtrack (list
-                   (gen:one-of-total nothing (gen:vars env tau))
-                   (gen:zero env tau)))]
-    [n (backtrack (list
-                   (gen:one-of-total nothing (gen:vars env tau))
-                   (gen:bind gen:typ
-                             (lambda (T1) (gen:bind-opt (gen:expr env (TFun T1 tau) (- n 1))
-                                                        (lambda (e1) (gen:bind-opt (gen:expr env T1 (- n 1))
-                                                                                   (lambda (e2) (gen:const (just (App e1 e2)))))))))
-                   (match tau
-                     [(TBool) (gen:bind gen:boolean (lambda (b) (gen:const (just (Bool b)))))]
-                     [(TFun T1 T2) (gen:bind-opt (gen:expr (cons T1 env) T2 (- n 1))
-                                                 (lambda (e) (gen:const (just (Abs T1 e)))))]
-                     )))]
-    )
-  )
-
+    [0 (gen:one-of-total nothing (list (gen:one-of-total nothing (gen:vars env tau))
+                                       (gen:one env tau)))]
+    [n (backtrack  (list  (cons 1 (gen:one env tau))
+                          (cons 1 (gen:one-of-total nothing (gen:vars env tau)))
+                          (cons 2 (gen:bind (gen:typ (random 1 (+ 1 (min n 10))))
+                                    (lambda (T1) (gen:bind-opt (gen:expr env (TFun T1 tau) (quotient n 2))
+                                                                (lambda (e1) (gen:bind-opt (gen:expr env T1 (quotient n 2))
+                                                                                          (lambda (e2) (gen:const (just (App e1 e2))))))))))                                            
+                          (cons 2 (match tau
+                                  [(TBool) (gen:bind gen:boolean (lambda (b) (gen:const (just (Bool b)))))]
+                                  [(TFun T1 T2) (gen:bind-opt (gen:expr (cons T1 env) T2 (quotient n 2))
+                                                              (lambda (e) (gen:const (just (Abs T1 e)))))]))))]))
 
 (define gSized
-  (gen:bind gen:typ
+  (gen:bind (gen:typ 150)
             (lambda (tau)
-              (gen:bind-opt (gen:expr '() tau 10) (lambda (x) (gen:const x))))))
+              (gen:bind-opt (gen:expr '() tau 100) (lambda (x) (gen:const x))))))
 
 (provide gSized)
