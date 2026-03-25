@@ -28,37 +28,37 @@ pub(crate) fn insert(k: i32, v: i32, t: Tree) -> Tree {
     match t {
         E => T(Box::new(E), k, v, Box::new(E)),
         T(l, k2, v2, r) => {
-            /*| insert */
-            /*|
-            if k < k2 {
-                T(Box::new(insert(k, v, *l)), k2, v2, r)
-            } else if k2 < k {
-                T(l, k2, v2, Box::new(insert(k, v, *r)))
-            } else {
-                T(l, k2, v, r)
+            /* marauders:variation=insert;tags= */
+            match () {
+                _ if matches!(std::env::var("M_insert_1").as_deref(), Ok("active")) => {
+                    T(Box::new(E), k, v, Box::new(E))
+                },
+                _ if matches!(std::env::var("M_insert_2").as_deref(), Ok("active")) => {
+                    if k < k2 {
+                        T(Box::new(insert(k, v, *l)), k2, v2, r)
+                    } else {
+                        T(l, k2, v, r)
+                    }
+                },
+                _ if matches!(std::env::var("M_insert_3").as_deref(), Ok("active")) => {
+                    if k < k2 {
+                        T(Box::new(insert(k, v, *l)), k2, v2, r)
+                    } else if k2 < k {
+                        T(l, k2, v2, Box::new(insert(k, v, *r)))
+                    } else {
+                        T(l, k2, v2, r)
+                    }
+                },
+                _ => {
+                    if k < k2 {
+                        T(Box::new(insert(k, v, *l)), k2, v2, r)
+                    } else if k2 < k {
+                        T(l, k2, v2, Box::new(insert(k, v, *r)))
+                    } else {
+                        T(l, k2, v, r)
+                    }
+                },
             }
-            */
-            /*|| insert_1 */
-            T(Box::new(E), k, v, Box::new(E))
-            /*|| insert_2 */
-            /*|
-            if k < k2 {
-                T(Box::new(insert(k, v, *l)), k2, v2, r)
-            } else {
-                T(l, k2, v, r)
-            }
-            */
-            /*|| insert_3 */
-            /*|
-            if k < k2 {
-                T(Box::new(insert(k, v, *l)), k2, v2, r)
-            } else if k2 < k {
-                T(l, k2, v2, Box::new(insert(k, v, *r)))
-            } else {
-                T(l, k2, v2, r)
-            }
-            */
-            /* |*/
         },
     }
 }
@@ -79,36 +79,37 @@ pub(crate) fn delete(k: i32, t: Tree) -> Tree {
     match t {
         E => E,
         T(l, k2, v2, r) => {
-            /*| delete */
-            if k < k2 {
-                T(Box::new(delete(k, *l)), k2, v2, r)
-            } else if k2 < k {
-                T(l, k2, v2, Box::new(delete(k, *r)))
-            } else {
-                join(*l, *r)
+            /* marauders:variation=delete;tags= */
+            match () {
+                _ if matches!(std::env::var("M_delete_4").as_deref(), Ok("active")) => {
+                    let _ = v2;
+                    if k < k2 {
+                        delete(k, *l)
+                    } else if k2 < k {
+                        delete(k, *r)
+                    } else {
+                        join(*l, *r)
+                    }
+                },
+                _ if matches!(std::env::var("M_delete_5").as_deref(), Ok("active")) => {
+                    if k2 < k {
+                        T(Box::new(delete(k, *l)), k2, v2, r)
+                    } else if k < k2 {
+                        T(l, k2, v2, Box::new(delete(k, *r)))
+                    } else {
+                        join(*l, *r)
+                    }
+                },
+                _ => {
+                    if k < k2 {
+                        T(Box::new(delete(k, *l)), k2, v2, r)
+                    } else if k2 < k {
+                        T(l, k2, v2, Box::new(delete(k, *r)))
+                    } else {
+                        join(*l, *r)
+                    }
+                },
             }
-            /*|| delete_4 */
-            /*|
-            let _ = v2;
-            if k < k2 {
-                delete(k, *l)
-            } else if k2 < k {
-                delete(k, *r)
-            } else {
-                join(*l, *r)
-            }
-            */
-            /*|| delete_5 */
-            /*|
-            if k2 < k {
-                T(Box::new(delete(k, *l)), k2, v2, r)
-            } else if k < k2 {
-                T(l, k2, v2, Box::new(delete(k, *r)))
-            } else {
-                join(*l, *r)
-            }
-            */
-            /* |*/
         },
     }
 }
@@ -151,24 +152,11 @@ pub(crate) fn union_(l: Tree, r: Tree, f: usize) -> Tree {
         (E, r) => r,
         (l, E) => l,
 
-        /*| union */
-        (T(l1, k, v, r1), t) => {
-            T(
-                Box::new(union_(*l1, below(k, t.clone()), f1)),
-                k,
-                v,
-                Box::new(union_(*r1, above(k, t), f1)),
-            )
-        }
-        /*|| union_6 */
-        /*|
-        (T(l1, k1, v1, r1), T(l2, k2, v2, r2)) => {
+        /* marauders:variation=union;tags= */
+        (T(l1, k1, v1, r1), T(l2, k2, v2, r2)) if matches!(std::env::var("M_union_6").as_deref(), Ok("active")) => {
             T(l1, k1, v1, Box::new(T(Box::new(union_(*r1, *l2, f1)), k2, v2, r2)))
-        }
-        */
-        /*|| union_7 */
-        /*|
-        (T(l1, k1, v1, r1), T(l2, k2, v2, r2)) => {
+        },
+        (T(l1, k1, v1, r1), T(l2, k2, v2, r2)) if matches!(std::env::var("M_union_7").as_deref(), Ok("active")) => {
             if k1 == k2 {
                 T(
                     Box::new(union_(*l1, *l2, f1)),
@@ -186,11 +174,8 @@ pub(crate) fn union_(l: Tree, r: Tree, f: usize) -> Tree {
             } else {
                 union_(T(l2, k2, v2, r2), T(l1, k1, v1, r1), f1)
             }
-        }
-        */
-        /*|| union_8 */
-        /*|
-        (T(box l1, k1, v1, box r1), T(box l2, k2, v2, box r2)) => {
+        },
+        (T(box l1, k1, v1, box r1), T(box l2, k2, v2, box r2)) if matches!(std::env::var("M_union_8").as_deref(), Ok("active")) => {
             if k1 == k2 {
                 T(
                     Box::new(union_(l1, l2, f1)),
@@ -208,9 +193,15 @@ pub(crate) fn union_(l: Tree, r: Tree, f: usize) -> Tree {
             } else {
                 union_(T(Box::new(l2), k2, v2, Box::new(r2)), T(Box::new(l1), k1, v1, Box::new(r1)), f1)
             }
-        }
-        */
-        /* |*/
+        },
+        (T(l1, k, v, r1), t) => {
+            T(
+                Box::new(union_(*l1, below(k, t.clone()), f1)),
+                k,
+                v,
+                Box::new(union_(*r1, above(k, t), f1)),
+            )
+        },
     }
 }
 

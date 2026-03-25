@@ -178,6 +178,7 @@ pub(crate) fn run() -> anyhow::Result<()> {
             }
             ExperimentCommand::Visualize { name: _, figure, tests, groupby, aggby, metric, buckets, max, visualization_type, hatched } => commands::experiment::visualize::invoke(mgr, experiment.unwrap(), figure, tests, groupby, aggby, metric, buckets, max, visualization_type, hatched),
             ExperimentCommand::VisualizeJson { input, output } => commands::experiment::visualize::draw_bucket_chart_from_json(&input, &output),
+            ExperimentCommand::Report { name: _, output, publish } => commands::experiment::report::invoke(mgr, experiment.unwrap(), output, publish),
             ExperimentCommand::List {} => commands::experiment::list::invoke(mgr),
         },
         Command::Workload(wl) => match wl {
@@ -371,6 +372,21 @@ enum ExperimentCommand {
         #[clap(short, long)]
         output: PathBuf,
     },
+    #[clap(name = "report", about = "Generate an interactive HTML report for the experiment")]
+    Report {
+        /// Name of the experiment
+        /// [default: current directory]
+        #[clap(short, long)]
+        name: Option<String>,
+        /// Output file path
+        /// [default: <experiment_path>/report.html]
+        #[clap(short, long)]
+        output: Option<PathBuf>,
+        /// Publish the report as a public GitHub Gist (requires `gh` CLI)
+        /// and print a viewable URL via gisthost.github.io
+        #[clap(long, default_value = "false")]
+        publish: bool,
+    },
     #[clap(name = "list", about = "List all experiments")]
     List {},
 }
@@ -557,6 +573,7 @@ impl Command {
                 ExperimentCommand::AmendTest { name, .. } => name.as_ref(),
                 ExperimentCommand::Visualize { name, .. } => name.as_ref(),
                 ExperimentCommand::VisualizeJson { .. } => None,
+                ExperimentCommand::Report { name, .. } => name.as_ref(),
                 ExperimentCommand::List { .. } => None,
             },
             Command::Workload(wl) => match wl {
@@ -582,6 +599,7 @@ impl Command {
                 ExperimentCommand::AmendTest { .. } => true,
                 ExperimentCommand::Visualize { .. } => true,
                 ExperimentCommand::VisualizeJson { .. } => false,
+                ExperimentCommand::Report { .. } => true,
                 ExperimentCommand::List { .. } => false,
             },
             Command::Workload(wl) => match wl {

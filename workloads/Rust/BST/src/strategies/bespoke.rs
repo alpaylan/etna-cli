@@ -4,7 +4,7 @@ use crate::implementation::Tree;
 
 use Tree::*;
 
-fn insert_(k: i32, v: i32, t: Tree) -> Tree {
+pub(crate) fn insert_(k: i32, v: i32, t: Tree) -> Tree {
     match t {
         E => T(Box::new(E), k, v, Box::new(E)),
         T(l, k2, v2, r) => {

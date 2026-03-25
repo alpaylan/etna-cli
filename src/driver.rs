@@ -138,11 +138,16 @@ fn metric_matches<'a>(
         })
     });
 
-    let task_match = task.iter().all(|(k, v)| {
-        m.data
-            .get(k)
-            .is_some_and(|val| val.as_str() == Some(v.as_str()))
-    });
+    // Do not match on `counterexample`: it is advisory metadata from docs and
+    // may differ from the strategy-produced runtime counterexample.
+    let task_match = task
+        .iter()
+        .filter(|(k, _)| k.as_str() != "counterexample")
+        .all(|(k, v)| {
+            m.data
+                .get(k)
+                .is_some_and(|val| val.as_str() == Some(v.as_str()))
+        });
 
     let timeout_match = timeout.is_none_or(|t| {
         m.data
@@ -1256,6 +1261,8 @@ fn log_process_output(
         store.push(Metric {
             data: {
                 let mut error_context = context.clone();
+                // Drop task-specified docs counterexample; keep runtime data only.
+                error_context.remove("counterexample");
                 error_context.insert(
                     "status".to_owned(),
                     Value::String(Status::Aborted.to_string()),
@@ -1276,16 +1283,20 @@ fn log_process_output(
     // Look for JSON objects in the output
     let mut logs = Vec::new();
     for line in stdout.lines().chain(stderr.lines()) {
-        if let Ok(mut json) =
+        if let Ok(json) =
             serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(line)
         {
             tracing::info!("Found JSON object: {:?}", json);
-            json.extend(context.clone());
+            let mut merged = context.clone();
+            // Drop task-specified docs counterexample; keep runtime data only.
+            merged.remove("counterexample");
+            // Runtime JSON should win over context defaults when keys overlap.
+            merged.extend(json.clone());
             store.push(Metric {
-                data: json.clone(),
+                data: merged.clone(),
                 hash: experiment_hash.to_string(),
             })?;
-            logs.push(json);
+            logs.push(merged);
         }
     }
 

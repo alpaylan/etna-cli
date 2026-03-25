@@ -1,10 +1,63 @@
 use bst::{implementation::Tree, spec};
+use hegel::{HealthCheck, Hegel, Settings, Verbosity};
+use proptest::{
+    strategy::{Strategy, ValueTree},
+    test_runner::{Config, TestRunner},
+};
+use std::time::{Duration, Instant};
+
+fn sample_hegel(property: &str, tests: u64) -> Vec<(Duration, String)> {
+    let mut results = Vec::with_capacity(tests as usize);
+    let settings = Settings::new()
+        .test_cases(tests)
+        .verbosity(Verbosity::Quiet)
+        .database(None)
+        .suppress_health_check(HealthCheck::all());
+
+    Hegel::new(|tc| {
+        let start = Instant::now();
+        let Some((sample, _result)) = bst::strategies::hegel::draw_case(property, &tc) else {
+            panic!("Unknown property: {}", property);
+        };
+        results.push((start.elapsed(), sample));
+    })
+    .settings(settings)
+    .run();
+
+    results
+}
+
+fn sample_proptest(property: &str, tests: u64) -> Vec<(Duration, String)> {
+    let Some(strategy) = bst::strategies::proptest::strategy_for(property) else {
+        panic!("Unknown property: {}", property);
+    };
+
+    let cases = tests.min(u64::from(u32::MAX)) as u32;
+    let mut runner = TestRunner::new(Config {
+        cases,
+        max_global_rejects: cases.saturating_mul(20),
+        failure_persistence: None,
+        ..Config::default()
+    });
+
+    let mut results = Vec::with_capacity(cases as usize);
+    for _ in 0..cases {
+        let start = Instant::now();
+        let value = strategy
+            .new_tree(&mut runner)
+            .expect("Failed to generate proptest sample");
+        let (sample, _result) = value.current();
+        results.push((start.elapsed(), sample));
+    }
+
+    results
+}
 
 fn main() {
     let args = std::env::args().collect::<Vec<_>>();
     if args.len() < 4 {
         eprintln!("Usage: {} <tool> <property> <tests>", args[0]);
-        eprintln!("Available tools: quickcheck");
+        eprintln!("Available tools: quickcheck, hegel, proptest");
         eprintln!(
             "For available properties, check https://github.com/alpaylan/etna-cli/blob/main/docs/workloads/bst.md"
         );
@@ -22,64 +75,67 @@ fn main() {
         .max_tests(num_tests * 2)
         .max_time(std::time::Duration::from_secs(1));
 
-    let result = match (tool, property) {
-        ("quickcheck", "InsertValid") => {
-            qc.quicksample(spec::prop_insert_valid as fn(Tree, i32, i32) -> Option<bool>)
-        }
-        ("quickcheck", "DeleteValid") => {
-            qc.quicksample(spec::prop_delete_valid as fn(Tree, i32) -> Option<bool>)
-        }
-        ("quickcheck", "UnionValid") => {
-            qc.quicksample(spec::prop_union_valid as fn(Tree, Tree) -> Option<bool>)
-        }
-        ("quickcheck", "InsertPost") => {
-            qc.quicksample(spec::prop_insert_post as fn(Tree, i32, i32, i32) -> Option<bool>)
-        }
-        ("quickcheck", "DeletePost") => {
-            qc.quicksample(spec::prop_delete_post as fn(Tree, i32, i32) -> Option<bool>)
-        }
-        ("quickcheck", "UnionPost") => {
-            qc.quicksample(spec::prop_union_post as fn(Tree, Tree, i32) -> Option<bool>)
-        }
-        ("quickcheck", "InsertModel") => {
-            qc.quicksample(spec::prop_insert_model as fn(Tree, i32, i32) -> Option<bool>)
-        }
-        ("quickcheck", "DeleteModel") => {
-            qc.quicksample(spec::prop_delete_model as fn(Tree, i32) -> Option<bool>)
-        }
-        ("quickcheck", "UnionModel") => {
-            qc.quicksample(spec::prop_union_model as fn(Tree, Tree) -> Option<bool>)
-        }
-        ("quickcheck", "InsertInsert") => {
-            qc.quicksample(spec::prop_insert_insert as fn(Tree, i32, i32, i32, i32) -> Option<bool>)
-        }
-        ("quickcheck", "InsertUnion") => {
-            qc.quicksample(spec::prop_insert_union as fn(Tree, Tree, i32, i32) -> Option<bool>)
-        }
-        ("quickcheck", "InsertDelete") => {
-            qc.quicksample(spec::prop_insert_delete as fn(Tree, i32, i32, i32) -> Option<bool>)
-        }
-        ("quickcheck", "DeleteInsert") => {
-            qc.quicksample(spec::prop_delete_insert as fn(Tree, i32, i32, i32) -> Option<bool>)
-        }
-        ("quickcheck", "DeleteDelete") => {
-            qc.quicksample(spec::prop_delete_delete as fn(Tree, i32, i32) -> Option<bool>)
-        }
-        ("quickcheck", "DeleteUnion") => {
-            qc.quicksample(spec::prop_delete_union as fn(Tree, Tree, i32) -> Option<bool>)
-        }
-        ("quickcheck", "UnionDeleteInsert") => {
-            qc.quicksample(spec::prop_union_delete_insert as fn(Tree, Tree, i32, i32) -> Option<bool>)
-        }
-        ("quickcheck", "UnionUnionIdempotent") => {
-            qc.quicksample(spec::prop_union_union_idempotent as fn(Tree) -> Option<bool>)
-        }
-        ("quickcheck", "UnionUnionAssoc") => {
-            qc.quicksample(spec::prop_union_union_assoc as fn(Tree, Tree, Tree) -> Option<bool>)
-        }
-        _ => {
-            panic!("Unknown tool or property: {} {}", tool, property)
-        }
+    let result: Vec<(Duration, String)> = match tool {
+        "quickcheck" => match property {
+            "InsertValid" => {
+                qc.quicksample(spec::prop_insert_valid as fn(Tree, i32, i32) -> Option<bool>)
+            }
+            "DeleteValid" => {
+                qc.quicksample(spec::prop_delete_valid as fn(Tree, i32) -> Option<bool>)
+            }
+            "UnionValid" => {
+                qc.quicksample(spec::prop_union_valid as fn(Tree, Tree) -> Option<bool>)
+            }
+            "InsertPost" => {
+                qc.quicksample(spec::prop_insert_post as fn(Tree, i32, i32, i32) -> Option<bool>)
+            }
+            "DeletePost" => {
+                qc.quicksample(spec::prop_delete_post as fn(Tree, i32, i32) -> Option<bool>)
+            }
+            "UnionPost" => {
+                qc.quicksample(spec::prop_union_post as fn(Tree, Tree, i32) -> Option<bool>)
+            }
+            "InsertModel" => {
+                qc.quicksample(spec::prop_insert_model as fn(Tree, i32, i32) -> Option<bool>)
+            }
+            "DeleteModel" => {
+                qc.quicksample(spec::prop_delete_model as fn(Tree, i32) -> Option<bool>)
+            }
+            "UnionModel" => {
+                qc.quicksample(spec::prop_union_model as fn(Tree, Tree) -> Option<bool>)
+            }
+            "InsertInsert" => qc.quicksample(
+                spec::prop_insert_insert as fn(Tree, i32, i32, i32, i32) -> Option<bool>,
+            ),
+            "InsertUnion" => {
+                qc.quicksample(spec::prop_insert_union as fn(Tree, Tree, i32, i32) -> Option<bool>)
+            }
+            "InsertDelete" => {
+                qc.quicksample(spec::prop_insert_delete as fn(Tree, i32, i32, i32) -> Option<bool>)
+            }
+            "DeleteInsert" => {
+                qc.quicksample(spec::prop_delete_insert as fn(Tree, i32, i32, i32) -> Option<bool>)
+            }
+            "DeleteDelete" => {
+                qc.quicksample(spec::prop_delete_delete as fn(Tree, i32, i32) -> Option<bool>)
+            }
+            "DeleteUnion" => {
+                qc.quicksample(spec::prop_delete_union as fn(Tree, Tree, i32) -> Option<bool>)
+            }
+            "UnionDeleteInsert" => qc.quicksample(
+                spec::prop_union_delete_insert as fn(Tree, Tree, i32, i32) -> Option<bool>,
+            ),
+            "UnionUnionIdempotent" => {
+                qc.quicksample(spec::prop_union_union_idempotent as fn(Tree) -> Option<bool>)
+            }
+            "UnionUnionAssoc" => {
+                qc.quicksample(spec::prop_union_union_assoc as fn(Tree, Tree, Tree) -> Option<bool>)
+            }
+            _ => panic!("Unknown property: {}", property),
+        },
+        "hegel" => sample_hegel(property, num_tests),
+        "proptest" => sample_proptest(property, num_tests),
+        _ => panic!("Unknown tool: {}", tool),
     };
 
     let mut results = Vec::<serde_json::Value>::new();

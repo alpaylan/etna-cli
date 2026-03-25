@@ -1,0 +1,4 @@
+interface:
+  display_name: "Etna Workflow"
+  short_description: "Run and analyze Etna experiments"
+  default_prompt: "Use this skill when working with Etna experiments: define tests, run experiments, inspect store.jsonl, and summarize strategy performance with deduped metrics."

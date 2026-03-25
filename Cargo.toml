@@ -8,11 +8,13 @@ repository = "https://github.com/alpaylan/etna-cli"
 [dependencies]
 ab_glyph = "0.2.30"
 anyhow = "1.0.88"
+base64 = "0.22"
 axum = { version = "0.8", features = ["macros"] }
 chrono = { version = "0.4.38", features = ["serde"] }
 clap = { version = "4.5.17", features = ["derive"] }
 dirs = "5.0.1"
 env_logger = "0.11.5"
+flate2 = "1"
 git2 = { version = "0.19.0", default-features = false, features = ["https", "vendored-openssl"] }
 image = { version = "0.25.6", default-features = false, features = ["png"] }
 imageproc = { version = "0.25.0", default-features = false }
@@ -22,7 +24,7 @@ jaq-interpret = { version = "1.5.0", default-features = false }
 jaq-parse = { version = "1.0.3", default-features = false }
 jaq-std = { version = "1.6.0", default-features = false }
 marauders = { git = "https://github.com/alpaylan/marauders.git", branch = "main" }
-minijinja = { version = "2.12.0", default-features = false, features = ["loader"] }
+minijinja = { version = "2.12.0", default-features = false, features = ["loader", "serde"] }
 parse_duration = { version = "2.1.1", default-features = false }
 process_control = { version = "5.0.0", default-features = false }
 regex = "1.11.2"

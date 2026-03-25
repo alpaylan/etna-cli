@@ -1,0 +1,1397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ETNA Report: {{ experiment_name }}</title>
+<style>
+:root {
+  --bg: #0d1117;
+  --bg2: #161b22;
+  --bg3: #21262d;
+  --border: #30363d;
+  --text: #e6edf3;
+  --text2: #8b949e;
+  --accent: #58a6ff;
+  --green: #3fb950;
+  --red: #f85149;
+  --orange: #d29922;
+  --purple: #bc8cff;
+  --pink: #f778ba;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:var(--bg); color:var(--text); font-family:var(--font); font-size:14px; line-height:1.5; }
+a { color:var(--accent); text-decoration:none; }
+a:hover { text-decoration:underline; }
+
+/* Layout */
+.header { background:var(--bg2); border-bottom:1px solid var(--border); padding:16px 24px; display:flex; align-items:center; justify-content:space-between; }
+.header h1 { font-size:20px; font-weight:600; }
+.header .meta { color:var(--text2); font-size:12px; }
+.nav { background:var(--bg2); border-bottom:1px solid var(--border); padding:0 24px; display:flex; gap:0; overflow-x:auto; }
+.nav button { background:none; border:none; color:var(--text2); padding:12px 16px; font-size:14px; font-family:var(--font); cursor:pointer; border-bottom:2px solid transparent; white-space:nowrap; }
+.nav button:hover { color:var(--text); }
+.nav button.active { color:var(--accent); border-bottom-color:var(--accent); }
+.content { padding:24px; max-width:1400px; margin:0 auto; }
+.view { display:none; }
+.view.active { display:block; }
+
+/* Cards */
+.cards { display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:16px; margin-bottom:24px; }
+.card { background:var(--bg2); border:1px solid var(--border); border-radius:8px; padding:16px; }
+.card .label { color:var(--text2); font-size:12px; text-transform:uppercase; letter-spacing:0.5px; }
+.card .value { font-size:28px; font-weight:600; margin-top:4px; }
+
+/* Tables */
+table { width:100%; border-collapse:collapse; background:var(--bg2); border:1px solid var(--border); border-radius:8px; overflow:hidden; }
+th, td { text-align:left; padding:10px 14px; border-bottom:1px solid var(--border); font-size:13px; }
+th { background:var(--bg3); color:var(--text2); font-weight:600; text-transform:uppercase; font-size:11px; letter-spacing:0.5px; cursor:pointer; user-select:none; white-space:nowrap; }
+th:hover { color:var(--text); }
+th .sort-arrow { margin-left:4px; opacity:0.5; }
+th.sorted .sort-arrow { opacity:1; }
+tr:hover td { background:rgba(88,166,255,0.04); }
+td.num { text-align:right; font-family:var(--mono); font-size:12px; }
+.status-found_bug, .status-failed { color:var(--green); }
+.status-passed { color:var(--text2); }
+.status-timed_out { color:var(--red); }
+.status-gave_up { color:var(--orange); }
+.status-aborted { color:var(--red); }
+
+/* Charts */
+.chart-container { background:var(--bg2); border:1px solid var(--border); border-radius:8px; padding:16px; margin-bottom:16px; }
+.chart-container h3 { font-size:14px; margin-bottom:12px; color:var(--text2); }
+.chart-row { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px; }
+@media (max-width:900px) { .chart-row { grid-template-columns:1fr; } }
+canvas { max-height:400px; }
+
+/* Controls */
+.controls { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px; align-items:center; }
+.controls label { color:var(--text2); font-size:12px; }
+.controls select, .controls input { background:var(--bg3); border:1px solid var(--border); color:var(--text); padding:6px 10px; border-radius:6px; font-size:13px; font-family:var(--font); }
+.controls input[type="text"] { width:200px; }
+.controls input[type="number"] { width:80px; }
+.btn { background:var(--bg3); border:1px solid var(--border); color:var(--text); padding:6px 14px; border-radius:6px; cursor:pointer; font-size:13px; font-family:var(--font); }
+.btn:hover { background:var(--border); }
+.btn.active { background:var(--accent); color:#000; border-color:var(--accent); }
+
+/* Bucket chart specific */
+.bucket-legend { display:flex; gap:16px; margin-bottom:12px; flex-wrap:wrap; }
+.bucket-legend .item { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text2); }
+.bucket-legend .swatch { width:14px; height:14px; border-radius:3px; }
+
+/* Matrix */
+.matrix-cell { width:40px; height:40px; display:inline-flex; align-items:center; justify-content:center; font-size:11px; font-weight:600; border-radius:4px; }
+
+/* Drill-down breadcrumb */
+.breadcrumb { font-size:13px; color:var(--text2); margin-bottom:16px; }
+.breadcrumb span { cursor:pointer; color:var(--accent); }
+.breadcrumb span:hover { text-decoration:underline; }
+
+/* Filter bar for raw data */
+.filter-row th { padding:4px; }
+.filter-row input { width:100%; background:var(--bg); border:1px solid var(--border); color:var(--text); padding:4px 8px; border-radius:4px; font-size:12px; font-family:var(--mono); }
+
+/* Pagination */
+.pagination { display:flex; gap:8px; align-items:center; justify-content:center; margin-top:16px; color:var(--text2); font-size:13px; }
+
+/* Section titles */
+.section-title { font-size:16px; font-weight:600; margin-bottom:16px; }
+
+/* Scrollable table wrapper */
+.table-wrap { overflow-x:auto; border-radius:8px; }
+
+/* Tooltip helper */
+.tip { position:relative; cursor:help; }
+.tip:hover::after { content:attr(data-tip); position:absolute; bottom:100%; left:50%; transform:translateX(-50%); background:var(--bg3); border:1px solid var(--border); color:var(--text); padding:4px 8px; border-radius:4px; font-size:11px; white-space:nowrap; z-index:10; }
+
+/* Modal overlay */
+.modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:100; display:flex; align-items:center; justify-content:center; }
+.modal { background:var(--bg2); border:1px solid var(--border); border-radius:12px; padding:24px; max-width:90vw; max-height:85vh; overflow-y:auto; min-width:600px; }
+.modal-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
+.modal-header h2 { font-size:16px; font-weight:600; }
+.modal-close { background:none; border:none; color:var(--text2); font-size:22px; cursor:pointer; padding:4px 8px; line-height:1; }
+.modal-close:hover { color:var(--text); }
+
+/* Invalid mean marker */
+.invalid-mean { color:var(--orange); font-style:italic; }
+
+/* Bucket group checkbox row */
+.bucket-group-row { display:flex; align-items:center; gap:8px; margin-bottom:4px; }
+.bucket-group-row input[type="checkbox"] { margin:0; }
+
+/* Toggle switch (mean/median) */
+.toggle-group { display:inline-flex; border:1px solid var(--border); border-radius:6px; overflow:hidden; }
+.toggle-group button { background:var(--bg3); border:none; color:var(--text2); padding:4px 12px; font-size:12px; font-family:var(--font); cursor:pointer; }
+.toggle-group button.active { background:var(--accent); color:#000; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>ETNA Report: <span id="exp-name"></span></h1>
+  <div class="meta">Generated <span id="gen-time"></span> &middot; <span id="metric-count"></span> records</div>
+</div>
+
+<div class="nav" id="nav">
+  <button data-view="overview" class="active">Overview</button>
+  <button data-view="buckets">Bucket Charts</button>
+  <button data-view="strategies">Strategy Comparison</button>
+  <button data-view="mutations">Mutation Matrix</button>
+  <button data-view="drilldown">Drill-Down</button>
+  <button data-view="rawdata">Raw Data</button>
+</div>
+
+<div class="content">
+  <!-- OVERVIEW -->
+  <div class="view active" id="view-overview">
+    <div class="cards" id="overview-cards"></div>
+    <div class="controls">
+      <span class="section-title" style="margin-bottom:0">Summary by Workload / Property / Mutation</span>
+      <label style="margin-left:auto;">Aggregation:</label>
+      <div class="toggle-group" id="overview-agg-toggle">
+        <button class="active" data-mode="mean">Mean</button>
+        <button data-mode="median">Median</button>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table id="overview-table">
+        <thead><tr>
+          <th data-col="workload">Workload <span class="sort-arrow">&#9650;</span></th>
+          <th data-col="property">Property <span class="sort-arrow">&#9650;</span></th>
+          <th data-col="mutation">Mutation <span class="sort-arrow">&#9650;</span></th>
+          <th data-col="strategies">Strategies <span class="sort-arrow">&#9650;</span></th>
+          <th data-col="trials">Trials <span class="sort-arrow">&#9650;</span></th>
+          <th data-col="bugRate">Bug Rate <span class="sort-arrow">&#9650;</span></th>
+          <th data-col="aggTime" id="overview-th-time">Mean TTF <span class="sort-arrow">&#9650;</span></th>
+          <th data-col="aggTests" id="overview-th-tests">Mean ITF <span class="sort-arrow">&#9650;</span></th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- BUCKET CHARTS -->
+  <div class="view" id="view-buckets">
+    <div class="controls">
+      <label>Metric:</label>
+      <select id="bucket-metric">
+        <option value="time">Time to Failure</option>
+        <option value="tests">Inputs to Failure</option>
+      </select>
+      <label>Aggregation:</label>
+      <div class="toggle-group" id="bucket-agg-toggle">
+        <button class="active" data-mode="mean">Mean</button>
+        <button data-mode="median">Median</button>
+      </div>
+      <label>Thresholds:</label>
+      <input type="text" id="bucket-thresholds" value="0.1, 1, 10, 60" placeholder="comma-separated">
+      <button class="btn" id="bucket-apply">Apply</button>
+      <label>Group by:</label>
+      <label><input type="checkbox" class="bucket-groupby-cb" value="language"> Language</label>
+      <label><input type="checkbox" class="bucket-groupby-cb" value="workload" checked> Workload</label>
+      <label><input type="checkbox" class="bucket-groupby-cb" value="strategy" checked> Strategy</label>
+      <label><input type="checkbox" class="bucket-groupby-cb" value="cross"> Cross</label>
+      <button class="btn" id="bucket-compare-btn" style="margin-left:auto;">Compare</button>
+    </div>
+    <div id="bucket-charts"></div>
+  </div>
+
+  <!-- STRATEGY COMPARISON -->
+  <div class="view" id="view-strategies">
+    <div class="controls">
+      <label>Workload:</label>
+      <select id="strat-workload"></select>
+      <label>Metric:</label>
+      <select id="strat-metric">
+        <option value="time">Time</option>
+        <option value="tests">Tests</option>
+        <option value="shrinking_time">Shrinking Time</option>
+        <option value="generation_time">Generation Time</option>
+        <option value="execution_time">Execution Time</option>
+        <option value="discards">Discards</option>
+      </select>
+      <label>Aggregation:</label>
+      <div class="toggle-group" id="strat-agg-toggle">
+        <button class="active" data-mode="mean">Mean</button>
+        <button data-mode="median">Median</button>
+      </div>
+      <label>Scale:</label>
+      <div class="toggle-group" id="strat-scale-toggle">
+        <button class="active" data-mode="linear">Linear</button>
+        <button data-mode="log">Log</button>
+      </div>
+    </div>
+    <div class="chart-row">
+      <div class="chart-container">
+        <h3>Bug Finding Rate by Strategy</h3>
+        <canvas id="strat-bugrate-chart"></canvas>
+      </div>
+      <div class="chart-container">
+        <h3 id="strat-metric-title">Mean Time by Strategy</h3>
+        <canvas id="strat-metric-chart"></canvas>
+      </div>
+    </div>
+    <div class="chart-container">
+      <h3 id="strat-dist-title">Distribution by Strategy &amp; Property</h3>
+      <canvas id="strat-dist-chart"></canvas>
+    </div>
+  </div>
+
+  <!-- MUTATION MATRIX -->
+  <div class="view" id="view-mutations">
+    <div class="controls">
+      <label>Workload:</label>
+      <select id="mut-workload"></select>
+    </div>
+    <div class="table-wrap" id="mutation-matrix-wrap"></div>
+  </div>
+
+  <!-- DRILL-DOWN -->
+  <div class="view" id="view-drilldown">
+    <div class="controls">
+      <label>Workload:</label>
+      <select id="dd-workload"></select>
+      <label>Property:</label>
+      <select id="dd-property"></select>
+      <label>Mutation:</label>
+      <select id="dd-mutation"></select>
+      <label>Strategy:</label>
+      <select id="dd-strategy"></select>
+    </div>
+    <div class="chart-row">
+      <div class="chart-container">
+        <h3>Time per Trial</h3>
+        <canvas id="dd-time-chart"></canvas>
+      </div>
+      <div class="chart-container">
+        <h3>Tests per Trial</h3>
+        <canvas id="dd-tests-chart"></canvas>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table id="dd-table">
+        <thead><tr>
+          <th>Trial</th>
+          <th>Status</th>
+          <th>Time</th>
+          <th>Tests</th>
+          <th>Discards</th>
+          <th>Shrinking</th>
+          <th>Generation</th>
+          <th>Execution</th>
+          <th>Counterexample</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- RAW DATA -->
+  <div class="view" id="view-rawdata">
+    <div class="controls">
+      <label>Show:</label>
+      <select id="raw-pagesize">
+        <option value="50">50</option>
+        <option value="100" selected>100</option>
+        <option value="250">250</option>
+        <option value="0">All</option>
+      </select>
+      <label>rows</label>
+      <span id="raw-info" style="margin-left:auto;color:var(--text2);font-size:12px;"></span>
+    </div>
+    <div class="table-wrap">
+      <table id="raw-table">
+        <thead>
+          <tr class="filter-row" id="raw-filters"></tr>
+          <tr id="raw-header"></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="pagination" id="raw-pagination"></div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script>
+// ============================================================
+// DATA (gzip-compressed, base64-encoded)
+// ============================================================
+const METRICS_B64 = "{{ metrics_b64 }}";
+const EXPERIMENT_NAME = {{ experiment_name_json }};
+const GENERATED_AT = {{ generated_at_json }};
+// docs/workloads/*.json — maps workload name to [{mutations, tasks: [{property}]}]
+const WORKLOAD_DOCS = {{ workload_docs_json }};
+
+// Decompress metrics
+let METRICS = [];
+async function decompressMetrics() {
+  const bin = Uint8Array.from(atob(METRICS_B64), c => c.charCodeAt(0));
+  const ds = new DecompressionStream('gzip');
+  const writer = ds.writable.getWriter();
+  writer.write(bin);
+  writer.close();
+  const reader = ds.readable.getReader();
+  const chunks = [];
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+  }
+  const blob = new Blob(chunks);
+  const text = await blob.text();
+  METRICS = JSON.parse(text);
+}
+
+// ============================================================
+// UTILITIES
+// ============================================================
+function parseTime(s) {
+  if (s === null || s === undefined) return NaN;
+  if (typeof s === 'number') return s;
+  s = String(s).trim();
+  const m = s.match(/^([\d.]+)\s*(ns|us|µs|ms|s)$/);
+  if (!m) return parseFloat(s);
+  const v = parseFloat(m[1]);
+  switch (m[2]) {
+    case 'ns': return v / 1e9;
+    case 'us': case 'µs': return v / 1e6;
+    case 'ms': return v / 1e3;
+    case 's': return v;
+  }
+  return NaN;
+}
+
+function formatTime(sec) {
+  if (sec === null || sec === undefined || isNaN(sec)) return 'N/A';
+  if (!isFinite(sec)) return 'Timeout';
+  if (sec < 1e-6) return (sec * 1e9).toFixed(1) + ' ns';
+  if (sec < 1e-3) return (sec * 1e6).toFixed(1) + ' µs';
+  if (sec < 1) return (sec * 1e3).toFixed(2) + ' ms';
+  return sec.toFixed(3) + ' s';
+}
+
+function formatNum(n) {
+  if (n === null || n === undefined || isNaN(n)) return 'N/A';
+  if (!isFinite(n)) return '\u221e';
+  return Number(n).toLocaleString(undefined, {maximumFractionDigits: 2});
+}
+
+function mutKey(mutations) {
+  if (!mutations || (Array.isArray(mutations) && mutations.length === 0)) return '(none)';
+  if (Array.isArray(mutations)) return mutations.sort().join(', ');
+  return String(mutations);
+}
+
+function statusNorm(s) { return (s || '').toLowerCase(); }
+
+function unique(arr, fn) {
+  const s = new Set();
+  for (const x of arr) { const v = fn(x); if (v !== undefined) s.add(v); }
+  return [...s].sort();
+}
+
+function groupBy(arr, keyFn) {
+  const m = new Map();
+  for (const x of arr) {
+    const k = keyFn(x);
+    if (!m.has(k)) m.set(k, []);
+    m.get(k).push(x);
+  }
+  return m;
+}
+
+function mean(arr) {
+  if (!arr.length) return NaN;
+  return arr.reduce((a,b) => a+b, 0) / arr.length;
+}
+
+function median(arr) {
+  if (!arr.length) return NaN;
+  const sorted = [...arr].sort((a,b) => a-b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid-1] + sorted[mid]) / 2;
+}
+
+// Aggregate values respecting validity rules:
+// If mode is 'mean' and any trial in the cell is non-failing, mean is invalid -> return NaN.
+// If mode is 'median', always compute median of failing trials only.
+// `allTrials` = full set of trials for the cell, `vals` = values from failing trials only.
+function agg(vals, allTrials, mode) {
+  const hasNonFailing = allTrials.some(m => m._status !== 'failed');
+  if (mode === 'mean') {
+    if (hasNonFailing) return NaN; // invalid mean
+    return mean(vals);
+  }
+  // median mode — always use failing trials
+  return median(vals);
+}
+
+// Format an aggregated value, marking invalid means
+function formatAggTime(val, allTrials, mode) {
+  const hasNonFailing = allTrials.some(m => m._status !== 'failed');
+  if (mode === 'mean' && hasNonFailing) return '<span class="invalid-mean" title="Some trials did not find a bug — mean is invalid">N/A*</span>';
+  return formatTime(val);
+}
+
+function formatAggNum(val, allTrials, mode) {
+  const hasNonFailing = allTrials.some(m => m._status !== 'failed');
+  if (mode === 'mean' && hasNonFailing) return '<span class="invalid-mean" title="Some trials did not find a bug — mean is invalid">N/A*</span>';
+  return formatNum(val);
+}
+
+// Toggle group helper — wires up a toggle group and returns a function to get the current mode
+function setupToggle(containerId, onChange) {
+  const el = document.getElementById(containerId);
+  if (!el) return () => 'mean';
+  el.addEventListener('click', e => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    el.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    if (onChange) onChange();
+  });
+  return () => (el.querySelector('button.active')?.dataset.mode || 'mean');
+}
+
+function parseMetrics() {
+  for (const m of METRICS) {
+    m._time = parseTime(m.time);
+    m._shrinking_time = parseTime(m.shrinking_time);
+    m._generation_time = parseTime(m.generation_time);
+    m._execution_time = parseTime(m.execution_time);
+    m._status = statusNorm(m.status);
+    m._mutations = mutKey(m.mutations);
+  }
+}
+
+// ============================================================
+// NAVIGATION
+// ============================================================
+const nav = document.getElementById('nav');
+nav.addEventListener('click', e => {
+  if (e.target.tagName !== 'BUTTON') return;
+  nav.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+  e.target.classList.add('active');
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById('view-' + e.target.dataset.view).classList.add('active');
+  location.hash = e.target.dataset.view;
+  render(e.target.dataset.view);
+});
+
+// Handle hash on load
+const initialView = location.hash.slice(1) || 'overview';
+const rendered = new Set();
+
+function render(view) {
+  if (rendered.has(view)) return;
+  rendered.add(view);
+  switch(view) {
+    case 'overview': renderOverview(); break;
+    case 'buckets': renderBuckets(); break;
+    case 'strategies': renderStrategies(); break;
+    case 'mutations': renderMutations(); break;
+    case 'drilldown': renderDrilldown(); break;
+    case 'rawdata': renderRawData(); break;
+  }
+}
+
+// ============================================================
+// CHART.JS DEFAULTS
+// ============================================================
+Chart.defaults.color = '#8b949e';
+Chart.defaults.borderColor = '#30363d';
+Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif';
+Chart.defaults.font.size = 12;
+Chart.defaults.plugins.legend.labels.boxWidth = 14;
+
+const PALETTE = ['#58a6ff','#3fb950','#d29922','#f85149','#bc8cff','#f778ba','#79c0ff','#56d364','#e3b341','#ff7b72','#d2a8ff','#ff9bce'];
+
+// ============================================================
+// OVERVIEW
+// ============================================================
+function renderOverview() {
+  document.getElementById('exp-name').textContent = EXPERIMENT_NAME;
+  document.getElementById('gen-time').textContent = GENERATED_AT;
+  document.getElementById('metric-count').textContent = METRICS.length;
+
+  const strategies = unique(METRICS, m => m.strategy);
+  const workloads = unique(METRICS, m => m.workload);
+  const properties = unique(METRICS, m => m.property);
+  const languages = unique(METRICS, m => m.language);
+
+  const cardsEl = document.getElementById('overview-cards');
+  cardsEl.innerHTML = [
+    { label: 'Records', value: METRICS.length },
+    { label: 'Strategies', value: strategies.length },
+    { label: 'Workloads', value: workloads.length },
+    { label: 'Properties', value: properties.length },
+    { label: 'Languages', value: languages.length },
+    { label: 'Bug Found', value: METRICS.filter(m => m._status === 'failed').length },
+  ].map(c => `<div class="card"><div class="label">${c.label}</div><div class="value">${c.value}</div></div>`).join('');
+
+  // Summary table
+  const groups = groupBy(METRICS, m => `${m.workload}|||${m.property}|||${m._mutations}`);
+
+  // Precompute per-group data (mode-independent)
+  const groupData = [];
+  for (const [key, items] of groups) {
+    const [workload, property, mutation] = key.split('|||');
+    const strats = unique(items, m => m.strategy);
+    const bugTrials = items.filter(m => m._status === 'failed');
+    const bugRate = bugTrials.length / items.length;
+    const times = bugTrials.map(m => m._time).filter(t => !isNaN(t));
+    const tests = bugTrials.map(m => m.tests).filter(t => t != null);
+    groupData.push({ workload, property, mutation, strats, items, bugTrials, bugRate, times, tests });
+  }
+
+  const tbody = document.querySelector('#overview-table tbody');
+  let sortCol = 'workload', sortDir = 1;
+  const getAggMode = setupToggle('overview-agg-toggle', renderTable);
+
+  function renderTable() {
+    const mode = getAggMode();
+    // Update column headers
+    const label = mode === 'mean' ? 'Mean' : 'Median';
+    document.getElementById('overview-th-time').innerHTML = `${label} TTF <span class="sort-arrow">&#9650;</span>`;
+    document.getElementById('overview-th-tests').innerHTML = `${label} ITF <span class="sort-arrow">&#9650;</span>`;
+
+    const rows = groupData.map(g => {
+      const aggTime = agg(g.times, g.items, mode);
+      const aggTests = agg(g.tests, g.items, mode);
+      return { ...g, strategies: g.strats.length, trials: g.items.length, aggTime, aggTests };
+    });
+
+    rows.sort((a,b) => {
+      let va = a[sortCol], vb = b[sortCol];
+      if (typeof va === 'string') return sortDir * va.localeCompare(vb);
+      if (va == null || isNaN(va)) va = -Infinity;
+      if (vb == null || isNaN(vb)) vb = -Infinity;
+      return sortDir * (va - vb);
+    });
+    tbody.innerHTML = rows.map(r => `<tr>
+      <td>${r.workload}</td>
+      <td>${r.property}</td>
+      <td>${r.mutation}</td>
+      <td class="num">${r.strategies}</td>
+      <td class="num">${r.trials}</td>
+      <td class="num">${(r.bugRate*100).toFixed(1)}%</td>
+      <td class="num">${formatAggTime(r.aggTime, r.items, mode)}</td>
+      <td class="num">${formatAggNum(r.aggTests, r.items, mode)}</td>
+    </tr>`).join('');
+  }
+
+  document.querySelectorAll('#overview-table th').forEach(th => {
+    th.addEventListener('click', () => {
+      const col = th.dataset.col;
+      if (sortCol === col) sortDir *= -1; else { sortCol = col; sortDir = 1; }
+      renderTable();
+    });
+  });
+
+  renderTable();
+}
+
+// ============================================================
+// BUCKET CHARTS
+// ============================================================
+let bucketCharts = [];
+// Store computed bucket data for compare modal
+let bucketGroupData = new Map(); // key -> {bucketCounts, cellCount}
+
+function getCheckedGroupByFields() {
+  return [...document.querySelectorAll('.bucket-groupby-cb:checked')].map(cb => cb.value);
+}
+
+function renderBuckets() {
+  const triggerRebuild = () => { rendered.delete('buckets_inner'); rebuildBuckets(); };
+  window._getBucketAgg = setupToggle('bucket-agg-toggle', triggerRebuild);
+  rebuildBuckets();
+  document.getElementById('bucket-apply').addEventListener('click', triggerRebuild);
+  document.getElementById('bucket-metric').addEventListener('change', triggerRebuild);
+  document.querySelectorAll('.bucket-groupby-cb').forEach(cb => cb.addEventListener('change', triggerRebuild));
+  document.getElementById('bucket-compare-btn').addEventListener('click', openCompareModal);
+}
+
+function computeBucketCounts(metrics, metricField, thresholds, aggMode) {
+  const cells = groupBy(metrics, m => `${m.property}|||${m._mutations}`);
+  const bucketCounts = new Array(thresholds.length + 1).fill(0);
+
+  for (const [, cellMetrics] of cells) {
+    const anyTimeout = cellMetrics.some(m => m._status === 'timed_out');
+    if (anyTimeout) {
+      bucketCounts[thresholds.length]++;
+      continue;
+    }
+
+    const failTrials = cellMetrics.filter(m => m._status === 'failed');
+    let vals;
+    if (metricField === 'time') {
+      vals = failTrials.map(m => m._time).filter(t => !isNaN(t));
+    } else {
+      vals = failTrials.map(m => m.tests).filter(t => t != null);
+    }
+
+    const val = agg(vals, cellMetrics, aggMode);
+
+    if (isNaN(val)) {
+      bucketCounts[thresholds.length]++;
+      continue;
+    }
+
+    let placed = false;
+    for (let i = 0; i < thresholds.length; i++) {
+      if (val <= thresholds[i]) {
+        bucketCounts[i]++;
+        placed = true;
+        break;
+      }
+    }
+    if (!placed) bucketCounts[thresholds.length]++;
+  }
+  return { bucketCounts, cellCount: cells.size };
+}
+
+function getBucketConfig() {
+  const metricField = document.getElementById('bucket-metric').value;
+  const thresholds = document.getElementById('bucket-thresholds').value
+    .split(',').map(s => parseFloat(s.trim())).filter(n => !isNaN(n)).sort((a,b) => a-b);
+  const aggMode = (window._getBucketAgg || (() => 'mean'))();
+  const groupByFields = getCheckedGroupByFields();
+
+  const bucketLabels = [];
+  for (let i = 0; i < thresholds.length; i++) {
+    const lo = i === 0 ? 0 : thresholds[i-1];
+    const hi = thresholds[i];
+    if (metricField === 'time') {
+      bucketLabels.push(`${formatTime(lo)} - ${formatTime(hi)}`);
+    } else {
+      bucketLabels.push(`${formatNum(lo)} - ${formatNum(hi)}`);
+    }
+  }
+  bucketLabels.push('Timeout');
+
+  return { metricField, thresholds, aggMode, groupByFields, bucketLabels };
+}
+
+const BUCKET_COLORS = ['#3fb950','#58a6ff','#d29922','#f0883e','#f85149','#8b949e'];
+
+function rebuildBuckets() {
+  if (rendered.has('buckets_inner')) return;
+  rendered.add('buckets_inner');
+
+  for (const c of bucketCharts) c.destroy();
+  bucketCharts = [];
+  bucketGroupData = new Map();
+
+  const { metricField, thresholds, aggMode, groupByFields, bucketLabels } = getBucketConfig();
+
+  if (!groupByFields.length) {
+    document.getElementById('bucket-charts').innerHTML = '<p style="color:var(--text2)">Select at least one group-by field.</p>';
+    return;
+  }
+
+  // Sort group-by fields: workload first, then language, strategy, cross
+  const fieldOrder = ['workload', 'language', 'strategy', 'cross'];
+  const sortedFields = [...groupByFields].sort((a, b) => fieldOrder.indexOf(a) - fieldOrder.indexOf(b));
+
+  function compositeKey(m) {
+    return sortedFields.map(f => {
+      if (f === 'cross') return m.cross ? 'cross' : 'no-cross';
+      return m[f] ?? '?';
+    }).join(' / ');
+  }
+
+  const outerGroups = groupBy(METRICS, compositeKey);
+  const container = document.getElementById('bucket-charts');
+  container.innerHTML = '';
+
+  // Collect all data for a single combined chart
+  const allKeys = [];
+  for (const [outerKey, outerMetrics] of outerGroups) {
+    const { bucketCounts, cellCount } = computeBucketCounts(outerMetrics, metricField, thresholds, aggMode);
+    bucketGroupData.set(outerKey, { bucketCounts, cellCount, metrics: outerMetrics });
+    allKeys.push(outerKey);
+  }
+  allKeys.sort();
+
+  // Render as one stacked horizontal bar chart with all groups
+  const wrap = document.createElement('div');
+  wrap.className = 'chart-container';
+  wrap.style.padding = '12px 16px';
+  const chartHeight = Math.max(120, allKeys.length * 56 + 40);
+  wrap.innerHTML = `<canvas style="height:${chartHeight}px"></canvas>`;
+  container.appendChild(wrap);
+
+  const ctx = wrap.querySelector('canvas').getContext('2d');
+  const datasets = bucketLabels.map((label, i) => ({
+    label,
+    data: allKeys.map(key => bucketGroupData.get(key).bucketCounts[i]),
+    backgroundColor: BUCKET_COLORS[i % BUCKET_COLORS.length],
+  }));
+
+  const chart = new Chart(ctx, {
+    type: 'bar',
+    data: { labels: allKeys, datasets },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: { stacked: true, title: { display: true, text: '# cells' } },
+        y: { stacked: true, ticks: { font: { size: 11 } } },
+      },
+      plugins: {
+        tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${ctx.raw}` } },
+        legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } },
+      },
+      barPercentage: 0.7,
+    }
+  });
+  bucketCharts.push(chart);
+}
+
+// ---- Compare Modal ----
+let compareChart = null;
+
+function openCompareModal() {
+  const groups = [...bucketGroupData.keys()];
+  if (groups.length < 2) {
+    alert('Need at least 2 groups to compare.');
+    return;
+  }
+
+  const { bucketLabels } = getBucketConfig();
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `<div class="modal" style="min-width:750px;">
+    <div class="modal-header">
+      <h2>Compare Bucket Charts</h2>
+      <button class="modal-close">&times;</button>
+    </div>
+    <div style="margin-bottom:12px;max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;padding:8px;" id="compare-checklist"></div>
+    <div style="display:flex;gap:8px;margin-bottom:16px;">
+      <button class="btn" id="compare-select-all">Select All</button>
+      <button class="btn" id="compare-select-none">Select None</button>
+    </div>
+    <div id="compare-chart-wrap" style="min-height:100px;"></div>
+  </div>`;
+  document.body.appendChild(overlay);
+
+  // Populate checklist
+  const checklist = overlay.querySelector('#compare-checklist');
+  checklist.innerHTML = groups.map(g =>
+    `<label style="display:block;padding:3px 0;font-size:13px;cursor:pointer;">` +
+    `<input type="checkbox" class="compare-group-cb" value="${g}" style="margin-right:8px;">${g}` +
+    `</label>`
+  ).join('');
+
+  // Close handlers
+  function closeModal() { if (compareChart) { compareChart.destroy(); compareChart = null; } overlay.remove(); }
+  overlay.querySelector('.modal-close').addEventListener('click', closeModal);
+  overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(); });
+
+  // Select all/none
+  overlay.querySelector('#compare-select-all').addEventListener('click', () => {
+    checklist.querySelectorAll('input').forEach(cb => cb.checked = true);
+    rebuildCompare();
+  });
+  overlay.querySelector('#compare-select-none').addEventListener('click', () => {
+    checklist.querySelectorAll('input').forEach(cb => cb.checked = false);
+    rebuildCompare();
+  });
+
+  // Rebuild chart on any checkbox change
+  checklist.addEventListener('change', rebuildCompare);
+
+  function rebuildCompare() {
+    const selected = [...checklist.querySelectorAll('input:checked')].map(cb => cb.value);
+    const wrap = overlay.querySelector('#compare-chart-wrap');
+    if (compareChart) { compareChart.destroy(); compareChart = null; }
+
+    if (selected.length < 2) {
+      wrap.innerHTML = '<p style="color:var(--text2);font-size:13px;">Select at least 2 groups.</p>';
+      return;
+    }
+
+    const chartH = Math.max(120, selected.length * 28 + 50);
+    wrap.innerHTML = `<canvas style="height:${chartH}px"></canvas>`;
+    const ctx = wrap.querySelector('canvas').getContext('2d');
+    const datasets = bucketLabels.map((label, i) => ({
+      label,
+      data: selected.map(key => {
+        const d = bucketGroupData.get(key);
+        return d ? d.bucketCounts[i] : 0;
+      }),
+      backgroundColor: BUCKET_COLORS[i % BUCKET_COLORS.length],
+    }));
+
+    compareChart = new Chart(ctx, {
+      type: 'bar',
+      data: { labels: selected, datasets },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: { x: { stacked: true, title: { display: true, text: '# cells' } }, y: { stacked: true } },
+        plugins: {
+          tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${ctx.raw}` } }
+        }
+      }
+    });
+  }
+}
+
+// ============================================================
+// STRATEGY COMPARISON
+// ============================================================
+let stratCharts = [];
+
+function renderStrategies() {
+  const workloads = unique(METRICS, m => m.workload);
+  const sel = document.getElementById('strat-workload');
+  sel.innerHTML = workloads.map(w => `<option value="${w}">${w}</option>`).join('');
+  sel.addEventListener('change', rebuildStrategies);
+  document.getElementById('strat-metric').addEventListener('change', rebuildStrategies);
+  window._getStratAgg = setupToggle('strat-agg-toggle', rebuildStrategies);
+  window._getStratScale = setupToggle('strat-scale-toggle', rebuildStrategies);
+  rebuildStrategies();
+}
+
+function getMetricVals(metrics, metricField) {
+  if (metricField === 'time') return metrics.map(m => m._time);
+  if (metricField === 'shrinking_time') return metrics.map(m => m._shrinking_time);
+  if (metricField === 'generation_time') return metrics.map(m => m._generation_time);
+  if (metricField === 'execution_time') return metrics.map(m => m._execution_time);
+  return metrics.map(m => m[metricField]);
+}
+
+function rebuildStrategies() {
+  for (const c of stratCharts) c.destroy();
+  stratCharts = [];
+
+  const wl = document.getElementById('strat-workload').value;
+  const metricField = document.getElementById('strat-metric').value;
+  const aggMode = (window._getStratAgg || (() => 'mean'))();
+  const wlMetrics = METRICS.filter(m => m.workload === wl);
+  const strategies = unique(wlMetrics, m => m.strategy);
+  const properties = unique(wlMetrics, m => m.property);
+
+  // Bug finding rate per strategy (not affected by agg mode)
+  const bugRates = strategies.map(s => {
+    const sm = wlMetrics.filter(m => m.strategy === s);
+    const cells = groupBy(sm, m => `${m.property}|||${m._mutations}`);
+    let found = 0, total = 0;
+    for (const [, cellMetrics] of cells) {
+      total++;
+      const anyBug = cellMetrics.some(m => m._status === 'failed');
+      if (anyBug) found++;
+    }
+    return total ? (found / total * 100) : 0;
+  });
+
+  const bugCtx = document.getElementById('strat-bugrate-chart').getContext('2d');
+  stratCharts.push(new Chart(bugCtx, {
+    type: 'bar',
+    data: {
+      labels: strategies,
+      datasets: [{
+        label: 'Bug Finding Rate (%)',
+        data: bugRates,
+        backgroundColor: strategies.map((_, i) => PALETTE[i % PALETTE.length]),
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: { y: { beginAtZero: true, max: 100, title: { display: true, text: '%' } } }
+    }
+  }));
+
+  // Metric per strategy
+  const aggLabel = aggMode === 'mean' ? 'Mean' : 'Median';
+  const metricTitleMap = {
+    time: 'Time', tests: 'Tests', shrinking_time: 'Shrinking Time',
+    generation_time: 'Generation Time', execution_time: 'Execution Time', discards: 'Discards',
+  };
+  const metricName = metricTitleMap[metricField] || metricField;
+  document.getElementById('strat-metric-title').textContent = `${aggLabel} ${metricName} by Strategy`;
+
+  const isTimeMetric = ['time','shrinking_time','generation_time','execution_time'].includes(metricField);
+  const scaleRaw = (window._getStratScale || (() => 'linear'))();
+  const scaleType = scaleRaw === 'log' ? 'logarithmic' : 'linear';
+
+  // Compute metric values with fallback info for invalid means
+  const metricEntries = strategies.map(s => {
+    const allTrials = wlMetrics.filter(m => m.strategy === s);
+    const failTrials = allTrials.filter(m => m._status === 'failed');
+    let vals = getMetricVals(failTrials, metricField);
+    vals = vals.filter(v => v != null && !isNaN(v) && isFinite(v));
+    const v = agg(vals, allTrials, aggMode);
+    const invalid = isNaN(v);
+    const fallback = invalid ? median(vals) : v;
+    return { value: v, display: isNaN(fallback) ? 0 : fallback, invalid };
+  });
+
+  const metricCtx = document.getElementById('strat-metric-chart').getContext('2d');
+  stratCharts.push(new Chart(metricCtx, {
+    type: 'bar',
+    data: {
+      labels: strategies,
+      datasets: [{
+        label: `${aggLabel} ${metricName}`,
+        data: metricEntries.map(e => e.display),
+        backgroundColor: metricEntries.map((e, i) => e.invalid ? 'rgba(210,153,34,0.5)' : PALETTE[i % PALETTE.length]),
+        borderColor: metricEntries.map((e, i) => e.invalid ? '#d29922' : PALETTE[i % PALETTE.length]),
+        borderWidth: metricEntries.map(e => e.invalid ? 2 : 0),
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const e = metricEntries[ctx.dataIndex];
+              if (e.invalid) {
+                const fmtVal = isTimeMetric ? formatTime(e.display) : formatNum(e.display);
+                return `Mean invalid — showing median: ${fmtVal}`;
+              }
+              return isTimeMetric ? formatTime(e.display) : formatNum(e.display);
+            }
+          }
+        }
+      },
+      scales: {
+        y: {
+          type: scaleType,
+          beginAtZero: scaleType === 'linear',
+          title: { display: true, text: isTimeMetric ? 'seconds' : metricField },
+          ticks: isTimeMetric ? { callback: v => formatTime(v) } : {}
+        }
+      }
+    }
+  }));
+
+  // Distribution: grouped bar per property, one bar per strategy
+  document.getElementById('strat-dist-title').textContent = `${aggLabel} ${metricName} Distribution by Strategy & Property`;
+  const distCtx = document.getElementById('strat-dist-chart').getContext('2d');
+
+  // Track invalidity per (strategy, property) for tooltips
+  const distInvalid = strategies.map(s => properties.map(p => {
+    const allTrials = wlMetrics.filter(m => m.strategy === s && m.property === p);
+    return allTrials.some(m => m._status !== 'failed');
+  }));
+
+  const distDatasets = strategies.map((s, si) => {
+    const data = properties.map((p, pi) => {
+      const allTrials = wlMetrics.filter(m => m.strategy === s && m.property === p);
+      const failTrials = allTrials.filter(m => m._status === 'failed');
+      let vals = getMetricVals(failTrials, metricField);
+      vals = vals.filter(v => v != null && !isNaN(v) && isFinite(v));
+      const v = agg(vals, allTrials, aggMode);
+      if (isNaN(v)) {
+        const fb = median(vals);
+        return isNaN(fb) ? 0 : fb;
+      }
+      return v;
+    });
+    const bgColors = properties.map((_, pi) =>
+      distInvalid[si][pi] && aggMode === 'mean' ? 'rgba(210,153,34,0.5)' : PALETTE[si % PALETTE.length]
+    );
+    const borderColors = properties.map((_, pi) =>
+      distInvalid[si][pi] && aggMode === 'mean' ? '#d29922' : PALETTE[si % PALETTE.length]
+    );
+    const borderWidths = properties.map((_, pi) =>
+      distInvalid[si][pi] && aggMode === 'mean' ? 2 : 0
+    );
+    return { label: s, data, backgroundColor: bgColors, borderColor: borderColors, borderWidth: borderWidths };
+  });
+
+  stratCharts.push(new Chart(distCtx, {
+    type: 'bar',
+    data: { labels: properties, datasets: distDatasets },
+    options: {
+      responsive: true,
+      plugins: {
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const si = strategies.indexOf(ctx.dataset.label);
+              const pi = ctx.dataIndex;
+              const inv = si >= 0 && distInvalid[si] && distInvalid[si][pi] && aggMode === 'mean';
+              const fmtVal = isTimeMetric ? formatTime(ctx.raw) : formatNum(ctx.raw);
+              if (inv) return `${ctx.dataset.label}: mean invalid — median: ${fmtVal}`;
+              return `${ctx.dataset.label}: ${fmtVal}`;
+            }
+          }
+        }
+      },
+      scales: {
+        y: {
+          type: scaleType,
+          beginAtZero: scaleType === 'linear',
+          title: { display: true, text: isTimeMetric ? 'seconds' : metricField },
+          ticks: isTimeMetric ? { callback: v => formatTime(v) } : {}
+        }
+      }
+    }
+  }));
+}
+
+// ============================================================
+// MUTATION MATRIX
+// ============================================================
+
+// Build valid (mutation, property) task set from WORKLOAD_DOCS
+// Returns a Set of "mutation|||property" keys for the given workload, or null if no docs found
+function getValidTasks(workload) {
+  const wlLower = workload.toLowerCase();
+  const doc = WORKLOAD_DOCS[wlLower];
+  if (!doc || !Array.isArray(doc)) return null;
+  const tasks = new Set();
+  for (const entry of doc) {
+    const muts = entry.mutations || [];
+    const mutKey = muts.length ? muts.sort().join(', ') : '(none)';
+    for (const task of (entry.tasks || [])) {
+      tasks.add(`${mutKey}|||${task.property}`);
+    }
+  }
+  return tasks;
+}
+
+function renderMutations() {
+  const workloads = unique(METRICS, m => m.workload);
+  const sel = document.getElementById('mut-workload');
+  sel.innerHTML = ['<option value="(all)">All workloads</option>'].concat(workloads.map(w => `<option value="${w}">${w}</option>`)).join('');
+  sel.addEventListener('change', rebuildMutations);
+  rebuildMutations();
+}
+
+function rebuildMutations() {
+  const wl = document.getElementById('mut-workload').value;
+  const filtered = wl === '(all)' ? METRICS : METRICS.filter(m => m.workload === wl);
+  const strategies = unique(filtered, m => m.strategy);
+
+  // Get valid tasks from docs (when a single workload is selected)
+  const validTasks = wl !== '(all)' ? getValidTasks(wl) : null;
+
+  // Collect (mutation, property) pairs — either from docs or from data
+  let taskPairs; // array of {mutation, property}
+  if (validTasks && validTasks.size > 0) {
+    taskPairs = [...validTasks].map(k => {
+      const [mutation, property] = k.split('|||');
+      return { mutation, property };
+    });
+  } else {
+    // Fallback: derive from data, filtering out (none) mutations
+    const seen = new Set();
+    taskPairs = [];
+    for (const m of filtered) {
+      if (m._mutations === '(none)') continue;
+      const key = `${m._mutations}|||${m.property}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        taskPairs.push({ mutation: m._mutations, property: m.property });
+      }
+    }
+  }
+
+  if (!taskPairs.length) {
+    document.getElementById('mutation-matrix-wrap').innerHTML = '<p style="color:var(--text2)">No mutation tasks found for this workload.</p>';
+    return;
+  }
+
+  // Sort by mutation then property
+  taskPairs.sort((a, b) => a.mutation.localeCompare(b.mutation) || a.property.localeCompare(b.property));
+
+  // Rows: (property, mutation) from tasks, Columns: strategies
+  let html = '<table><thead><tr><th>Property</th><th>Mutation</th>';
+  for (const s of strategies) html += `<th style="text-align:center">${s}</th>`;
+  html += '</tr></thead><tbody>';
+
+  for (const { mutation: mut, property: prop } of taskPairs) {
+    html += `<tr><td>${prop}</td><td>${mut}</td>`;
+    for (const s of strategies) {
+      const trials = filtered.filter(m => m.property === prop && m._mutations === mut && m.strategy === s);
+      if (!trials.length) {
+        html += '<td style="text-align:center;color:var(--text2)">-</td>';
+        continue;
+      }
+      const bugs = trials.filter(m => m._status === 'failed').length;
+      const rate = bugs / trials.length;
+      const pct = (rate * 100).toFixed(0);
+      let bg;
+      if (rate >= 1) bg = 'rgba(63,185,80,0.3)';
+      else if (rate > 0) bg = 'rgba(210,153,34,0.3)';
+      else bg = 'rgba(248,81,73,0.3)';
+      html += `<td style="text-align:center;background:${bg}" title="${bugs}/${trials.length} trials">${pct}%</td>`;
+    }
+    html += '</tr>';
+  }
+  html += '</tbody></table>';
+  document.getElementById('mutation-matrix-wrap').innerHTML = html;
+}
+
+// ============================================================
+// DRILL-DOWN
+// ============================================================
+let ddCharts = [];
+
+function renderDrilldown() {
+  const workloads = unique(METRICS, m => m.workload);
+  const selW = document.getElementById('dd-workload');
+  selW.innerHTML = workloads.map(w => `<option value="${w}">${w}</option>`).join('');
+
+  function updateFilters() {
+    const wl = selW.value;
+    const wlM = METRICS.filter(m => m.workload === wl);
+    const props = unique(wlM, m => m.property);
+    document.getElementById('dd-property').innerHTML = props.map(p => `<option value="${p}">${p}</option>`).join('');
+    updateMutations();
+  }
+
+  function updateMutations() {
+    const wl = selW.value;
+    const prop = document.getElementById('dd-property').value;
+    const filtered = METRICS.filter(m => m.workload === wl && m.property === prop);
+    const muts = unique(filtered, m => m._mutations);
+    document.getElementById('dd-mutation').innerHTML = muts.map(m => `<option value="${m}">${m}</option>`).join('');
+    updateStrategies();
+  }
+
+  function updateStrategies() {
+    const wl = selW.value;
+    const prop = document.getElementById('dd-property').value;
+    const mut = document.getElementById('dd-mutation').value;
+    const filtered = METRICS.filter(m => m.workload === wl && m.property === prop && m._mutations === mut);
+    const strats = unique(filtered, m => m.strategy);
+    document.getElementById('dd-strategy').innerHTML = ['<option value="(all)">All</option>'].concat(strats.map(s => `<option value="${s}">${s}</option>`)).join('');
+    rebuildDrilldown();
+  }
+
+  selW.addEventListener('change', updateFilters);
+  document.getElementById('dd-property').addEventListener('change', updateMutations);
+  document.getElementById('dd-mutation').addEventListener('change', updateStrategies);
+  document.getElementById('dd-strategy').addEventListener('change', rebuildDrilldown);
+
+  updateFilters();
+}
+
+function rebuildDrilldown() {
+  for (const c of ddCharts) c.destroy();
+  ddCharts = [];
+
+  const wl = document.getElementById('dd-workload').value;
+  const prop = document.getElementById('dd-property').value;
+  const mut = document.getElementById('dd-mutation').value;
+  const strat = document.getElementById('dd-strategy').value;
+
+  let filtered = METRICS.filter(m => m.workload === wl && m.property === prop && m._mutations === mut);
+  if (strat !== '(all)') filtered = filtered.filter(m => m.strategy === strat);
+
+  // Sort by trial
+  filtered.sort((a,b) => (a.trial || 0) - (b.trial || 0));
+
+  // Table
+  const tbody = document.querySelector('#dd-table tbody');
+  tbody.innerHTML = filtered.map(m => `<tr>
+    <td class="num">${m.trial ?? '-'}</td>
+    <td class="status-${m._status}">${m._status}</td>
+    <td class="num">${formatTime(m._time)}</td>
+    <td class="num">${m.tests ?? '-'}</td>
+    <td class="num">${m.discards ?? '-'}</td>
+    <td class="num">${formatTime(m._shrinking_time)}</td>
+    <td class="num">${formatTime(m._generation_time)}</td>
+    <td class="num">${formatTime(m._execution_time)}</td>
+    <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${(m.counterexample||'').replace(/"/g,'&quot;')}">${m.counterexample || '-'}</td>
+  </tr>`).join('');
+
+  // Charts by strategy
+  const byStrat = groupBy(filtered, m => m.strategy);
+  const stratNames = [...byStrat.keys()];
+
+  // Time chart
+  const timeCtx = document.getElementById('dd-time-chart').getContext('2d');
+  ddCharts.push(new Chart(timeCtx, {
+    type: 'bar',
+    data: {
+      labels: filtered.map(m => `${m.strategy} T${m.trial ?? '?'}`),
+      datasets: [{
+        label: 'Time',
+        data: filtered.map(m => m._time),
+        backgroundColor: filtered.map(m => {
+          const si = stratNames.indexOf(m.strategy);
+          return PALETTE[si % PALETTE.length];
+        }),
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => formatTime(ctx.raw) } }
+      },
+      scales: { y: { beginAtZero: true, ticks: { callback: v => formatTime(v) } } }
+    }
+  }));
+
+  // Tests chart
+  const testsCtx = document.getElementById('dd-tests-chart').getContext('2d');
+  ddCharts.push(new Chart(testsCtx, {
+    type: 'bar',
+    data: {
+      labels: filtered.map(m => `${m.strategy} T${m.trial ?? '?'}`),
+      datasets: [{
+        label: 'Tests',
+        data: filtered.map(m => m.tests),
+        backgroundColor: filtered.map(m => {
+          const si = stratNames.indexOf(m.strategy);
+          return PALETTE[si % PALETTE.length];
+        }),
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: { y: { beginAtZero: true } }
+    }
+  }));
+}
+
+// ============================================================
+// RAW DATA
+// ============================================================
+const RAW_COLS = ['workload','property','strategy','mutations','status','trial','time','tests','discards','shrinking_time','generation_time','execution_time','timeout','timestamp','counterexample'];
+let rawFilters = {};
+let rawSort = { col: null, dir: 1 };
+let rawPage = 0;
+
+function renderRawData() {
+  // Build header
+  const headerRow = document.getElementById('raw-header');
+  const filterRow = document.getElementById('raw-filters');
+  headerRow.innerHTML = RAW_COLS.map(c => `<th data-col="${c}">${c} <span class="sort-arrow">&#9650;</span></th>`).join('');
+  filterRow.innerHTML = RAW_COLS.map(c => `<th><input type="text" placeholder="filter..." data-col="${c}"></th>`).join('');
+
+  headerRow.querySelectorAll('th').forEach(th => {
+    th.addEventListener('click', () => {
+      const col = th.dataset.col;
+      if (rawSort.col === col) rawSort.dir *= -1; else { rawSort.col = col; rawSort.dir = 1; }
+      rebuildRawTable();
+    });
+  });
+
+  filterRow.querySelectorAll('input').forEach(inp => {
+    inp.addEventListener('input', () => {
+      rawFilters[inp.dataset.col] = inp.value.toLowerCase();
+      rawPage = 0;
+      rebuildRawTable();
+    });
+  });
+
+  document.getElementById('raw-pagesize').addEventListener('change', () => { rawPage = 0; rebuildRawTable(); });
+
+  rebuildRawTable();
+}
+
+function rebuildRawTable() {
+  let data = METRICS.slice();
+
+  // Filter
+  for (const [col, val] of Object.entries(rawFilters)) {
+    if (!val) continue;
+    data = data.filter(m => {
+      let cv;
+      if (col === 'mutations') cv = m._mutations;
+      else if (col === 'time') cv = formatTime(m._time);
+      else if (col === 'shrinking_time') cv = formatTime(m._shrinking_time);
+      else if (col === 'generation_time') cv = formatTime(m._generation_time);
+      else if (col === 'execution_time') cv = formatTime(m._execution_time);
+      else cv = String(m[col] ?? '');
+      return cv.toLowerCase().includes(val);
+    });
+  }
+
+  // Sort
+  if (rawSort.col) {
+    const col = rawSort.col;
+    data.sort((a,b) => {
+      let va, vb;
+      if (['time','shrinking_time','generation_time','execution_time'].includes(col)) {
+        va = a['_'+col] ?? -Infinity; vb = b['_'+col] ?? -Infinity;
+      } else if (col === 'mutations') {
+        va = a._mutations; vb = b._mutations;
+      } else {
+        va = a[col]; vb = b[col];
+      }
+      if (typeof va === 'string') return rawSort.dir * va.localeCompare(String(vb || ''));
+      if (va == null) va = -Infinity;
+      if (vb == null) vb = -Infinity;
+      return rawSort.dir * (va - vb);
+    });
+  }
+
+  // Paginate
+  const pageSize = parseInt(document.getElementById('raw-pagesize').value) || 0;
+  const totalRows = data.length;
+  const pageData = pageSize ? data.slice(rawPage * pageSize, (rawPage + 1) * pageSize) : data;
+  const totalPages = pageSize ? Math.ceil(totalRows / pageSize) : 1;
+
+  document.getElementById('raw-info').textContent = `Showing ${pageData.length} of ${totalRows} records`;
+
+  const tbody = document.querySelector('#raw-table tbody');
+  tbody.innerHTML = pageData.map(m => '<tr>' + RAW_COLS.map(c => {
+    let v;
+    if (c === 'mutations') v = m._mutations;
+    else if (c === 'time') v = formatTime(m._time);
+    else if (c === 'shrinking_time') v = formatTime(m._shrinking_time);
+    else if (c === 'generation_time') v = formatTime(m._generation_time);
+    else if (c === 'execution_time') v = formatTime(m._execution_time);
+    else if (c === 'status') return `<td class="status-${m._status}">${m._status}</td>`;
+    else v = m[c] ?? '';
+    const isNum = ['trial','tests','discards','timeout'].includes(c);
+    return `<td${isNum ? ' class="num"' : ''}>${v}</td>`;
+  }).join('') + '</tr>').join('');
+
+  // Pagination
+  const pagEl = document.getElementById('raw-pagination');
+  if (totalPages <= 1) { pagEl.innerHTML = ''; return; }
+  let pagHtml = `<button class="btn" ${rawPage === 0 ? 'disabled' : ''} onclick="rawPage=0;rebuildRawTable()">&#171;</button>`;
+  pagHtml += `<button class="btn" ${rawPage === 0 ? 'disabled' : ''} onclick="rawPage--;rebuildRawTable()">&#8249;</button>`;
+  pagHtml += `<span>Page ${rawPage+1} of ${totalPages}</span>`;
+  pagHtml += `<button class="btn" ${rawPage >= totalPages-1 ? 'disabled' : ''} onclick="rawPage++;rebuildRawTable()">&#8250;</button>`;
+  pagHtml += `<button class="btn" ${rawPage >= totalPages-1 ? 'disabled' : ''} onclick="rawPage=${totalPages-1};rebuildRawTable()">&#187;</button>`;
+  pagEl.innerHTML = pagHtml;
+}
+
+// Make pagination functions global
+window.rawPage = rawPage;
+Object.defineProperty(window, 'rawPage', {
+  get() { return rawPage; },
+  set(v) { rawPage = v; }
+});
+window.rebuildRawTable = rebuildRawTable;
+
+// ============================================================
+// INIT
+// ============================================================
+async function boot() {
+  await decompressMetrics();
+  parseMetrics();
+  const btn = nav.querySelector(`button[data-view="${initialView}"]`);
+  if (btn) btn.click(); else render('overview');
+}
+// document.write() (used by gisthost) means DOMContentLoaded already fired
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', boot);
+} else {
+  boot();
+}
+</script>
+</body>
+</html>

@@ -21,8 +21,8 @@
               "command": "${workload_path}/target/release/stlc-sampler",
               "args": [
                 "${strategy}",
-                "$property",
-                "$tests"
+                "${property}",
+                "${tests}"
               ],
               "params": [
                 "workload_path",
@@ -36,7 +36,7 @@
               "command": "${workload_path}/target/release/stlc",
               "args": [
                 "${strategy}",
-                "$property"
+                "${property}"
               ],
               "params": [
                 "workload_path",

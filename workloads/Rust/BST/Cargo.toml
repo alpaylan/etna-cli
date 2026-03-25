@@ -6,6 +6,8 @@ edition = "2024"
 [dependencies]
 # quickcheck = { git = "https://github.com/alpaylan/quickcheck.git" , branch = "master" , features = ["etna"]}
 quickcheck = { path = "/Users/akeles/Programming/projects/PbtBenchmark/quickcheck" , features = ["etna"]}
+hegel = { package = "hegeltest", version = "0.2.0" }
+proptest = "1.6.0"
 etna-rs-utils = { git = "https://github.com/alpaylan/etna-rs-utils", branch = "main" }
 serde = { version = "1.0.219", features = ["derive"] }
 serde-lexpr = "0.1.3"
@@ -22,3 +24,7 @@ path = "src/main_serialized.rs"
 [[bin]]
 name = "bst-sampler"
 path = "src/main_sampler.rs"
+
+[[bin]]
+name = "bst-oracle"
+path = "src/main_oracle.rs"
