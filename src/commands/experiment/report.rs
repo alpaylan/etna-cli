@@ -1,10 +1,9 @@
 use std::io::Write;
 use std::path::PathBuf;
 
-use anyhow::Context;
 use base64::Engine;
 
-use crate::{experiment::ExperimentMetadata, manager::Manager};
+use crate::{error_context::Context, experiment::ExperimentMetadata, manager::Manager};
 
 const TEMPLATE: &str = include_str!("../../../templates/report.html");
 

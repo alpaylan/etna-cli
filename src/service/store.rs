@@ -1,8 +1,8 @@
-use anyhow::Context;
 use jaq_interpret::{Ctx, FilterT as _, RcIter, Val};
 
 use crate::{
     commands::store::lib::jaq_compile,
+    error_context::Context,
     store::{Metric, Store},
 };
 

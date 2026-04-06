@@ -4,10 +4,11 @@ use std::{
     sync::{Arc, Mutex, RwLock},
 };
 
-use anyhow::{bail, Context};
+use anyhow::bail;
 
 use crate::{
     driver::run_experiment as driver_run_experiment,
+    error_context::Context,
     experiment::{ExperimentMetadata, Test},
     git_driver,
     manager::Manager,

@@ -1,8 +1,7 @@
 use std::collections::HashSet;
 
-use anyhow::Context;
-
 use crate::{
+    error_context::Context,
     experiment::ExperimentMetadata,
     git_driver,
     manager::Manager,

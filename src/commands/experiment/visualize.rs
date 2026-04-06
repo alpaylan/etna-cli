@@ -1,7 +1,6 @@
 use std::{fmt::Display, io::Write, path::Path};
 
 use ab_glyph::{Font, FontRef, ScaleFont as _};
-use anyhow::Context;
 use image::{Rgb, RgbImage};
 use imageproc::{drawing::draw_filled_rect_mut, rect::Rect};
 use itertools::Itertools;
@@ -9,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 use crate::{
+    error_context::Context,
     experiment::{ExperimentMetadata, Test},
     manager::Manager,
     open_pbt_format::Status,

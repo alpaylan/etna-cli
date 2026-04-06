@@ -1,6 +1,5 @@
 use std::{env, path::PathBuf};
 
-use anyhow::Context;
 use clap::{Parser, Subcommand};
 
 /// Parse a key=value pair for CLI parameters
@@ -16,6 +15,7 @@ use etna::{
         self,
         experiment::visualize::{MetricType, VisualizationType},
     },
+    error_context::Context,
     experiment::ExperimentMetadata,
     manager::Manager,
     store::Store,

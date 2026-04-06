@@ -1,6 +1,5 @@
-use anyhow::Context;
-
 use crate::{
+    error_context::Context,
     service::{store::write_metric, types::WriteMetricRequest},
     store::Store,
 };

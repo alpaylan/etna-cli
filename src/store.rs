@@ -4,8 +4,10 @@ use std::{
     path::PathBuf,
 };
 
-use anyhow::{Context, Ok};
+use anyhow::Ok;
 use serde_derive::{Deserialize, Serialize};
+
+use crate::error_context::Context;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Store {

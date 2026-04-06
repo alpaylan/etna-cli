@@ -3,12 +3,12 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use anyhow::Context;
 use serde_json::Value;
 use tracing::info;
 
 use crate::{
     driver::run_experiment,
+    error_context::Context,
     experiment::{ExperimentMetadata, Test},
     git_driver,
     manager::Manager,

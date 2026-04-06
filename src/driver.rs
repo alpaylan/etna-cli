@@ -19,11 +19,10 @@ use crate::{
     workload::{Command, Language, Step, Steps, Workload},
 };
 
-use anyhow::Context;
-
 use process_control::{ChildExt, Control};
 
 use crate::experiment::{ExperimentMetadata, Test};
+use crate::error_context::Context;
 
 type Object = Map<String, Value>;
 

@@ -1,9 +1,9 @@
 use std::{collections::HashMap, fmt::Display, path::PathBuf};
 
-use anyhow::Context as _;
 use serde_derive::{Deserialize, Serialize};
 
 use crate::{git_driver, manager::Manager, workload::WorkloadMetadata};
+use crate::error_context::Context as _;
 
 /// Experiment Configuration
 /// It contains the name of the experiment, a description of the experiment, and a list of workloads

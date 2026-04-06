@@ -1,8 +1,7 @@
 use std::collections::HashMap;
 
-use anyhow::Context as _;
-
 use crate::{commands, config::EtnaConfig, experiment::ExperimentMetadata, store::Store};
+use crate::error_context::Context as _;
 
 pub struct Manager {
     pub experiments: HashMap<String, ExperimentMetadata>,

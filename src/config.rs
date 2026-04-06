@@ -1,7 +1,8 @@
 use std::path::PathBuf;
 
-use anyhow::Context;
 use serde_derive::{Deserialize, Serialize};
+
+use crate::error_context::Context;
 
 /// Etna Configuration
 /// It contains the configuration for etna-cli

@@ -1,8 +1,8 @@
-use anyhow::Context;
 use tracing::info;
 
 use crate::{
     config::{current_version, EtnaConfig},
+    error_context::Context,
     git_driver,
 };
 

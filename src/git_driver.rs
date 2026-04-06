@@ -1,21 +1,32 @@
 use std::path::{Path, PathBuf};
 
-use anyhow::Context;
 use tracing::debug;
+
+use crate::error_context::Context;
 
 const ETNA_COMMITTER_NAME: &str = "ETNA Commit Bot";
 const ETNA_COMMITTER_EMAIL: &str = "etna-bot@users.noreply.github.com";
 
 pub(crate) fn initialize_git_repo(path: &PathBuf, msg: &str) -> anyhow::Result<()> {
+    let repo_path = path.display().to_string();
     // Initialize a git repository
-    let git_repo = git2::Repository::init(path).context("Failed to initialize git repository")?;
-    let mut index = git_repo.index().context("Failed to get index")?;
+    let git_repo = git2::Repository::init(path)
+        .with_context(|| format!("Failed to initialize git repository at '{repo_path}'"))?;
+    let mut index = git_repo
+        .index()
+        .with_context(|| format!("Failed to get index for repo '{repo_path}'"))?;
     index
         .add_all(["*"].iter(), git2::IndexAddOption::DEFAULT, None)
-        .context("Failed to add files to index")?;
-    index.write().context("Failed to write index")?;
-    let tree_id = index.write_tree().context("Failed to write tree")?;
-    let tree = git_repo.find_tree(tree_id).context("Failed to find tree")?;
+        .with_context(|| format!("Failed to add files to index for repo '{repo_path}'"))?;
+    index
+        .write()
+        .with_context(|| format!("Failed to write index for repo '{repo_path}'"))?;
+    let tree_id = index
+        .write_tree()
+        .with_context(|| format!("Failed to write tree for repo '{repo_path}'"))?;
+    let tree = git_repo
+        .find_tree(tree_id)
+        .with_context(|| format!("Failed to find tree for repo '{repo_path}'"))?;
 
     if let Ok(head) = git_repo.head() {
         if let Ok(head_commit) = head.peel_to_commit() {
@@ -27,10 +38,10 @@ pub(crate) fn initialize_git_repo(path: &PathBuf, msg: &str) -> anyhow::Result<(
     }
 
     let signature = git2::Signature::now(ETNA_COMMITTER_NAME, ETNA_COMMITTER_EMAIL)
-        .context("Failed to create signature")?;
+        .with_context(|| format!("Failed to create signature for repo '{repo_path}'"))?;
     git_repo
         .commit(Some("HEAD"), &signature, &signature, msg, &tree, &[])
-        .context("Failed to commit")?;
+        .with_context(|| format!("Failed to commit in repo '{repo_path}'"))?;
     Ok(())
 }
 
@@ -73,16 +84,63 @@ pub(crate) fn _change_branch(repo_path: &PathBuf, branch: &str) -> anyhow::Resul
 /// Commit the entire repo with the given message.
 pub(crate) fn commit(repo_path: &Path, message: &str) -> anyhow::Result<String> {
     debug!("repo path: {}", repo_path.display());
-    let git_repo = git2::Repository::open(repo_path).context("Failed to open git repository")?;
+    let repo_display = repo_path.display().to_string();
+    let git_repo = git2::Repository::open_ext(
+        repo_path,
+        git2::RepositoryOpenFlags::NO_SEARCH,
+        std::iter::empty::<&std::ffi::OsStr>(),
+    )
+    .with_context(|| {
+        format!(
+            "Failed to open git repository at '{}' without parent search",
+            repo_display
+        )
+    })?;
 
-    let mut index = git_repo.index().context("Failed to get index")?;
-    index.clear().context("Failed to clear index")?;
+    let mut index = git_repo
+        .index()
+        .with_context(|| format!("Failed to get index for repo '{repo_display}'"))?;
+    index
+        .clear()
+        .with_context(|| format!("Failed to clear index for repo '{repo_display}'"))?;
+
+    let mut last_seen_path: Option<String> = None;
+    let mut last_skipped_nested_repo: Option<String> = None;
+    let repo_root = repo_path.to_path_buf();
+    index
+        .add_all(
+            ["*"],
+            git2::IndexAddOption::DEFAULT,
+            Some(&mut |path, _| {
+                let p = path.display().to_string();
+                last_seen_path = Some(p.clone());
+                // Embedded repositories appear as directory-style matches (e.g. "foo/").
+                // Skip only those nested repo roots; keep normal directory traversal behavior.
+                if p.ends_with('/') {
+                    let nested_root = repo_root.join(path);
+                    if nested_root.join(".git").exists() {
+                        last_skipped_nested_repo = Some(p);
+                        return 1; // Skip this matched path and continue.
+                    }
+                }
+                0
+            }),
+        )
+        .with_context(|| match last_seen_path {
+            Some(ref p) => match last_skipped_nested_repo {
+                Some(ref skipped) => format!(
+                    "Failed to add files to index for repo '{repo_display}' (last path: '{p}', skipped nested repo: '{skipped}')"
+                ),
+                None => {
+                    format!("Failed to add files to index for repo '{repo_display}' (last path: '{p}')")
+                }
+            },
+            None => format!("Failed to add files to index for repo '{repo_display}'"),
+        })?;
 
     index
-        .add_all(["*"], git2::IndexAddOption::DEFAULT, None)
-        .context("Failed to add files to index")?;
-
-    index.write().context("Failed to write index")?;
+        .write()
+        .with_context(|| format!("Failed to write index for repo '{repo_display}'"))?;
     debug!(
         "index {:?}",
         index
@@ -91,11 +149,15 @@ pub(crate) fn commit(repo_path: &Path, message: &str) -> anyhow::Result<String> 
             .collect::<Vec<_>>()
     );
 
-    let tree_id = index.write_tree().context("Failed to write tree")?;
-    let tree = git_repo.find_tree(tree_id).context("Failed to find tree")?;
+    let tree_id = index
+        .write_tree()
+        .with_context(|| format!("Failed to write tree for repo '{repo_display}'"))?;
+    let tree = git_repo
+        .find_tree(tree_id)
+        .with_context(|| format!("Failed to find tree for repo '{repo_display}'"))?;
 
     let signature = git2::Signature::now(ETNA_COMMITTER_NAME, ETNA_COMMITTER_EMAIL)
-        .context("Failed to create signature")?;
+        .with_context(|| format!("Failed to create signature for repo '{repo_display}'"))?;
 
     git_repo
         .commit(
@@ -106,14 +168,20 @@ pub(crate) fn commit(repo_path: &Path, message: &str) -> anyhow::Result<String> 
             &tree,
             &[&git_repo
                 .head()
-                .context("Failed to get head")?
+                .with_context(|| format!("Failed to get head for repo '{repo_display}'"))?
                 .peel_to_commit()
-                .context("Failed to peel to commit")?],
+                .with_context(|| {
+                    format!("Failed to peel head to commit for repo '{repo_display}'")
+                })?],
         )
-        .context("Failed to commit")?;
+        .with_context(|| format!("Failed to commit in repo '{repo_display}'"))?;
 
-    let head = git_repo.head().context("Failed to get head")?;
-    let head = head.peel_to_commit().context("Failed to peel to commit")?;
+    let head = git_repo
+        .head()
+        .with_context(|| format!("Failed to get head for repo '{repo_display}'"))?;
+    let head = head
+        .peel_to_commit()
+        .with_context(|| format!("Failed to peel head to commit for repo '{repo_display}'"))?;
     Ok(head.id().to_string())
 }
 

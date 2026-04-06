@@ -1,10 +1,10 @@
 use std::{collections::HashMap, fmt::Display, hash::Hash, path::PathBuf};
 
-use anyhow::Context as _;
 use itertools::Itertools as _;
 use serde::{Deserialize, Serialize};
 
 use crate::{property::Property, strategy::Strategy};
+use crate::error_context::Context as _;
 use marauders::Variation;
 
 /// Represents a command that can be executed in the context of a workload.

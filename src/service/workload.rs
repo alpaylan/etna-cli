@@ -1,9 +1,10 @@
 use std::{collections::HashMap, fs, path::Path, process::Command};
 
-use anyhow::{bail, Context};
+use anyhow::bail;
 use serde::Deserialize;
 
 use crate::{
+    error_context::Context,
     experiment::{ExperimentMetadata, Test},
     git_driver,
     manager::Manager,
