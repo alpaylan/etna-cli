@@ -1,6 +1,6 @@
 [package]
 name = "etna"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2021"
 default-run = "etna"
 repository = "https://github.com/alpaylan/etna-cli"
