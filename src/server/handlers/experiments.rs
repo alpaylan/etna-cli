@@ -21,8 +21,6 @@ pub struct CreateExperimentRequest {
     pub path: Option<String>,
     #[serde(default)]
     pub overwrite: bool,
-    #[serde(default)]
-    pub register: bool,
 }
 
 /// Response for creating an experiment
@@ -108,7 +106,6 @@ pub async fn create_experiment(
         name: request.name,
         path: request.path.map(PathBuf::from),
         overwrite: request.overwrite,
-        register: request.register,
     };
 
     let experiment = exp_service::create_experiment(&mut manager, options)?;

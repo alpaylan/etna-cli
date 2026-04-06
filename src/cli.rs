@@ -155,11 +155,13 @@ pub(crate) fn run() -> anyhow::Result<()> {
     match cli.command {
         Command::Experiment(exp) => match exp {
             ExperimentCommand::New {
-                        name,
-                        path,
-                        overwrite,
-                        register,
-            } => commands::experiment::new::invoke(mgr, name, path, overwrite, register),
+                name,
+                path,
+                overwrite,
+            } => commands::experiment::new::invoke(mgr, name, path, overwrite),
+            ExperimentCommand::Register { name, path } => {
+                commands::experiment::register::invoke(mgr, name, path)
+            }
             ExperimentCommand::Run { name: _, tests, short_circuit, parallel, params } => commands::experiment::run::invoke(mgr, experiment.unwrap(), tests, short_circuit, parallel, params),
             ExperimentCommand::Show {
                         name,
@@ -234,10 +236,16 @@ enum ExperimentCommand {
         /// Overwrite the existing experiment
         #[clap(short = 'o', long)]
         overwrite: bool,
-        /// Register an existing experiment in the tracking metadata
-        /// [default: false]
-        #[clap(short = 'r', long)]
-        register: bool,
+    },
+    #[clap(
+        name = "register",
+        about = "Register an existing experiment in the tracking metadata"
+    )]
+    Register {
+        /// Name of the experiment, if not provided, the experiment name is inferred from the experiment path
+        name: Option<String>,
+        /// An optional root path, if not provided, the current directory is used
+        path: Option<PathBuf>,
     },
     #[clap(name = "run", about = "Run an experiment")]
     Run {
@@ -537,6 +545,7 @@ impl Command {
         match self {
             Command::Experiment(exp) => match exp {
                 ExperimentCommand::New { .. } => None,
+                ExperimentCommand::Register { .. } => None,
                 ExperimentCommand::Run { name, .. } => name.as_ref(),
                 ExperimentCommand::Show { name, .. } => Some(name),
                 ExperimentCommand::AmendTest { name, .. } => name.as_ref(),
@@ -558,6 +567,7 @@ impl Command {
         match self {
             Command::Experiment(exp) => match exp {
                 ExperimentCommand::New { .. } => false,
+                ExperimentCommand::Register { .. } => false,
                 ExperimentCommand::Run { .. } => true,
                 ExperimentCommand::Show { .. } => true,
                 ExperimentCommand::AmendTest { .. } => true,

@@ -2,11 +2,7 @@ use std::fmt::Display;
 use std::panic::Location;
 
 fn with_callsite<C: Display>(context: C, location: &'static Location<'static>) -> String {
-    format!(
-        "{context} (at {}:{})",
-        location.file(),
-        location.line()
-    )
+    format!("{context} (at {}:{})", location.file(), location.line())
 }
 
 /// Drop-in replacement for `anyhow::Context` that appends call-site location.

@@ -16,8 +16,6 @@ export interface CreateExperimentRequest {
   name: string;
   path?: string;
   overwrite?: boolean;
-  register?: boolean;
-  use_local_store?: boolean;
 }
 
 export interface RunExperimentRequest {

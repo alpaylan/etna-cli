@@ -22,7 +22,6 @@ pub struct CreateExperimentOptions {
     pub name: String,
     pub path: Option<PathBuf>,
     pub overwrite: bool,
-    pub register: bool,
 }
 
 /// Options for running an experiment

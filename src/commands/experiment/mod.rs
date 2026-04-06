@@ -1,6 +1,7 @@
 pub mod amend_test;
 pub mod list;
 pub mod new;
+pub mod register;
 pub mod report;
 pub mod run;
 pub mod show;

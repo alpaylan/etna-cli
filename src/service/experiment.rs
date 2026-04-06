@@ -1,6 +1,7 @@
 use std::{
     collections::HashMap,
     fs,
+    path::PathBuf,
     sync::{Arc, Mutex, RwLock},
 };
 
@@ -22,6 +23,73 @@ use super::{
     },
 };
 
+fn resolve_experiment_root(path: Option<std::path::PathBuf>) -> anyhow::Result<std::path::PathBuf> {
+    if let Some(path) = path {
+        if !path.exists() {
+            bail!(
+                "Provided path '{}' does not exist",
+                path.canonicalize()
+                    .unwrap_or_else(|_| path.clone())
+                    .display()
+            );
+        }
+
+        if !path.is_dir() {
+            bail!("Provided path '{}' is not a directory", path.display());
+        }
+
+        Ok(path)
+    } else {
+        std::env::current_dir().context("Failed to get current directory")
+    }
+}
+
+/// Register an existing experiment
+pub fn register_experiment(
+    mgr: &mut Manager,
+    name: Option<String>,
+    path: Option<PathBuf>,
+) -> ServiceResult<ExperimentInfo> {
+    let experiment_path = resolve_experiment_root(path)?;
+
+    let name = name.unwrap_or_else(|| {
+        let file_name = experiment_path
+            .file_name()
+            .expect("Experiment path is canonicalized, should not fail");
+        file_name.to_string_lossy().to_string()
+    });
+
+    tracing::trace!("registering experiment with name '{name}'");
+
+    if mgr.get_experiment(&name).is_some() {
+        bail!("Experiment '{}' is already registered", name);
+    }
+
+    let store_path = experiment_path.join("store.jsonl");
+    Store::new(store_path.clone())
+        .with_context(|| format!("Failed to initialize '{}'", store_path.display()))?;
+
+    let metadata = ExperimentMetadata {
+        name: name.clone(),
+        path: experiment_path.clone(),
+        store: store_path,
+    };
+
+    mgr.add_experiment(name.clone(), metadata.clone())?;
+
+    tracing::info!(
+        "Experiment '{name}' registered successfully at '{}'",
+        experiment_path.display()
+    );
+
+    Ok(ExperimentInfo {
+        name: metadata.name.clone(),
+        path: metadata.path.clone(),
+        store: metadata.store.clone(),
+        workloads: metadata.workloads(),
+    })
+}
+
 /// Create a new experiment
 pub fn create_experiment(
     mgr: &mut Manager,
@@ -31,31 +99,15 @@ pub fn create_experiment(
         name,
         path,
         overwrite,
-        register,
     } = options;
 
     tracing::trace!("creating new experiment with name '{name}'");
 
-    let path = if let Some(path) = path {
-        path
-    } else {
-        std::env::current_dir().context("Failed to get current directory")?
-    };
+    let root_path = resolve_experiment_root(path)?;
+    let experiment_path = root_path.join(&name);
 
-    let experiment_path = path.join(&name);
-    let experiment_exists = mgr.get_experiment(&name);
-
-    // Handle --register and --overwrite logic
-    match (
-        experiment_path.exists(),
-        experiment_exists.as_ref(),
-        overwrite,
-        register,
-    ) {
-        (_, _, true, true) => {
-            bail!("Cannot use both --register and --overwrite at the same time")
-        }
-        (true, _, true, false) => {
+    match (experiment_path.exists(), overwrite) {
+        (true, true) => {
             tracing::debug!("--overwrite flag is set, removing existing experiment directory");
             fs::remove_dir_all(&experiment_path).with_context(|| {
                 format!(
@@ -64,51 +116,20 @@ pub fn create_experiment(
                 )
             })?
         }
-        (true, None, false, true) => {
-            tracing::debug!("--register flag is set, registering existing experiment");
-
-            let store_path = experiment_path.join("store.jsonl");
-            Store::new(store_path.clone())
-                .with_context(|| format!("Failed to initialize '{}'", store_path.display()))?;
-
-            let metadata = ExperimentMetadata {
-                name: name.clone(),
-                path: path.clone(),
-                store: store_path,
-            };
-
-            mgr.add_experiment(name.clone(), metadata.clone())?;
-
-            tracing::info!(
-                "Experiment '{name}' registered successfully at '{}'",
-                experiment_path.display()
-            );
-
-            return Ok(ExperimentInfo {
-                name: metadata.name,
-                path: metadata.path.clone(),
-                store: metadata.store,
-                workloads: vec![],
-            });
-        }
-        (true, Some(_), false, true) => {
-            bail!("Experiment already exists: {}", name)
-        }
-        (true, _, false, false) => {
+        (true, false) => {
             bail!(
-                "An experiment named '{name}' already exists in '{}'. Use overwrite or register options.",
-                fs::canonicalize(&path).unwrap_or(path).display()
+                "An experiment named '{name}' already exists in '{}'. Use --overwrite to replace it.",
+                fs::canonicalize(&root_path)
+                    .unwrap_or_else(|_| root_path.clone())
+                    .display()
             )
         }
-        (false, _, true, false) => {
+        (false, true) => {
             tracing::warn!(
                 "--overwrite flag is set, but the experiment does not exist. Creating experiment as usual."
             )
         }
-        (false, _, false, true) => {
-            bail!("--register flag is set, but the experiment does not exist")
-        }
-        (false, _, false, false) => {}
+        (false, false) => {}
     };
 
     // Create the experiment directory

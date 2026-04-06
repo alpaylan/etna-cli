@@ -37,7 +37,14 @@ Usage: etna experiment new [OPTIONS] <NAME> [PATH]
 
 Options:
   -o, --overwrite
-  -r, --register
+```
+
+### `experiment register`
+
+Register an existing experiment directory in tracking metadata.
+
+```text
+Usage: etna experiment register <NAME> [PATH]
 ```
 
 ### `experiment run`

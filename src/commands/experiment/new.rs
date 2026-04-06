@@ -14,14 +14,12 @@ pub fn invoke(
     name: String,
     path: Option<PathBuf>,
     overwrite: bool,
-    register: bool,
 ) -> anyhow::Result<()> {
     // Convert CLI args to service options
     let options = CreateExperimentOptions {
         name,
         path,
         overwrite,
-        register,
     };
 
     // Call service layer
