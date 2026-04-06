@@ -17,7 +17,9 @@ use crate::{
 
 use super::{
     test_utils::{build_invalid_test_message, resolve_test_name},
-    types::{CreateExperimentOptions, ExperimentInfo, RunExperimentOptions, ServiceResult, TestInfo},
+    types::{
+        CreateExperimentOptions, ExperimentInfo, RunExperimentOptions, ServiceResult, TestInfo,
+    },
 };
 
 /// Create a new experiment
@@ -30,7 +32,6 @@ pub fn create_experiment(
         path,
         overwrite,
         register,
-        use_local_store,
     } = options;
 
     tracing::trace!("creating new experiment with name '{name}'");
@@ -67,16 +68,13 @@ pub fn create_experiment(
             tracing::debug!("--register flag is set, registering existing experiment");
 
             let store_path = experiment_path.join("store.jsonl");
-            let local_store = if store_path.exists() {
-                Some(store_path)
-            } else {
-                None
-            };
+            Store::new(store_path.clone())
+                .with_context(|| format!("Failed to initialize '{}'", store_path.display()))?;
 
             let metadata = ExperimentMetadata {
                 name: name.clone(),
                 path: path.clone(),
-                store: local_store.unwrap_or(mgr.store.path.clone()),
+                store: store_path,
             };
 
             mgr.add_experiment(name.clone(), metadata.clone())?;
@@ -215,24 +213,14 @@ pub fn create_experiment(
         format!("Automated initialization commit for experiment '{}'", name).as_str(),
     )?;
 
-    // Update store if using local store
-    if use_local_store {
-        let store_path = experiment_path.join("store.jsonl");
-        tracing::info!(
-            "using a local store for experiment '{name}' at '{}'",
-            store_path.display()
-        );
-        mgr.store = Store::new(store_path)?;
-    }
+    let store_path = experiment_path.join("store.jsonl");
+    Store::new(store_path.clone())
+        .with_context(|| format!("Failed to initialize '{}'", store_path.display()))?;
 
     let metadata = ExperimentMetadata {
         name: name.clone(),
         path: experiment_path.clone(),
-        store: if use_local_store {
-            experiment_path.join("store.jsonl")
-        } else {
-            mgr.store.path.clone()
-        },
+        store: store_path,
     };
 
     mgr.add_experiment(name.clone(), metadata.clone())?;
@@ -363,7 +351,8 @@ pub fn run_experiment(
     let cli_params: HashMap<String, String> = params.into_iter().collect();
 
     let mut mgr = mgr;
-    mgr.store.load_metrics()?;
+    mgr.set_store_path(experiment.store.clone())?;
+    mgr.require_store_mut()?.load_metrics()?;
 
     git_driver::commit(&experiment.path, "Running experiment")?;
 

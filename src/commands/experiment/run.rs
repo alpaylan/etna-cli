@@ -69,7 +69,8 @@ pub fn invoke(
     let cli_params: HashMap<String, String> = cli_params.into_iter().collect();
 
     // Load metrics from the store
-    mgr.store.load_metrics()?;
+    mgr.set_store_path(experiment.store.clone())?;
+    mgr.require_store_mut()?.load_metrics()?;
 
     git_driver::commit(&experiment.path, "Running experiment")?;
 

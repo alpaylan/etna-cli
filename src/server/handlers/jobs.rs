@@ -66,9 +66,14 @@ pub async fn get_job_metrics(
     // Filter by experiment name
     let filter = format!(r#".[] | select(.experiment == "{}")"#, experiment_name);
 
-    let mut manager = state.manager.write().unwrap();
-    store_service::load_metrics(&mut manager.store)?;
-    let result = store_service::query_metrics(&manager.store, &filter)?;
+    let manager = state.manager.read().unwrap();
+    let experiment = manager.get_experiment(experiment_name).ok_or_else(|| {
+        ServerError::not_found(format!("Experiment not found: {experiment_name}"))
+    })?;
+
+    let mut store = crate::store::Store::new(experiment.store)?;
+    store_service::load_metrics(&mut store)?;
+    let result = store_service::query_metrics(&store, &filter)?;
 
     Ok(Json(result))
 }

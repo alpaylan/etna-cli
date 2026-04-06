@@ -18,7 +18,6 @@ use etna::{
     error_context::Context,
     experiment::ExperimentMetadata,
     manager::Manager,
-    store::Store,
 };
 
 use tracing::Level;
@@ -150,7 +149,7 @@ pub(crate) fn run() -> anyhow::Result<()> {
     };
 
     if let Some(experiment) = &experiment {
-        mgr.store = Store::new(experiment.store.clone())?;
+        mgr.set_store_path(experiment.store.clone())?;
     }
 
     match cli.command {
@@ -160,8 +159,7 @@ pub(crate) fn run() -> anyhow::Result<()> {
                         path,
                         overwrite,
                         register,
-                        local_store,
-            } => commands::experiment::new::invoke(mgr, name, path, overwrite, register,  local_store),
+            } => commands::experiment::new::invoke(mgr, name, path, overwrite, register),
             ExperimentCommand::Run { name: _, tests, short_circuit, parallel, params } => commands::experiment::run::invoke(mgr, experiment.unwrap(), tests, short_circuit, parallel, params),
             ExperimentCommand::Show {
                         name,
@@ -203,32 +201,6 @@ pub(crate) fn run() -> anyhow::Result<()> {
             ConfigCommand::Show => commands::config::show::invoke(),
         },
         Command::Setup { .. } => unreachable!("Setup command is handled earlier"),
-        Command::Store(store_command) => {
-            let experiment = match &store_command {
-                StoreCommand::Write { experiment, ..} => experiment,
-                StoreCommand::Query { experiment, ..} => experiment,
-                StoreCommand::Remove { experiment, ..} => experiment,
-            };
-            let store = if let Some(experiment) = experiment {
-                Store::new(
-            mgr.get_experiment(experiment)
-                .context(format!("Experiment '{experiment}' not found"))?
-                .store,
-                )?
-            } else {
-                mgr.store
-            };
-
-            match store_command {
-            StoreCommand::Write {
-                experiment: _,
-                experiment_id,
-                metric,
-            } => commands::store::write::invoke(store, experiment_id, metric),
-            StoreCommand::Query { experiment: _, filter } => commands::store::query::invoke(store, filter),
-            StoreCommand::Remove { experiment: _, filter } => commands::store::remove::invoke(store, filter),
-        }
-    },
         Command::Analyze(_analyze_command) => todo!(),
         Command::Mutation(mutation_command) => match mutation_command {
             MutationCommand::List { path } => commands::mutation::list::invoke(path),
@@ -262,14 +234,10 @@ enum ExperimentCommand {
         /// Overwrite the existing experiment
         #[clap(short = 'o', long)]
         overwrite: bool,
-        /// Register the experiment in the store
+        /// Register an existing experiment in the tracking metadata
         /// [default: false]
         #[clap(short = 'r', long)]
         register: bool,
-        /// Does the experiment use a local store instead of the global store
-        /// [default: false]
-        #[clap(short = 's', long, default_value = "false")]
-        local_store: bool,
     },
     #[clap(name = "run", about = "Run an experiment")]
     Run {
@@ -372,7 +340,10 @@ enum ExperimentCommand {
         #[clap(short, long)]
         output: PathBuf,
     },
-    #[clap(name = "report", about = "Generate an interactive HTML report for the experiment")]
+    #[clap(
+        name = "report",
+        about = "Generate an interactive HTML report for the experiment"
+    )]
     Report {
         /// Name of the experiment
         /// [default: current directory]
@@ -523,8 +494,6 @@ enum Command {
     Experiment(ExperimentCommand),
     #[command(subcommand, name = "workload", about = "Manage workloads")]
     Workload(WorkloadCommand),
-    #[command(subcommand, name = "store", about = "Manage the etna store")]
-    Store(StoreCommand),
     #[command(subcommand, name = "config", about = "Manage etna-cli configuration")]
     Config(ConfigCommand),
     #[command(name = "setup", about = "Setup etna-cli")]
@@ -581,11 +550,6 @@ impl Command {
                 WorkloadCommand::RemoveWorkload { experiment, .. } => experiment.as_ref(),
                 WorkloadCommand::ListWorkloads { experiment, .. } => experiment.as_ref(),
             },
-            Command::Store(store_command) => match store_command {
-                StoreCommand::Write { .. } => None,
-                StoreCommand::Query { experiment, .. } => experiment.as_ref(),
-                StoreCommand::Remove { experiment, .. } => experiment.as_ref(),
-            },
             _ => None,
         }
     }
@@ -606,11 +570,6 @@ impl Command {
                 WorkloadCommand::AddWorkload { .. } => true,
                 WorkloadCommand::RemoveWorkload { .. } => true,
                 WorkloadCommand::ListWorkloads { .. } => true,
-            },
-            Command::Store(store_command) => match store_command {
-                StoreCommand::Write { .. } => false,
-                StoreCommand::Query { .. } => false,
-                StoreCommand::Remove { .. } => false,
             },
             _ => false,
         }

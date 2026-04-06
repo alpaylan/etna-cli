@@ -23,7 +23,6 @@ pub struct CreateExperimentOptions {
     pub path: Option<PathBuf>,
     pub overwrite: bool,
     pub register: bool,
-    pub use_local_store: bool,
 }
 
 /// Options for running an experiment

@@ -51,7 +51,9 @@ fn publish_gist(path: &std::path::Path) -> anyhow::Result<String> {
         .args(["gist", "create", "--public"])
         .arg(path)
         .output()
-        .context("Failed to run `gh gist create`. Is the GitHub CLI installed and authenticated?")?;
+        .context(
+            "Failed to run `gh gist create`. Is the GitHub CLI installed and authenticated?",
+        )?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -71,12 +73,12 @@ fn publish_gist(path: &std::path::Path) -> anyhow::Result<String> {
         .and_then(|f| f.to_str())
         .unwrap_or("report.html");
 
-    let view_url = format!("https://etna-reports.alpkeles99.workers.dev/{}/{}", gist_id, filename);
+    let view_url = format!(
+        "https://etna-reports.alpkeles99.workers.dev/{}/{}",
+        gist_id, filename
+    );
 
-    Ok(format!(
-        "Gist: {}\nView: {}",
-        gist_url, view_url
-    ))
+    Ok(format!("Gist: {}\nView: {}", gist_url, view_url))
 }
 
 pub fn invoke(
@@ -86,10 +88,11 @@ pub fn invoke(
     publish: bool,
 ) -> anyhow::Result<()> {
     // Load metrics
-    mgr.store.load_metrics()?;
+    mgr.set_store_path(experiment.store.clone())?;
+    mgr.require_store_mut()?.load_metrics()?;
 
     let metrics: Vec<serde_json::Value> = mgr
-        .store
+        .require_store()?
         .metrics
         .iter()
         .map(|m| {
@@ -108,8 +111,7 @@ pub fn invoke(
     let metrics_json_raw = serde_json::to_string(&metrics)?;
 
     // Gzip-compress and base64-encode metrics to keep the HTML under GitHub's 1MB API limit
-    let mut encoder =
-        flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+    let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
     encoder.write_all(metrics_json_raw.as_bytes())?;
     let compressed = encoder.finish()?;
     let metrics_b64 = base64::engine::general_purpose::STANDARD.encode(&compressed);

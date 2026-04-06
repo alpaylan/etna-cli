@@ -26,7 +26,7 @@ impl EtnaConfig {
     //! ETNA v2 notes:
     //! - Removed experiment configurations
     //! - Added explicit versioning to the configuration for future changes
-    //! - Store path is now always `<etna_dir>/store.jsonl`
+    //! - Experiment metrics are stored in each experiment's local `store.jsonl`
     //! - Experiments are now not part of the store, but managed separately in `experiments.json`
     //! - Added `.etna_cache` directory for pulling in the workloads from a remote git repository
     //! - The remote git repository can be configured via the `ETNA_REMOTE` environment variable

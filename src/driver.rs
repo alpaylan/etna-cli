@@ -21,8 +21,8 @@ use crate::{
 
 use process_control::{ChildExt, Control};
 
-use crate::experiment::{ExperimentMetadata, Test};
 use crate::error_context::Context;
+use crate::experiment::{ExperimentMetadata, Test};
 
 type Object = Map<String, Value>;
 
@@ -284,8 +284,9 @@ pub(crate) fn run(
     let mut remaining_trials = vec![];
     {
         let mgr = mgr.lock().unwrap();
+        let store = mgr.require_store()?;
         for i in 0..run_config.trials {
-            let previous_metric = mgr.store.metrics.iter().find(|m| {
+            let previous_metric = store.metrics.iter().find(|m| {
                 metric_matches(
                     m,
                     Some(&run_config.language),
@@ -666,7 +667,7 @@ fn run_cross(
                     let mut mgr = mgr.lock().unwrap();
                     log_process_output(
                         &output,
-                        &mut mgr.store,
+                        mgr.require_store_mut()?,
                         &run_config.experiment_hash,
                         &context,
                     )?
@@ -739,7 +740,7 @@ fn run_cross(
                         Value::String(results.unwrap_err().to_string()),
                     );
                     let mut mgr = mgr.lock().unwrap();
-                    mgr.store.push(Metric {
+                    mgr.require_store_mut()?.push(Metric {
                         data: context.clone(),
                         hash: run_config.experiment_hash.clone(),
                     })?;
@@ -816,7 +817,7 @@ fn run_cross(
                             .clone(),
                     );
                     let mut mgr = mgr.lock().unwrap();
-                    mgr.store.push(Metric {
+                    mgr.require_store_mut()?.push(Metric {
                         data: context.clone(),
                         hash: run_config.experiment_hash.clone(),
                     })?;
@@ -836,7 +837,7 @@ fn run_cross(
                 );
                 context.insert("error".to_owned(), Value::String(err.to_string()));
                 let mut mgr = mgr.lock().unwrap();
-                mgr.store.push(Metric {
+                mgr.require_store_mut()?.push(Metric {
                     data: context.clone(),
                     hash: run_config.experiment_hash.clone(),
                 })?;
@@ -865,7 +866,7 @@ fn run_cross(
     );
 
     let mut mgr = mgr.lock().unwrap();
-    mgr.store.push(Metric {
+    mgr.require_store_mut()?.push(Metric {
         data: context.clone(),
         hash: run_config.experiment_hash.clone(),
     })?;
@@ -904,7 +905,7 @@ fn run_default(
                 Value::String(Status::TimedOut.to_string()),
             );
             let mut mgr = mgr.lock().unwrap();
-            mgr.store.push(Metric {
+            mgr.require_store_mut()?.push(Metric {
                 data: context.clone(),
                 hash: run_config.experiment_hash.clone(),
             })?;
@@ -919,7 +920,7 @@ fn run_default(
                 let mut mgr = mgr.lock().unwrap();
                 log_process_output(
                     &output.into_std_lossy(),
-                    &mut mgr.store,
+                    mgr.require_store_mut()?,
                     &run_config.experiment_hash,
                     &context,
                 )?
@@ -944,7 +945,7 @@ fn run_default(
             context.insert("error".to_owned(), Value::String(err.to_string()));
 
             let mut mgr = mgr.lock().unwrap();
-            mgr.store.push(Metric {
+            mgr.require_store_mut()?.push(Metric {
                 data: context.clone(),
                 hash: run_config.experiment_hash.clone(),
             })?;
@@ -1144,6 +1145,7 @@ pub(crate) fn run_experiment(
 
         {
             let mgr = mgr.lock().unwrap();
+            let store = mgr.require_store()?;
             let all_tasks_completed = test.tasks.iter().all(|task| {
                 task_completed(
                     &test.language,
@@ -1154,7 +1156,7 @@ pub(crate) fn run_experiment(
                     test.trials,
                     short_circuit,
                     test.cross,
-                    &mgr.store.metrics,
+                    &store.metrics,
                 )
             });
 
@@ -1282,9 +1284,7 @@ fn log_process_output(
     // Look for JSON objects in the output
     let mut logs = Vec::new();
     for line in stdout.lines().chain(stderr.lines()) {
-        if let Ok(json) =
-            serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(line)
-        {
+        if let Ok(json) = serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(line) {
             tracing::info!("Found JSON object: {:?}", json);
             let mut merged = context.clone();
             // Drop task-specified docs counterexample; keep runtime data only.

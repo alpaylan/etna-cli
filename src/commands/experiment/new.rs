@@ -15,7 +15,6 @@ pub fn invoke(
     path: Option<PathBuf>,
     overwrite: bool,
     register: bool,
-    use_local_store: bool,
 ) -> anyhow::Result<()> {
     // Convert CLI args to service options
     let options = CreateExperimentOptions {
@@ -23,7 +22,6 @@ pub fn invoke(
         path,
         overwrite,
         register,
-        use_local_store,
     };
 
     // Call service layer

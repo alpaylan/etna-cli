@@ -85,13 +85,6 @@ pub fn setup(overwrite: bool) -> ServiceResult<ConfigInfo> {
             .with_context(|| format!("Failed to write to '{}'", experiments_path.display()))?;
     }
 
-    // Create the `store.jsonl` file
-    let store_path = etna_dir.join("store.jsonl");
-    if !store_path.exists() {
-        info!("Creating store.jsonl");
-        std::fs::File::create(&store_path).context("Failed to create store.jsonl")?;
-    }
-
     // Mark etna as configured in the config.json file
     config.configured = true;
     let file = std::fs::File::create(&config_path).context("Failed to create config.json")?;

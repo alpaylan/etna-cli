@@ -23,8 +23,6 @@ pub struct CreateExperimentRequest {
     pub overwrite: bool,
     #[serde(default)]
     pub register: bool,
-    #[serde(default)]
-    pub use_local_store: bool,
 }
 
 /// Response for creating an experiment
@@ -111,7 +109,6 @@ pub async fn create_experiment(
         path: request.path.map(PathBuf::from),
         overwrite: request.overwrite,
         register: request.register,
-        use_local_store: request.use_local_store,
     };
 
     let experiment = exp_service::create_experiment(&mut manager, options)?;
@@ -189,16 +186,29 @@ pub async fn run_experiment(
             return;
         }
 
-        // Get the manager and run the experiment
+        // Get the manager and bind it to the experiment-local store.
         let manager = {
             let mgr = state_clone.manager.read().unwrap();
-            // Clone the manager for the sync operation
-            // Note: In a real implementation, you'd want a more elegant way to handle this
-            crate::manager::Manager {
+            let Some(experiment) = mgr.get_experiment(&options_clone.experiment_name) else {
+                let _ = state_clone.job_manager.set_job_error(
+                    &job_id_clone,
+                    format!("Experiment not found: {}", options_clone.experiment_name),
+                );
+                return;
+            };
+
+            let mut manager = crate::manager::Manager {
                 experiments: mgr.experiments.clone(),
-                store: crate::store::Store::new(mgr.store.path.clone()).unwrap(),
+                store: None,
                 config: crate::config::EtnaConfig::get_etna_config().unwrap(),
+            };
+            if let Err(e) = manager.set_store_path(experiment.store.clone()) {
+                let _ = state_clone
+                    .job_manager
+                    .set_job_error(&job_id_clone, e.to_string());
+                return;
             }
+            manager
         };
 
         // Run the experiment on a blocking thread with cancel support.

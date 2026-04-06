@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 
-use crate::{commands, config::EtnaConfig, experiment::ExperimentMetadata, store::Store};
 use crate::error_context::Context as _;
+use crate::{commands, config::EtnaConfig, experiment::ExperimentMetadata, store::Store};
 
 pub struct Manager {
     pub experiments: HashMap<String, ExperimentMetadata>,
-    pub store: Store,
+    pub store: Option<Store>,
     pub(crate) config: EtnaConfig,
 }
 
@@ -13,9 +13,6 @@ impl Manager {
     pub fn load() -> anyhow::Result<Self> {
         // Get Etna configuration
         let etna_config = EtnaConfig::get_etna_config().context("Failed to get etna config")?;
-
-        // Load the Store
-        let store = Store::new(etna_config.store_path()).context("Failed to load the store")?;
 
         // Load all experiments
         let experiments_json_path = etna_config.experiments_path();
@@ -30,7 +27,7 @@ impl Manager {
 
         Ok(Self {
             experiments,
-            store,
+            store: None,
             config: etna_config,
         })
     }
@@ -68,5 +65,26 @@ impl Manager {
     ) -> anyhow::Result<()> {
         self.experiments.insert(name, experiment);
         self.save_experiments()
+    }
+
+    pub fn set_store_path(&mut self, path: std::path::PathBuf) -> anyhow::Result<()> {
+        self.store = Some(Store::new(path).context("Failed to load the experiment store")?);
+        Ok(())
+    }
+
+    pub fn require_store(&self) -> anyhow::Result<&Store> {
+        self.store.as_ref().ok_or_else(|| {
+            anyhow::anyhow!(
+                "No experiment store is selected. Provide an experiment or run from an experiment directory."
+            )
+        })
+    }
+
+    pub fn require_store_mut(&mut self) -> anyhow::Result<&mut Store> {
+        self.store.as_mut().ok_or_else(|| {
+            anyhow::anyhow!(
+                "No experiment store is selected. Provide an experiment or run from an experiment directory."
+            )
+        })
     }
 }

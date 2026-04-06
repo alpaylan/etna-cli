@@ -38,7 +38,6 @@ Usage: etna experiment new [OPTIONS] <NAME> [PATH]
 Options:
   -o, --overwrite
   -r, --register
-  -s, --local-store
 ```
 
 ### `experiment run`
@@ -182,8 +181,9 @@ Usage: etna store query [OPTIONS] <FILTER>
 Usage: etna store remove [OPTIONS] <FILTER>
 ```
 
-All store subcommands support:
+All store subcommands use an experiment-local store. Use either:
 - `-e, --experiment <EXPERIMENT>`
+- run the command inside the experiment directory
 
 ---
 
