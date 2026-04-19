@@ -1,3 +1,5 @@
+import { handleBrowserMessage, isBrowserMode } from './browserShim';
+
 // Type declarations for VSCode webview API
 declare function acquireVsCodeApi(): VsCodeApi;
 
@@ -10,19 +12,29 @@ interface VsCodeApi {
 // Singleton pattern for VSCode API
 class VSCodeAPIWrapper {
   private readonly vsCodeApi: VsCodeApi | undefined;
+  private readonly browser: boolean;
 
   constructor() {
     if (typeof acquireVsCodeApi === 'function') {
       this.vsCodeApi = acquireVsCodeApi();
+    }
+    this.browser = !this.vsCodeApi && isBrowserMode();
+    if (this.browser) {
+      console.info('[etna] Running in browser dev mode — talking to server directly.');
     }
   }
 
   public postMessage(message: unknown): void {
     if (this.vsCodeApi) {
       this.vsCodeApi.postMessage(message);
-    } else {
-      console.log('VSCode API not available, message:', message);
+      return;
     }
+    if (this.browser) {
+      // Fire-and-forget; the shim dispatches the response back as a window message.
+      void handleBrowserMessage(message as { type: string; [k: string]: unknown });
+      return;
+    }
+    console.log('VSCode API not available, message:', message);
   }
 
   public getState<T>(): T | undefined {
@@ -66,6 +78,8 @@ export interface ExperimentInfo {
   path: string;
   store: string;
   workloads: WorkloadMetadata[];
+  /** Unix timestamp (seconds) of the most recent git commit touching the experiment path. */
+  last_activity?: number | null;
 }
 
 export interface WorkloadMetadata {

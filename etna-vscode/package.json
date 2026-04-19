@@ -55,6 +55,16 @@
           "default": "http://localhost:3000",
           "description": "URL of the Etna server"
         },
+        "etna.autoStartServer": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically start a local etna-server when opening the dashboard if one isn't already running."
+        },
+        "etna.serverBinary": {
+          "type": "string",
+          "default": "etna-server",
+          "description": "Path or name of the etna-server executable used for auto-start."
+        },
         "etna.autoRefreshInterval": {
           "type": "number",
           "default": 5000,

@@ -1,0 +1,10 @@
+languages = []
+ignore = []
+use_gitignore = false
+
+[[custom_languages]]
+name = "Test"
+extension = "st"
+comment_begin = "(*"
+comment_end = "*)"
+mutation_marker = "|"

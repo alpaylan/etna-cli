@@ -95,14 +95,17 @@ struct DocWorkloadEntry {
     tasks: Vec<DocTask>,
 }
 
-fn generate_tests_from_docs(
+/// Build `Test` entries from `docs/workloads/<workload>.json`.
+/// Returns an empty vec when the docs file doesn't exist.
+pub(crate) fn tests_from_docs(
     repo_dir: &Path,
-    experiment: &ExperimentMetadata,
     language: &str,
     workload: &str,
-) -> anyhow::Result<()> {
+    trials: usize,
+    timeout: f64,
+    mode: crate::experiment::Mode,
+) -> anyhow::Result<Vec<Test>> {
     let workload_slug = workload.to_lowercase();
-    let language_slug = language.to_lowercase();
     let docs_path = repo_dir
         .join("docs")
         .join("workloads")
@@ -113,7 +116,7 @@ fn generate_tests_from_docs(
             "No docs workload definition found at '{}', skipping test generation",
             docs_path.display()
         );
-        return Ok(());
+        return Ok(vec![]);
     }
 
     let docs_content = fs::read_to_string(&docs_path).with_context(|| {
@@ -128,7 +131,7 @@ fn generate_tests_from_docs(
             "Docs workload file '{}' is empty, skipping test generation",
             docs_path.display()
         );
-        return Ok(());
+        return Ok(vec![]);
     }
 
     let entries: Vec<DocWorkloadEntry> =
@@ -144,42 +147,67 @@ fn generate_tests_from_docs(
             "Docs workload file '{}' has no entries, skipping test generation",
             docs_path.display()
         );
+        return Ok(vec![]);
+    }
+
+    let generated = entries
+        .into_iter()
+        .map(|entry| {
+            let tasks = entry
+                .tasks
+                .into_iter()
+                .map(|task| {
+                    let mut map = HashMap::new();
+                    map.insert("property".to_string(), task.property);
+                    if !task.counterexample.is_empty() {
+                        map.insert("minimal_counterexample".to_string(), task.counterexample);
+                    }
+                    map
+                })
+                .collect();
+
+            Test {
+                language: language.to_string(),
+                workload: workload.to_string(),
+                trials,
+                timeout,
+                mutations: entry.mutations,
+                mode: mode.clone(),
+                params: None,
+                tasks,
+            }
+        })
+        .collect();
+
+    Ok(generated)
+}
+
+fn generate_tests_from_docs(
+    repo_dir: &Path,
+    experiment: &ExperimentMetadata,
+    language: &str,
+    workload: &str,
+) -> anyhow::Result<()> {
+    let generated = tests_from_docs(
+        repo_dir,
+        language,
+        workload,
+        10,
+        60.0,
+        crate::experiment::Mode::Solve,
+    )?;
+
+    if generated.is_empty() {
         return Ok(());
     }
 
+    let workload_slug = workload.to_lowercase();
+    let language_slug = language.to_lowercase();
     let test_path = experiment
         .path
         .join("tests")
         .join(format!("{workload_slug}-{language_slug}"))
         .with_extension("json");
-
-    let generated = entries.into_iter().map(|entry| {
-        let tasks = entry
-            .tasks
-            .into_iter()
-            .map(|task| {
-                let mut map = HashMap::new();
-                map.insert("property".to_string(), task.property);
-                if !task.counterexample.is_empty() {
-                    map.insert("counterexample".to_string(), task.counterexample);
-                }
-                map
-            })
-            .collect();
-
-        Test {
-            language: language.to_string(),
-            workload: workload.to_string(),
-            trials: 10,
-            timeout: 60.0,
-            mutations: entry.mutations,
-            cross: false,
-            params: None,
-            tasks,
-        }
-    });
-
-    let generated: Vec<Test> = generated.collect();
 
     if let Some(parent) = test_path.parent() {
         fs::create_dir_all(parent)

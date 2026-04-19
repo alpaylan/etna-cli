@@ -220,16 +220,24 @@ fn get_agg_metrics(
                     .and_then(serde_json::Value::as_array)?;
                 let strategy = m.data.get("strategy").and_then(serde_json::Value::as_str)?;
                 let property = m.data.get("property").and_then(serde_json::Value::as_str)?;
-                let cross = m.data.get("cross").and_then(serde_json::Value::as_bool)?;
+                let mode = m.data.get("mode").and_then(serde_json::Value::as_str)?;
 
-                let result = test.language == language
-                    && test.workload == workload
+                // For Cross mode, the metric's (language, workload) = consumer.
+                let (test_lang, test_wl) = match &test.mode {
+                    crate::experiment::Mode::Cross { consumer, .. } => {
+                        (consumer.language.as_str(), consumer.workload.as_str())
+                    }
+                    _ => (test.language.as_str(), test.workload.as_str()),
+                };
+
+                let result = test_lang == language
+                    && test_wl == workload
                     && &test.mutations == mutations
                     && test.tasks.iter().any(|task| {
                         task.get("strategy").map(String::as_str) == Some(strategy)
                             && task.get("property").map(String::as_str) == Some(property)
                     })
-                    && test.cross == cross;
+                    && test.mode.name() == mode;
 
                 if result {
                     Some(m)
@@ -311,7 +319,7 @@ fn get_agg_metrics(
                     "strategy": agg[2],
                     "property": agg[3],
                     "mutations": agg[4],
-                    "cross": agg[5],
+                    "mode": agg[5],
                     "discards": f64::NAN,
                     "tests": f64::NAN,
                     "shrinks": f64::NAN,
@@ -344,7 +352,7 @@ fn get_agg_metrics(
                     "strategy": agg[2],
                     "property": agg[3],
                     "mutations": agg[4],
-                    "cross": agg[5],
+                    "mode": agg[5],
                     "discards": f64::NAN,
                     "tests": f64::NAN,
                     "shrinks": f64::NAN,

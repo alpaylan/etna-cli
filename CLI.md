@@ -270,3 +270,17 @@ CLI flags evolve. For exact current behavior, prefer:
 ```bash
 etna <command> --help
 ```
+
+---
+
+## Environment Variables
+
+- `ETNA_HOME` — override the default `~/.etna` directory for config, the
+  `.etna_cache` checkout, and the experiments index. Used by the integration
+  test harness to isolate runs; handy for experimenting without disturbing
+  your real setup.
+- `ETNA_OFFLINE=1` — skip `git pull` inside `.etna_cache` during
+  `workload add` and `bash`. Let's you run the CLI against a manually-primed
+  cache without network access.
+- `ETNA_REMOTE` — override the repo URL cloned during `etna setup` (defaults
+  to the upstream `etna-cli` repo).

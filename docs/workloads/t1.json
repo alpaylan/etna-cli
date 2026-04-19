@@ -1,0 +1,14 @@
+[
+    {
+        "mutations": [],
+        "tasks": [
+            {
+                "property": "passes"
+            },
+            {
+                "property": "crash_path",
+                "counterexample": "0"
+            }
+        ]
+    }
+]

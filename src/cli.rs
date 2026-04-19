@@ -1,6 +1,6 @@
 use std::{env, path::PathBuf};
 
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
 
 /// Parse a key=value pair for CLI parameters
 fn parse_key_value(s: &str) -> Result<(String, String), String> {
@@ -121,7 +121,13 @@ fn main() -> anyhow::Result<()> {
 pub(crate) fn run() -> anyhow::Result<()> {
     let cli = Args::parse();
 
-    // Load the manager
+    // Handle commands that don't need the manager
+    if let Command::Completions { shell } = &cli.command {
+        let mut cmd = Args::command();
+        clap_complete::generate(*shell, &mut cmd, "etna", &mut std::io::stdout());
+        return Ok(());
+    }
+
     if let Command::Setup { .. } = &cli.command {
         // Skip loading the manager for setup command
         return commands::config::setup::invoke(
@@ -166,6 +172,19 @@ pub(crate) fn run() -> anyhow::Result<()> {
             ExperimentCommand::Show {
                         name,
                     } => commands::experiment::show::invoke(mgr, name),
+            ExperimentCommand::CreateTest { name: _, language, workload, test, trials, timeout, mode, mutation } => {
+                commands::experiment::create_test::invoke(
+                    mgr,
+                    experiment.unwrap(),
+                    language,
+                    workload,
+                    test,
+                    trials,
+                    timeout,
+                    mode,
+                    mutation,
+                )
+            }
             ExperimentCommand::AmendTest { name: _, test, strategy, mutation, property } => {
                 commands::experiment::amend_test::invoke(
                     mgr,
@@ -214,6 +233,7 @@ pub(crate) fn run() -> anyhow::Result<()> {
         Command::Check { restore, remove } => commands::check::integrity::invoke(mgr, restore, remove),
         #[cfg(unix)]
         Command::Bash { path } => commands::bash::invoke(mgr, path),
+        Command::Completions { .. } => unreachable!("Completions command is handled earlier"),
     }
     .context("Aborting run due to an error")
 }
@@ -276,6 +296,38 @@ enum ExperimentCommand {
         name: String,
     },
     #[clap(
+        name = "create-test",
+        about = "Create a new test file with default values"
+    )]
+    CreateTest {
+        /// Name of the experiment
+        /// [default: current directory]
+        #[clap(short, long)]
+        name: Option<String>,
+        /// Language of the workload
+        #[clap(long)]
+        language: String,
+        /// Workload name
+        #[clap(long)]
+        workload: String,
+        /// Test file name (without .json extension)
+        /// [default: <workload>-<language>]
+        #[clap(long)]
+        test: Option<String>,
+        /// Number of trials
+        #[clap(long, default_value = "10")]
+        trials: usize,
+        /// Timeout in seconds
+        #[clap(long, default_value = "60")]
+        timeout: f64,
+        /// Experiment mode: solve | sample | test | shrink | cross
+        #[clap(long, default_value = "solve")]
+        mode: String,
+        /// Mutation variant(s)
+        #[clap(long)]
+        mutation: Vec<String>,
+    },
+    #[clap(
         name = "amend-test",
         about = "Amend an existing test file by adding/duplicating tasks with a strategy"
     )]
@@ -309,10 +361,10 @@ enum ExperimentCommand {
         #[clap(short, long, value_parser, num_args = 1.., value_delimiter = ' ')]
         tests: Vec<String>,
         /// Group by fields
-        #[clap(short, long, default_values_t = vec!["language".to_string(), "workload".to_string(), "strategy".to_string(), "cross".to_string()])]
+        #[clap(short, long, default_values_t = vec!["language".to_string(), "workload".to_string(), "strategy".to_string(), "mode".to_string()])]
         groupby: Vec<String>,
         /// Aggregate by fields
-        #[clap(short, long, default_values_t = vec!["language".to_string(), "workload".to_string(), "strategy".to_string(), "property".to_string(), "mutations".to_string(), "cross".to_string()])]
+        #[clap(short, long, default_values_t = vec!["language".to_string(), "workload".to_string(), "strategy".to_string(), "property".to_string(), "mutations".to_string(), "mode".to_string()])]
         aggby: Vec<String>,
         /// Metric to visualize
         /// [default: "time"]
@@ -538,6 +590,11 @@ enum Command {
         #[clap(short, long, default_value = None)]
         path: Option<PathBuf>,
     },
+    #[command(name = "completions", about = "Generate shell completions")]
+    Completions {
+        /// Shell to generate completions for
+        shell: clap_complete::Shell,
+    },
 }
 
 impl Command {
@@ -548,6 +605,7 @@ impl Command {
                 ExperimentCommand::Register { .. } => None,
                 ExperimentCommand::Run { name, .. } => name.as_ref(),
                 ExperimentCommand::Show { name, .. } => Some(name),
+                ExperimentCommand::CreateTest { name, .. } => name.as_ref(),
                 ExperimentCommand::AmendTest { name, .. } => name.as_ref(),
                 ExperimentCommand::Visualize { name, .. } => name.as_ref(),
                 ExperimentCommand::VisualizeJson { .. } => None,
@@ -570,6 +628,7 @@ impl Command {
                 ExperimentCommand::Register { .. } => false,
                 ExperimentCommand::Run { .. } => true,
                 ExperimentCommand::Show { .. } => true,
+                ExperimentCommand::CreateTest { .. } => true,
                 ExperimentCommand::AmendTest { .. } => true,
                 ExperimentCommand::Visualize { .. } => true,
                 ExperimentCommand::VisualizeJson { .. } => false,

@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use axum::{
     extract::{Path, State},
+    response::Html,
     Json,
 };
 use serde::{Deserialize, Serialize};
@@ -309,8 +310,7 @@ pub struct TestDefinition {
     pub trials: usize,
     pub timeout: f64,
     pub mutations: Vec<String>,
-    #[serde(default)]
-    pub cross: bool,
+    pub mode: crate::experiment::Mode,
     #[serde(default)]
     pub params: Option<serde_json::Map<String, serde_json::Value>>,
     #[serde(default)]
@@ -325,7 +325,7 @@ impl From<crate::experiment::Test> for TestDefinition {
             trials: test.trials,
             timeout: test.timeout,
             mutations: test.mutations,
-            cross: test.cross,
+            mode: test.mode,
             params: test.params,
             tasks: test.tasks,
         }
@@ -340,7 +340,7 @@ impl From<TestDefinition> for crate::experiment::Test {
             trials: def.trials,
             timeout: def.timeout,
             mutations: def.mutations,
-            cross: def.cross,
+            mode: def.mode,
             params: def.params,
             tasks: def.tasks,
         }
@@ -388,6 +388,30 @@ pub async fn save_test(
         "success": true,
         "message": format!("Test '{}' saved", params.test_name)
     })))
+}
+
+/// Generate and return an experiment's report as HTML.
+pub async fn get_report(
+    State(state): State<AppState>,
+    Path(name): Path<String>,
+) -> Result<Html<String>, ServerError> {
+    let experiment = {
+        let manager = state.manager.read().unwrap();
+        manager
+            .get_experiment(&name)
+            .ok_or_else(|| ServerError::not_found(format!("Experiment not found: {}", name)))?
+    };
+
+    // Build an isolated manager so we don't mutate shared state (report loads a store).
+    let html = tokio::task::spawn_blocking(move || -> anyhow::Result<String> {
+        let mut manager = crate::manager::Manager::load()?;
+        crate::commands::experiment::report::render_html(&mut manager, &experiment)
+    })
+    .await
+    .map_err(|e| ServerError::internal(format!("Report task failed: {e}")))?
+    .map_err(|e| ServerError::internal(format!("Failed to render report: {e}")))?;
+
+    Ok(Html(html))
 }
 
 /// Delete a test file

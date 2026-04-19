@@ -87,7 +87,24 @@ pub fn register_experiment(
         path: metadata.path.clone(),
         store: metadata.store.clone(),
         workloads: metadata.workloads(),
+        last_activity: last_commit_time(&metadata.path),
     })
+}
+
+/// Unix timestamp (seconds) of the latest git commit that touched `path`,
+/// or `None` if the path is not inside a git repo or has no commits.
+fn last_commit_time(path: &std::path::Path) -> Option<i64> {
+    let output = std::process::Command::new("git")
+        .arg("-C")
+        .arg(path)
+        .args(["log", "-1", "--format=%ct", "--", "."])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let s = String::from_utf8_lossy(&output.stdout);
+    s.trim().parse::<i64>().ok()
 }
 
 /// Create a new experiment
@@ -256,12 +273,15 @@ pub fn create_experiment(
         path: metadata.path.clone(),
         store: metadata.store,
         workloads: vec![],
+        last_activity: last_commit_time(&metadata.path),
     })
 }
 
-/// List all experiments
+/// List all experiments, sorted by most-recent git activity (descending),
+/// with alphabetical-by-name as the tiebreaker and experiments without git
+/// history sunk to the bottom.
 pub fn list_experiments(mgr: &Manager) -> ServiceResult<Vec<ExperimentInfo>> {
-    let experiments = mgr
+    let mut experiments: Vec<ExperimentInfo> = mgr
         .experiments
         .values()
         .map(|exp| ExperimentInfo {
@@ -269,8 +289,15 @@ pub fn list_experiments(mgr: &Manager) -> ServiceResult<Vec<ExperimentInfo>> {
             path: exp.path.clone(),
             store: exp.store.clone(),
             workloads: exp.workloads(),
+            last_activity: last_commit_time(&exp.path),
         })
         .collect();
+
+    experiments.sort_by(|a, b| {
+        b.last_activity
+            .cmp(&a.last_activity)
+            .then_with(|| a.name.cmp(&b.name))
+    });
 
     Ok(experiments)
 }
@@ -286,6 +313,7 @@ pub fn get_experiment(mgr: &Manager, name: &str) -> ServiceResult<ExperimentInfo
         path: exp.path.clone(),
         store: exp.store.clone(),
         workloads: exp.workloads(),
+        last_activity: last_commit_time(&exp.path),
     })
 }
 
@@ -493,6 +521,66 @@ pub fn save_test(
     Ok(())
 }
 
+/// Create a new test file, populating tasks from docs when available
+pub fn create_test(
+    mgr: &crate::manager::Manager,
+    experiment: &crate::experiment::ExperimentMetadata,
+    test_name: &str,
+    language: &str,
+    workload: &str,
+    trials: usize,
+    timeout: f64,
+    mode: crate::experiment::Mode,
+    mutations: Vec<String>,
+) -> ServiceResult<()> {
+    let test_path = experiment
+        .path
+        .join("tests")
+        .join(test_name)
+        .with_extension("json");
+
+    if test_path.exists() {
+        bail!("Test '{}' already exists at '{}'", test_name, test_path.display());
+    }
+
+    anyhow::ensure!(
+        experiment.has_workload(language, workload),
+        "Workload '{}/{}' not found in experiment '{}'. Add it first with `etna workload add {} {}`.",
+        language,
+        workload,
+        experiment.name,
+        language,
+        workload,
+    );
+
+    let repo_dir = mgr.config.repo_dir();
+    let mut tests =
+        super::workload::tests_from_docs(&repo_dir, language, workload, trials, timeout, mode.clone())?;
+
+    if !mutations.is_empty() {
+        // Filter to entries whose mutations match any of the requested ones
+        tests.retain(|t| t.mutations.iter().any(|m| mutations.contains(m)));
+    }
+
+    if tests.is_empty() {
+        // No docs or no matching entries — create a single empty test
+        tests.push(crate::experiment::Test {
+            language: language.to_string(),
+            workload: workload.to_string(),
+            trials,
+            timeout,
+            mutations,
+            mode,
+            params: None,
+            tasks: vec![],
+        });
+    }
+
+    save_test(&experiment.path, test_name, &tests)?;
+
+    Ok(())
+}
+
 /// Delete a test file
 pub fn delete_test(experiment_path: &std::path::Path, test_name: &str) -> ServiceResult<()> {
     let test_path = experiment_path
@@ -532,5 +620,6 @@ pub fn get_experiment_from_current_dir(mgr: &Manager) -> ServiceResult<Experimen
         path: experiment.path.clone(),
         store: experiment.store.clone(),
         workloads: experiment.workloads(),
+        last_activity: last_commit_time(&experiment.path),
     })
 }

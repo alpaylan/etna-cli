@@ -81,7 +81,7 @@ impl Step {
         params: &HashMap<String, String>,
         tags: &HashMap<String, Vec<String>>,
     ) -> Command {
-        tracing::debug!("deciding step: {self} with params: {params:?} and tags: {tags:?}");
+        tracing::trace!("deciding step: {self} with params: {params:?} and tags: {tags:?}");
         match self {
             Step::Command {
                 command,
@@ -98,13 +98,13 @@ impl Step {
             },
             Step::Match { value, options } => {
                 let guard = params.get(value).unwrap();
-                tracing::debug!("obtaining guard '{guard}' for tags_ {tags:?}");
+                tracing::trace!("obtaining guard '{guard}' for tags_ {tags:?}");
 
                 if let Some(step) = options.get(guard) {
                     return step.decide(params, tags);
                 }
-                println!("Guard '{guard}' not found in options {options:?}, trying tags");
-                println!("Available tags: {tags:?}");
+                tracing::info!("Guard '{guard}' not found in options {options:?}, trying tags");
+                tracing::info!("Available tags: {tags:?}");
                 let tags_ = tags
                     .iter()
                     .filter_map(|(k, v)| if v.contains(guard) { Some(k) } else { None })
@@ -160,7 +160,7 @@ impl Step {
                 }
             }
         }
-        tracing::debug!("replaced step: '{}' with '{}'", original_step, self);
+        tracing::trace!("replaced step: '{}' with '{}'", original_step, self);
     }
 
     pub(crate) fn realize(
@@ -229,14 +229,40 @@ impl Display for Step {
     }
 }
 
+/// Capabilities a workload can expose. Each capability is a typed pipeline stage:
+/// - `Solve`:  full PBT campaign. Output: campaign-result JSON on stdout/stderr.
+/// - `Sample`: produce inputs (with optional per-input metadata). Output: input-stream JSON on stdout.
+/// - `Test`:   consume a list of inputs, run a property over them. Output: campaign-result JSON.
+/// - `Shrink`: consume a single failing input, return a minimized one. Output: campaign-result JSON.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Capability {
+    Solve,
+    Sample,
+    Test,
+    Shrink,
+}
+
+impl Display for Capability {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            Capability::Solve => "solve",
+            Capability::Sample => "sample",
+            Capability::Test => "test",
+            Capability::Shrink => "shrink",
+        };
+        f.write_str(s)
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 pub(crate) struct Steps {
     #[serde(rename = "setup_steps")]
     pub(crate) setup: Vec<Step>,
     #[serde(rename = "build_steps")]
     pub(crate) build: Vec<Step>,
-    #[serde(rename = "test_steps")]
-    pub(crate) test: Vec<Step>,
+    #[serde(default)]
+    pub(crate) capabilities: HashMap<Capability, Vec<Step>>,
     #[serde(default)]
     pub(crate) tags: HashMap<String, Vec<String>>,
 }
@@ -258,10 +284,30 @@ impl Steps {
         None
     }
 
+    fn get_capabilities(
+        json: &serde_json::Value,
+    ) -> Option<HashMap<Capability, Vec<Step>>> {
+        let caps = json.get("capabilities")?;
+        match serde_json::from_value::<HashMap<Capability, Vec<Step>>>(caps.clone()) {
+            Ok(c) => Some(c),
+            Err(e) => {
+                tracing::error!("Failed to parse 'capabilities': {}", e);
+                None
+            }
+        }
+    }
+
     pub(crate) fn with_default(json: &serde_json::Value, default: &Steps) -> Self {
         let setup = Self::get_steps(json, "setup_steps").unwrap_or(default.setup.clone());
         let build = Self::get_steps(json, "build_steps").unwrap_or(default.build.clone());
-        let test = Self::get_steps(json, "test_steps").unwrap_or(default.test.clone());
+
+        // Workload capabilities override language-level capabilities per-key.
+        let mut capabilities = default.capabilities.clone();
+        if let Some(workload_caps) = Self::get_capabilities(json) {
+            for (k, v) in workload_caps {
+                capabilities.insert(k, v);
+            }
+        }
 
         let tags = if let Some(tags) = json.get("tags") {
             serde_json::from_value(tags.clone()).unwrap_or_else(|_| default.tags.clone())
@@ -272,7 +318,7 @@ impl Steps {
         Self {
             setup,
             build,
-            test,
+            capabilities,
             tags,
         }
     }
@@ -280,7 +326,7 @@ impl Steps {
     pub(crate) fn from_value(json: &serde_json::Value) -> anyhow::Result<Self> {
         let setup = Self::get_steps(json, "setup_steps").context("could not find setup_steps")?;
         let build = Self::get_steps(json, "build_steps").context("could not find build_steps")?;
-        let test = Self::get_steps(json, "test_steps").context("could not find test_steps")?;
+        let capabilities = Self::get_capabilities(json).unwrap_or_default();
 
         let tags = if let Some(tags) = json.get("tags") {
             serde_json::from_value(tags.clone()).context("could not parse tags")?
@@ -291,8 +337,17 @@ impl Steps {
         Ok(Self {
             setup,
             build,
-            test,
+            capabilities,
             tags,
+        })
+    }
+
+    pub(crate) fn capability(&self, cap: Capability) -> anyhow::Result<&Vec<Step>> {
+        self.capabilities.get(&cap).ok_or_else(|| {
+            anyhow::anyhow!(
+                "workload does not declare capability '{}' in steps.json",
+                cap
+            )
         })
     }
 }

@@ -38,46 +38,43 @@
       }
     }
   ],
-  "test_steps": [
-    {
-      "Match": {
-        "value": "cross",
-        "options": {
-          "true": {
-            "Command": {
-              "run_at": "${workload_path}",
-              "command": "opam",
-              "args": [
-                "exec",
-                "--",
-                "dune",
-                "exec",
-                "stlc-sampler",
-                "--",
-                "--property=$property",
-                "--strategy=${strategy}",
-                "--count=$tests"
-              ]
-            }
-          },
-          "false": {
-            "Command": {
-              "run_at": "${workload_path}",
-              "command": "opam",
-              "args": [
-                "exec",
-                "--",
-                "dune",
-                "exec",
-                "stlc",
-                "--",
-                "--property=$property",
-                "--strategy=${strategy}"
-              ]
-            }
-          }
+  "capabilities": {
+    "solve": [
+      {
+        "Command": {
+          "run_at": "${workload_path}",
+          "command": "opam",
+          "args": [
+            "exec",
+            "--",
+            "dune",
+            "exec",
+            "stlc",
+            "--",
+            "--property=$property",
+            "--strategy=${strategy}"
+          ]
         }
       }
-    }
-  ]
+    ],
+    "sample": [
+      {
+        "Command": {
+          "run_at": "${workload_path}",
+          "command": "opam",
+          "args": [
+            "exec",
+            "--",
+            "dune",
+            "exec",
+            "stlc-sampler",
+            "--",
+            "--property=$property",
+            "--strategy=${strategy}",
+            "--count=$tests"
+          ]
+        }
+      }
+    ]
+  }
 }

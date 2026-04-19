@@ -20,41 +20,38 @@
       }
     }
   ],
-  "test_steps": [
-    {
-      "Match": {
-        "value": "cross",
-        "options": {
-          "true": {
-            "Command": {
-              "command": "${workload_path}/main-sampler",
-              "args": [
-                "$property",
-                "$tests"
-              ],
-              "params": [
-                "workload_path",
-                "property",
-                "strategy"
-              ]
-            }
-          },
-          "false": {
-            "Command": {
-              "command": "${workload_path}/main",
-              "args": [
-                "$property",
-                "${strategy}"
-              ],
-              "params": [
-                "workload_path",
-                "property",
-                "strategy"
-              ]
-            }
-          }
+  "capabilities": {
+    "solve": [
+      {
+        "Command": {
+          "command": "${workload_path}/main",
+          "args": [
+            "$property",
+            "${strategy}"
+          ],
+          "params": [
+            "workload_path",
+            "property",
+            "strategy"
+          ]
         }
       }
-    }
-  ]
+    ],
+    "sample": [
+      {
+        "Command": {
+          "command": "${workload_path}/main-sampler",
+          "args": [
+            "$property",
+            "$tests"
+          ],
+          "params": [
+            "workload_path",
+            "property",
+            "strategy"
+          ]
+        }
+      }
+    ]
+  }
 }

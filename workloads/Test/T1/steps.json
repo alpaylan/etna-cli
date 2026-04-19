@@ -1,16 +1,56 @@
 {
   "setup_steps": [],
-  "build_steps": [],
-  "test_steps": [
+  "build_steps": [
     {
       "Command": {
-        "command": "bash",
+        "command": "cargo",
         "args": [
-          "-lc",
-          "sleep 5s; echo '{\"name\": \"Test\", \"version\": \"1.0.0\", \"description\": \"A test workload\", \"steps\": [{\"type\": \"test\", \"command\": \"echo\", \"args\": [\"Running test step\"]}]}'"
-        ]
+          "build",
+          "--release",
+          "--manifest-path",
+          "${workload_path}/../harness/Cargo.toml"
+        ],
+        "params": ["workload_path"]
       }
     }
   ],
-  "tags": {}
+  "tags": {},
+  "capabilities": {
+    "solve": [
+      {
+        "Command": {
+          "command": "${workload_path}/../harness/target/release/etna_test_harness",
+          "args": ["solve", "--property", "${property}"],
+          "params": ["workload_path", "property"]
+        }
+      }
+    ],
+    "sample": [
+      {
+        "Command": {
+          "command": "${workload_path}/../harness/target/release/etna_test_harness",
+          "args": ["sample", "--trials", "3"],
+          "params": ["workload_path"]
+        }
+      }
+    ],
+    "test": [
+      {
+        "Command": {
+          "command": "${workload_path}/../harness/target/release/etna_test_harness",
+          "args": ["test", "--property", "${property}", "--inputs", "${inputs}"],
+          "params": ["workload_path", "property", "inputs"]
+        }
+      }
+    ],
+    "shrink": [
+      {
+        "Command": {
+          "command": "${workload_path}/../harness/target/release/etna_test_harness",
+          "args": ["shrink", "--property", "${property}", "--counterexample", "${counterexample}"],
+          "params": ["workload_path", "property", "counterexample"]
+        }
+      }
+    ]
+  }
 }

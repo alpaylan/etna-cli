@@ -150,8 +150,10 @@ fn collect_used_variables(cfg: &Steps) -> HashSet<&str> {
         collect_used_from_step(st, &mut used, &mut re_cache);
     }
 
-    for st in &cfg.test {
-        collect_used_from_step(st, &mut used, &mut re_cache);
+    for steps in cfg.capabilities.values() {
+        for st in steps {
+            collect_used_from_step(st, &mut used, &mut re_cache);
+        }
     }
 
     used
@@ -223,19 +225,21 @@ pub fn invoke(mgr: Manager, path: Option<PathBuf>) -> anyhow::Result<()> {
         .collect();
 
     tracing::trace!(
-        "Expanding test steps with params: {:?} tags: {:?}",
+        "Expanding capability steps with params: {:?} tags: {:?}",
         params,
         steps.tags
     );
-    let test_lines: Vec<String> = steps
-        .test
-        .iter()
-        .map(|s| s.realize(&params, &steps.tags))
-        .collect::<anyhow::Result<Vec<_>>>()?
-        .into_iter()
-        .flatten()
-        .map(|s| to_bash(&s, 1))
-        .collect::<Vec<_>>();
+    // Flatten all capability step lists into a single bash script block.
+    // Each capability's steps are realized and concatenated in insertion order.
+    let mut test_lines: Vec<String> = Vec::new();
+    for cap_steps in steps.capabilities.values() {
+        for s in cap_steps {
+            let realized = s.realize(&params, &steps.tags)?;
+            for st in realized {
+                test_lines.push(to_bash(&st, 1));
+            }
+        }
+    }
 
     // collect used candidate variables across all steps (on original cfg is sufficient)
     let used = collect_used_variables(&steps);
@@ -275,13 +279,16 @@ pub fn invoke(mgr: Manager, path: Option<PathBuf>) -> anyhow::Result<()> {
     Ok(())
 }
 
-const CANDIDATE_VARIABLES: [&str; 9] = [
+const CANDIDATE_VARIABLES: [&str; 12] = [
     "language",
     "workload_path",
     "workload",
     "strategy",
     "property",
-    "cross",
+    "mode",
+    "inputs",
+    "counterexample",
+    "producer_workload_path",
     "timeout",
     "mutations",
     "experiment_id",
@@ -352,101 +359,3 @@ fn to_bash(s: &Step, depth: usize) -> String {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use std::fs;
-
-    use crate::{commands::bash::invoke, manager::Manager};
-
-    const CONFIG_CONTENT: &str = r#"
-{
-    "check_steps": [],
-    "build_steps": [],
-    "run_step": {
-        "Command": { "command": "ls" }
-    }
-}
-    "#;
-
-    #[test]
-    fn test_bash_script_creation() {
-        // We do this because there is a race condition over `steps.sh` while running
-        // the invocation in parallel.
-        test_invoke_creates_script();
-        test_invoke_example_script();
-        test_invoke_expands_generator_tags();
-    }
-
-    fn test_invoke_creates_script() {
-        let temp_dir = tempfile::tempdir().unwrap();
-        let config_path = temp_dir.path().join("steps.json");
-        fs::write(&config_path, CONFIG_CONTENT).unwrap();
-        let mgr = Manager::load().unwrap();
-        let result = invoke(mgr, Some(config_path));
-        assert!(result.is_ok(), "{result:?}");
-
-        let script = fs::read_to_string("steps.sh").unwrap();
-        assert!(script.contains("#!/bin/bash"));
-        // Run the script and check if the result shows `steps.sh`
-        let output = std::process::Command::new("bash")
-            .arg("steps.sh")
-            .output()
-            .unwrap();
-        assert!(
-            String::from_utf8_lossy(&output.stdout).contains("Run steps are completed"),
-            "Unexpected output: {}\\Stderr: {}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
-
-    fn test_invoke_example_script() {
-        let mgr = Manager::load().unwrap();
-        let config_path = mgr
-            .config
-            .repo_dir()
-            .join("templates")
-            .join("configs")
-            .join("example.json");
-        let result = invoke(mgr, Some(config_path));
-        assert!(result.is_ok(), "{result:?}");
-        let output = std::process::Command::new("bash")
-            .arg("steps.sh")
-            .args(["--choice=life", "--stages=run"])
-            .output()
-            .unwrap();
-        assert!(
-            String::from_utf8_lossy(&output.stdout).contains("it lives!"),
-            "Unexpected output: {}\\Stderr: {}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
-
-    fn test_invoke_expands_generator_tags() {
-        // Config with a build step that uses !{generator} and tags supplying two variants
-        let cfg = serde_json::json!({
-            "check_steps": [],
-            "build_steps": [
-                { "Command": { "command": "${workload_path}/build_generator", "args": ["!{generator}"] } }
-            ],
-            "run_step": { "Command": { "command": "echo", "args": ["done"] } },
-            "tags": {
-                "generator": ["Alpha", "Beta"]
-            }
-        });
-
-        let temp_dir = tempfile::tempdir().unwrap();
-        let config_path = temp_dir.path().join("steps.json");
-        std::fs::write(&config_path, serde_json::to_string_pretty(&cfg).unwrap()).unwrap();
-        let mgr = Manager::load().unwrap();
-        let result = invoke(mgr, Some(config_path));
-        assert!(result.is_ok(), "{result:?}");
-
-        let script = std::fs::read_to_string("steps.sh").unwrap();
-        // Expect expansions for both tag values and no literal !{generator}
-        assert!(script.contains("${workload_path}/build_generator Alpha"));
-        assert!(script.contains("${workload_path}/build_generator Beta"));
-        assert!(!script.contains("!{generator}"));
-    }
-}

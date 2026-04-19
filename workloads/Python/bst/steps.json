@@ -1,37 +1,34 @@
 {
   "setup_steps": [],
   "build_steps": [],
-  "test_steps": [
-    {
-      "Match": {
-        "value": "cross",
-        "options": {
-          "false": {
-            "Command": {
-              "command": "uv",
-              "args": [
-                "run",
-                "main.py",
-                "quickcheck",
-                "$property"
-              ],
-              "run_at": "${workload_path}"
-            }
-          },
-          "true": {
-            "Command": {
-              "command": "uv",
-              "args": [
-                "run",
-                "main-sampler.py",
-                "$property",
-                "$tests"
-              ],
-              "run_at": "${workload_path}"
-            }
-          }
+  "capabilities": {
+    "solve": [
+      {
+        "Command": {
+          "command": "uv",
+          "args": [
+            "run",
+            "main.py",
+            "quickcheck",
+            "$property"
+          ],
+          "run_at": "${workload_path}"
         }
       }
-    }
-  ]
+    ],
+    "sample": [
+      {
+        "Command": {
+          "command": "uv",
+          "args": [
+            "run",
+            "main-sampler.py",
+            "$property",
+            "$tests"
+          ],
+          "run_at": "${workload_path}"
+        }
+      }
+    ]
+  }
 }

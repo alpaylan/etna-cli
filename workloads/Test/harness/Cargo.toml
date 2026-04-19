@@ -1,0 +1,8 @@
+[package]
+name = "etna_test_harness"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "etna_test_harness"
+path = "src/main.rs"

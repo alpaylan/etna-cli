@@ -116,13 +116,21 @@ export async function handleWebviewMessage(message: WebviewMessage): Promise<Web
 
       case 'queryMetrics': {
         const filter = message.filter as string | undefined;
-        const result = await client.queryMetrics(filter);
+        const experimentName = message.experimentName as string | undefined;
+        const result = await client.queryMetrics(filter, experimentName);
         return { type: 'queryResult', data: result };
       }
 
       case 'getConfig': {
         const config = await client.getConfig();
         return { type: 'config', data: config };
+      }
+
+      case 'getWorkloadMutations': {
+        const language = message.language as string;
+        const workload = message.workload as string;
+        const mutations = await client.listWorkloadMutations(language, workload);
+        return { type: 'workloadMutations', data: { language, workload, mutations } };
       }
 
       default:

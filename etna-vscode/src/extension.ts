@@ -4,6 +4,7 @@ import { getMutationCodeLensProvider } from './codelens/mutationCodeLensProvider
 import { getMutationDecorationManager, disposeMutationDecorationManager } from './codelens/mutationDecorations';
 import { openDashboard } from './webview/webviewManager';
 import { getApiClient } from './api/client';
+import { disposeServerManager } from './server/serverManager';
 
 let statusBarItem: vscode.StatusBarItem;
 
@@ -15,8 +16,8 @@ export function activate(context: vscode.ExtensionContext): void {
 
   // Register dashboard command
   context.subscriptions.push(
-    vscode.commands.registerCommand('etna.openDashboard', () => {
-      openDashboard(context);
+    vscode.commands.registerCommand('etna.openDashboard', async () => {
+      await openDashboard(context);
     })
   );
 
@@ -80,4 +81,5 @@ async function checkServerHealth(): Promise<void> {
 
 export function deactivate(): void {
   disposeMutationDecorationManager();
+  disposeServerManager();
 }

@@ -16,13 +16,13 @@ use crate::{
     manager::Manager,
     open_pbt_format::Status,
     store::{Metric, Store},
-    workload::{Command, Language, Step, Steps, Workload},
+    workload::{Capability, Command, Language, Step, Steps, Workload},
 };
 
 use process_control::{ChildExt, Control};
 
 use crate::error_context::Context;
-use crate::experiment::{ExperimentMetadata, Test};
+use crate::experiment::{CexSource, ExperimentMetadata, InputSource, Mode, Target, Test};
 
 type Object = Map<String, Value>;
 
@@ -30,6 +30,7 @@ type Object = Map<String, Value>;
 pub(crate) struct RunConfig {
     pub(crate) experiment_name: String,
     pub(crate) experiment_hash: String,
+    /// Primary target. For Cross, this is the consumer's (language, workload).
     pub(crate) language: String,
     pub(crate) workload: String,
     pub(crate) workload_dir: PathBuf,
@@ -38,10 +39,27 @@ pub(crate) struct RunConfig {
     pub(crate) trials: usize,
     pub(crate) timeout: f64,
     pub(crate) short_circuit: bool,
-    pub(crate) cross: bool,
     pub(crate) parallel: bool,
     #[allow(dead_code)]
     pub(crate) seed: Option<u64>,
+    pub(crate) mode: Mode,
+    /// For Cross mode only: producer target + its on-disk path. None for other modes.
+    pub(crate) producer: Option<TargetPath>,
+    /// For Cross mode only: the consumer's `test` capability steps and tags.
+    /// Realized per-batch with the input filepath injected as `${inputs}`.
+    pub(crate) consumer_test: Option<ConsumerSteps>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct TargetPath {
+    pub(crate) target: Target,
+    pub(crate) dir: PathBuf,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct ConsumerSteps {
+    pub(crate) steps: Vec<Step>,
+    pub(crate) tags: HashMap<String, Vec<String>>,
 }
 
 fn load_language(experiment_path: &Path, language: &str) -> anyhow::Result<Language> {
@@ -116,7 +134,8 @@ fn metric_matches<'a>(
     task: &HashMap<String, String>,
     timeout: Option<f64>,
     trial: Option<usize>,
-    cross: Option<bool>,
+    mode: Option<&str>,
+    producer: Option<&Target>,
 ) -> Option<&'a Metric> {
     let language_match = language.is_none_or(|l| {
         m.data
@@ -137,16 +156,11 @@ fn metric_matches<'a>(
         })
     });
 
-    // Do not match on `counterexample`: it is advisory metadata from docs and
-    // may differ from the strategy-produced runtime counterexample.
-    let task_match = task
-        .iter()
-        .filter(|(k, _)| k.as_str() != "counterexample")
-        .all(|(k, v)| {
-            m.data
-                .get(k)
-                .is_some_and(|val| val.as_str() == Some(v.as_str()))
-        });
+    let task_match = task.iter().all(|(k, v)| {
+        m.data
+            .get(k)
+            .is_some_and(|val| val.as_str() == Some(v.as_str()))
+    });
 
     let timeout_match = timeout.is_none_or(|t| {
         m.data
@@ -160,8 +174,16 @@ fn metric_matches<'a>(
             .and_then(|v| v.as_u64())
             .is_some_and(|v| v as usize == t)
     });
-    let cross_match =
-        cross.is_none_or(|c| m.data.get("cross").and_then(|v| v.as_bool()) == Some(c));
+    let mode_match =
+        mode.is_none_or(|name| m.data.get("mode").and_then(|v| v.as_str()) == Some(name));
+    let producer_match = producer.is_none_or(|p| {
+        m.data
+            .get("producer_language")
+            .and_then(|v| v.as_str())
+            == Some(p.language.as_str())
+            && m.data.get("producer_workload").and_then(|v| v.as_str())
+                == Some(p.workload.as_str())
+    });
 
     if language_match
         && workload_match
@@ -169,7 +191,8 @@ fn metric_matches<'a>(
         && task_match
         && timeout_match
         && trial_match
-        && cross_match
+        && mode_match
+        && producer_match
     {
         Some(m)
     } else {
@@ -186,10 +209,11 @@ fn task_completed(
     timeout: f64,
     trials: usize,
     short_circuit: bool,
-    cross: bool,
+    mode_name: &str,
+    producer: Option<&Target>,
     metrics: &[Metric],
 ) -> bool {
-    tracing::trace!(
+    tracing::debug!(
         "Checking if task is completed for language '{}', workload '{}', mutations '{:?}', task '{:?}'",
         language, workload, mutations, task
     );
@@ -204,11 +228,16 @@ fn task_completed(
                 task,
                 None,
                 None,
-                Some(cross),
+                Some(mode_name),
+                producer,
             )
             .is_some()
         })
         .collect::<Vec<_>>();
+    tracing::debug!(
+        "Found {} matching metrics for the task",
+        filtered_metrics.len()
+    );
 
     let mut timed_out = false;
     (0..trials as u64).all(|i| {
@@ -256,12 +285,19 @@ pub(crate) fn run(
         "workload_path".to_string(),
         run_config.workload_dir.display().to_string(),
     );
-    params.insert("cross".to_string(), run_config.cross.to_string());
+    params.insert("mode".to_string(), run_config.mode.name().to_string());
     params.insert("timeout".to_string(), run_config.timeout.to_string());
     params.insert("mutations".to_string(), run_config.mutations.join(","));
-    params.insert("language".to_string(), run_config.language.clone());
     params.insert("experiment".to_string(), run_config.experiment_name.clone());
     params.insert("hash".to_string(), run_config.experiment_hash.clone());
+    if let Some(prod) = &run_config.producer {
+        params.insert("producer_language".to_string(), prod.target.language.clone());
+        params.insert("producer_workload".to_string(), prod.target.workload.clone());
+        params.insert(
+            "producer_workload_path".to_string(),
+            prod.dir.display().to_string(),
+        );
+    }
 
     tracing::trace!("Final params for step: {:?}", params);
 
@@ -281,6 +317,8 @@ pub(crate) fn run(
         tracing::trace!("Test step: {}", step);
     }
 
+    let producer_target = run_config.producer.as_ref().map(|p| &p.target);
+
     let mut remaining_trials = vec![];
     {
         let mgr = mgr.lock().unwrap();
@@ -295,7 +333,8 @@ pub(crate) fn run(
                     &run_config.task,
                     Some(run_config.timeout),
                     Some(i),
-                    Some(run_config.cross),
+                    Some(run_config.mode.name()),
+                    producer_target,
                 )
                 .is_some()
             });
@@ -348,6 +387,63 @@ pub(crate) fn run(
     }
 }
 
+/// Build the per-trial metric context shared across all modes.
+fn build_context(run_config: &RunConfig, trial: usize) -> Object {
+    let mut ctx = serde_json::json!({
+        "language": run_config.language,
+        "workload": run_config.workload,
+        "experiment": run_config.experiment_name,
+        "mutations": run_config.mutations,
+        "trial": trial,
+        "timestamp": chrono::Utc::now().to_rfc3339(),
+        "mode": run_config.mode.name(),
+        "timeout": run_config.timeout,
+    })
+    .as_object()
+    .unwrap()
+    .to_owned();
+
+    if let Some(prod) = &run_config.producer {
+        ctx.insert(
+            "producer_language".to_owned(),
+            Value::String(prod.target.language.clone()),
+        );
+        ctx.insert(
+            "producer_workload".to_owned(),
+            Value::String(prod.target.workload.clone()),
+        );
+    }
+
+    for (k, v) in &run_config.task {
+        ctx.insert(k.to_owned(), Value::String(v.to_owned()));
+    }
+
+    ctx
+}
+
+/// Dispatch a single trial step to the appropriate per-mode runner.
+fn dispatch_step(
+    mgr: Arc<Mutex<Manager>>,
+    run_config: &RunConfig,
+    step: &Step,
+    params: &HashMap<String, String>,
+    tags: &HashMap<String, Vec<String>>,
+    trial: usize,
+) -> anyhow::Result<Status> {
+    let realized = step.decide(params, tags);
+    tracing::trace!("step '{step}' is evaluated to '{realized}' with params: {params:?}");
+
+    let context = build_context(run_config, trial);
+
+    let cmd = std::process::Command::from(&realized);
+    match &run_config.mode {
+        Mode::Cross { .. } => run_cross(mgr, context, cmd, &realized, run_config, params, tags),
+        Mode::Solve | Mode::Sample { .. } | Mode::Test { .. } | Mode::Shrink { .. } => {
+            run_subprocess(mgr, context, cmd, &realized, run_config)
+        }
+    }
+}
+
 fn run_remaining_trials_sequential(
     mgr: Arc<Mutex<Manager>>,
     run_config: &RunConfig,
@@ -358,7 +454,6 @@ fn run_remaining_trials_sequential(
     cancel_flag: Option<Arc<RwLock<bool>>>,
 ) -> anyhow::Result<()> {
     for i in remaining_trials {
-        // Check cancellation before each trial
         if let Some(ref flag) = cancel_flag {
             if *flag.read().unwrap() {
                 tracing::info!("Job cancelled, stopping experiment");
@@ -369,39 +464,8 @@ fn run_remaining_trials_sequential(
         tracing::trace!("running trial {}", i);
 
         for step in &test_steps {
-            let old_step = step;
-            let step = old_step.decide(params, tags);
-            tracing::trace!("step '{old_step}' is evaluated to '{step}' with params: {params:?}");
+            let status = dispatch_step(mgr.clone(), run_config, step, params, tags, i)?;
 
-            let cmd = std::process::Command::from(&step);
-
-            let mut context = serde_json::json!({
-                "language": run_config.language,
-                "workload": run_config.workload,
-                "experiment": run_config.experiment_name,
-                "mutations": run_config.mutations,
-                "trial": i,
-                "timestamp": chrono::Utc::now().to_rfc3339(),
-                "cross": run_config.cross,
-                "timeout": run_config.timeout,
-            })
-            .as_object()
-            .unwrap()
-            .to_owned();
-
-            for (k, v) in &run_config.task {
-                context.insert(k.to_owned(), Value::String(v.to_owned()));
-            }
-
-            let status = if run_config.cross {
-                tracing::debug!("Running cross-language command: {}", step);
-                run_cross(mgr.clone(), context, cmd, &step, run_config)?
-            } else {
-                tracing::debug!("Running default command: {}", step);
-                run_default(mgr.clone(), context, cmd, &step, run_config)?
-            };
-
-            // If the run timed out and short-circuit is enabled, break the loop.
             if status == Status::TimedOut {
                 if run_config.short_circuit {
                     tracing::info!("Short-circuiting the experiment due to timeout");
@@ -440,12 +504,10 @@ fn run_remaining_trials_parallel(
     );
     let short_circuit = run_config.short_circuit;
 
-    // Parallelize the outer loop.
     remaining_trials
         .par_iter()
         .copied()
         .try_for_each(|i| -> anyhow::Result<()> {
-            // Check cancellation before each trial
             if let Some(ref flag) = cancel_flag {
                 if *flag.read().unwrap() {
                     tracing::info!("Job cancelled, stopping experiment");
@@ -455,47 +517,12 @@ fn run_remaining_trials_parallel(
 
             tracing::trace!("running trial {}", i);
 
-            // Steps remain sequential inside a trial
-            for step_tmpl in &test_steps {
-                let old_step = step_tmpl;
-                let step = old_step.decide(params, tags);
-                tracing::trace!(
-                    "step '{old_step}' is evaluated to '{step}' with params: {params:?}"
-                );
-
-                let cmd = std::process::Command::from(&step);
-
-                // Build context fresh per step (as in your original code)
-                let mut context = serde_json::json!({
-                    "language": run_config.language,
-                    "workload": run_config.workload,
-                    "experiment": run_config.experiment_name,
-                    "mutations": run_config.mutations,
-                    "trial": i,
-                    "timestamp": chrono::Utc::now().to_rfc3339(),
-                    "cross": run_config.cross,
-                    "timeout": run_config.timeout,
-                })
-                .as_object()
-                .unwrap()
-                .to_owned();
-
-                for (k, v) in &run_config.task {
-                    context.insert(k.to_owned(), serde_json::Value::String(v.to_owned()));
-                }
-
-                let status = if run_config.cross {
-                    tracing::debug!("Running cross-language command: {}", step);
-                    run_cross(mgr.clone(), context, cmd, &step, run_config)?
-                } else {
-                    tracing::debug!("Running default command: {}", step);
-                    run_default(mgr.clone(), context, cmd, &step, run_config)?
-                };
+            for step in &test_steps {
+                let status = dispatch_step(mgr.clone(), run_config, step, params, tags, i)?;
 
                 if status == Status::TimedOut {
                     if short_circuit {
                         tracing::info!("Short-circuiting the experiment due to timeout");
-                        // Convert to an error so try_for_each stops scheduling new trials.
                         return Err(anyhow::anyhow!(EarlyStop));
                     } else {
                         tracing::info!(
@@ -508,9 +535,7 @@ fn run_remaining_trials_parallel(
             Ok(())
         })
         .map_err(|e| {
-            // Swallow EarlyStop into Ok(()) so the function returns success when short-circuit triggers.
             if e.downcast_ref::<EarlyStop>().is_some() {
-                // We intentionally stopped early
                 anyhow::anyhow!("aborted remaining trials due to timeout short-circuit")
             } else {
                 e
@@ -520,121 +545,29 @@ fn run_remaining_trials_parallel(
     Ok(())
 }
 
-/// Runs the canonical serialized runner (Rust for now) for the given workload, mutation, property, and tests.
-/// Report the index of the failing test if any.
-fn run_canonical_serialized(
-    mgr: Arc<Mutex<Manager>>,
-    workload: &str,
-    mutations: &[String],
-    property: &str,
-    tests: &str,
-) -> anyhow::Result<Object> {
-    // Change the current working directory to the workload directory
-    let workload_dir = {
-        let mgr = mgr.lock().unwrap();
-        mgr.config
-            .repo_dir()
-            .join("workloads")
-            .join("Rust")
-            .join(workload)
-    };
-
-    // Run marauders to mutate the canonical serializer
-    tracing::trace!(
-        "Running marauders to mutate the canonical serializer for workload '{}', mutations '{:?}'",
-        workload,
-        mutations
-    );
-    let glob = format!("*.{}", marauders::Language::Rust.file_extension());
-    let mut project = marauders::Project::new(&workload_dir, Some(&glob))?;
-    marauders::reset_all(&mut project)?;
-
-    for variant in mutations.iter() {
-        tracing::trace!(
-            "Running marauders to mutate the canonical serializer for workload '{}', variant '{}'",
-            workload,
-            variant
-        );
-        marauders::set_variant(&mut project, variant)?;
-    }
-
-    // Run the build command for the canonical serializer
-    let mut cmd = std::process::Command::new("cargo");
-    cmd.current_dir(&workload_dir);
-    cmd.args(["build", "--release"]);
-    tracing::debug!(
-        "running 'cargo build --release' in '{}'",
-        workload_dir.display()
-    );
-
-    let output = cmd.output();
-    match output {
-        Ok(output) => {
-            if !output.status.success() {
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                anyhow::bail!("Failed to build canonical serializer: '{}'", stderr);
-            }
-        }
-        Err(e) => {
-            anyhow::bail!("Failed to run 'cargo build --release': '{}'", e);
-        }
-    }
-
-    // Run the canonical serializer
-    tracing::debug!(
-        "Running canonical serializer for workload '{}', mutations '{:?}', property '{}'",
-        workload,
-        mutations,
-        property
-    );
-    let mut cmd = std::process::Command::new(
-        PathBuf::from(&workload_dir)
-            .join("target")
-            .join("release")
-            .join(format!("{}-serialized", workload.to_lowercase())),
-    );
-    cmd.args([tests, property]);
-    cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
-
-    tracing::trace!("Running canonical serializer command: {:?}", cmd);
-    let output = cmd.output();
-    match output {
-        Ok(output) => {
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            // Parse the stdout to find the index of the failing test
-            // The JSON output starts at [| and ends at |]
-            tracing::trace!("Canonical serializer output: {}", stdout);
-
-            let json_value: Object =
-                serde_json::from_str(&stdout).context("Failed to parse JSON output")?;
-
-            Ok(json_value)
-        }
-        Err(e) => {
-            tracing::error!("Failed to run canonical serializer: {}", e);
-            anyhow::bail!("Failed to run canonical serializer: '{}'", e);
-        }
-    }
-}
-
-/// Cross-language runner for comparing across different languages.
-/// Logically runs the following;
-/// 1. Runs `workloads/language/workload-sampler` for the given strategy and property.
-/// 2. Parses the output of the sampler to get the samples along with their durations.
-/// 3. Writes the samples to a temporary file.
-/// 4. Mutates and builds `workloads/Rust/workload-serialized` for running the serializer.
-/// 5. Runs `workloads/Rust/workload-serialized` with the temporary file and the property as arguments.
-/// 6. Reads the output of the serializer from stderrr and puts it in the result store.
+/// Cross-mode runner: iterates `producer.sample` → `consumer.test` until timeout or FoundBug.
 ///
-/// The function is designed to run in a loop until the timeout is reached, with batches of 1000 samples
-/// collected in each iteration.
+/// 1. Run the producer's sampler (passed in as `cmd`).
+/// 2. Parse its stdout as a JSON array of `{time, value}` samples.
+/// 3. Write the samples to a tempfile in s-expression form `(s1 s2 ...)`.
+/// 4. Realize the consumer's `test` capability steps with `${inputs}` bound to the tempfile path.
+/// 5. Run the consumer's test steps; the final step's stdout is the campaign-result JSON.
+/// 6. Accumulate per-sample durations against the overall timeout; log FoundBug or keep going.
+#[allow(clippy::too_many_arguments)]
 fn run_cross(
     mgr: Arc<Mutex<Manager>>,
     mut context: Object,
     mut cmd: std::process::Command,
     step: &Command,
     run_config: &RunConfig,
+    params: &HashMap<String, String>,
+    _tags: &HashMap<String, Vec<String>>,
 ) -> anyhow::Result<Status> {
+    let consumer = run_config
+        .consumer_test
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("run_cross called without consumer_test in RunConfig"))?;
+
     let timeout = Duration::from_secs_f64(run_config.timeout);
 
     let mut total_time = Duration::default();
@@ -683,8 +616,24 @@ fn run_cross(
                 let stdout = String::from_utf8_lossy(&output.stdout);
 
                 if !output.status.success() {
-                    tracing::error!("Command '{}' failed with status: {}", step, output.status);
-                    panic!("Command should not have a non-zero exit status when running in cross-language mode");
+                    tracing::error!("Sampler '{}' failed with status: {}", step, output.status);
+                    context.insert(
+                        "status".to_owned(),
+                        Value::String(Status::Aborted.to_string()),
+                    );
+                    context.insert(
+                        "error".to_owned(),
+                        Value::String(format!(
+                            "sampler '{}' exited with status {}",
+                            step, output.status
+                        )),
+                    );
+                    let mut mgr = mgr.lock().unwrap();
+                    mgr.require_store_mut()?.push(Metric {
+                        data: context.clone(),
+                        hash: run_config.experiment_hash.clone(),
+                    })?;
+                    return Ok(Status::Aborted);
                 }
 
                 let samples: Vec<serde_json::Value> = serde_json::from_str(&stdout)
@@ -708,37 +657,31 @@ fn run_cross(
                     .write_all(format!("({})", samples.join(" ")).as_bytes())
                     .context("Failed to write samples to temporary file")?;
 
-                // Call the Rust serializer for the specific workload
-                tracing::debug!(
-                    "Running canonical serializer for workload '{}', mutations '{:?}', property '{}'",
-                    run_config.workload,
-                    run_config.mutations,
-                    run_config.task.get("property").unwrap_or(&"<unknown>".to_string())
-                );
-                tracing::debug!("Using temporary file: {}", temp_file.path().display());
-                let results = run_canonical_serialized(
-                    mgr.clone(),
-                    &run_config.workload,
-                    &run_config.mutations,
-                    run_config
-                        .task
-                        .get("property")
-                        .unwrap_or(&"<unknown>".to_string()),
-                    temp_file.path().to_str().unwrap(),
+                // Realize consumer's test steps with ${inputs} pointing at the tempfile.
+                let mut cparams = params.clone();
+                cparams.insert(
+                    "inputs".to_string(),
+                    temp_file.path().display().to_string(),
                 );
 
+                tracing::debug!(
+                    "Running consumer test for workload '{}/{}' with inputs at {}",
+                    run_config.language,
+                    run_config.workload,
+                    temp_file.path().display()
+                );
+
+                let results = run_consumer_test(&consumer.steps, &cparams, &consumer.tags);
+
                 let Ok(results) = results else {
-                    tracing::error!("Failed to run canonical serializer");
-                    tracing::error!("Results: {:?}", results);
+                    tracing::error!("Failed to run consumer test");
+                    let err = results.unwrap_err();
+                    tracing::error!("error: {}", err);
                     context.insert(
                         "status".to_owned(),
                         Value::String(Status::Aborted.to_string()),
                     );
-
-                    context.insert(
-                        "error".to_owned(),
-                        Value::String(results.unwrap_err().to_string()),
-                    );
+                    context.insert("error".to_owned(), Value::String(err.to_string()));
                     let mut mgr = mgr.lock().unwrap();
                     mgr.require_store_mut()?.push(Metric {
                         data: context.clone(),
@@ -750,7 +693,7 @@ fn run_cross(
                 let status = results
                     .get("status")
                     .and_then(|v| serde_json::from_value::<Status>(v.clone()).ok())
-                    .context("Failed to get 'status' from canonical serializer output")?;
+                    .context("Failed to get 'status' from consumer output")?;
 
                 let passed = results.get("tests").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
 
@@ -874,7 +817,48 @@ fn run_cross(
     Ok(Status::TimedOut)
 }
 
-fn run_default(
+/// Realize the consumer's `test` capability steps (with `${inputs}` already set in `params`),
+/// execute them in order, and return the final step's stdout parsed as a campaign-result JSON.
+fn run_consumer_test(
+    steps: &[Step],
+    params: &HashMap<String, String>,
+    tags: &HashMap<String, Vec<String>>,
+) -> anyhow::Result<Object> {
+    let realized: Vec<Step> = steps
+        .iter()
+        .map(|s| s.realize(params, tags))
+        .collect::<anyhow::Result<Vec<_>>>()?
+        .into_iter()
+        .flatten()
+        .collect();
+
+    let mut last_stdout: Option<String> = None;
+    for step in &realized {
+        let decided = step.decide(params, tags);
+        let mut cmd = std::process::Command::from(&decided);
+        cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+        tracing::debug!("Running consumer step: {}", decided);
+        let output = cmd
+            .output()
+            .with_context(|| format!("Failed to run consumer step '{}'", decided))?;
+        if !output.status.success() {
+            anyhow::bail!(
+                "consumer step '{}' exited with status {}: {}",
+                decided,
+                output.status,
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+        last_stdout = Some(String::from_utf8_lossy(&output.stdout).into_owned());
+    }
+
+    let stdout = last_stdout
+        .ok_or_else(|| anyhow::anyhow!("consumer test capability has no steps"))?;
+    serde_json::from_str::<Object>(stdout.trim())
+        .with_context(|| format!("Failed to parse consumer output as JSON: '{}'", stdout))
+}
+
+fn run_subprocess(
     mgr: Arc<Mutex<Manager>>,
     mut context: Object,
     mut cmd: std::process::Command,
@@ -1095,67 +1079,182 @@ pub(crate) fn run_experiment(
         cli_params: &HashMap<String, String>,
         cancel_flag: Option<Arc<RwLock<bool>>>,
     ) -> anyhow::Result<()> {
-        let lang = marauders::Language::name_to_language(&test.language, &custom_languages)
-            .with_context(|| format!("language '{}' is not known or supported", test.language))?;
-        let glob = format!("*.{}", lang.file_extension());
+        // Primary target = where the property runs. For Cross this is the consumer; the
+        // producer's sample capability is what we iterate each trial.
+        let (primary_lang, primary_wl, producer_target): (String, String, Option<Target>) =
+            match &test.mode {
+                Mode::Cross { producer, consumer } => (
+                    consumer.language.clone(),
+                    consumer.workload.clone(),
+                    Some(producer.clone()),
+                ),
+                _ => (test.language.clone(), test.workload.clone(), None),
+            };
 
-        let workload_dir = experiment
+        let primary_dir = experiment
             .path
             .join("workloads")
-            .join(test.language.as_str())
-            .join(test.workload.as_str());
+            .join(&primary_lang)
+            .join(&primary_wl);
 
-        let mut project = marauders::Project::new(&workload_dir, Some(&glob))?;
+        // Apply marauders mutations to the primary target only.
+        let lang = marauders::Language::name_to_language(&primary_lang, &custom_languages)
+            .with_context(|| format!("language '{}' is not known or supported", primary_lang))?;
+        let glob = format!("*.{}", lang.file_extension());
+        let mut project = marauders::Project::new(&primary_dir, Some(&glob))?;
         marauders::reset_all(&mut project)?;
-
         for variant in test.mutations.iter() {
             marauders::set_variant(&mut project, variant)?;
         }
 
-        let workload: Workload = load_workload(
-            &experiment.path,
-            test.language.as_str(),
-            test.workload.as_str(),
-        )?;
+        let workload: Workload =
+            load_workload(&experiment.path, &primary_lang, &primary_wl)?;
 
-        // todo: there's a bug when two params share a prefix, fix it.
-        let mut params = HashMap::from([(
+        // For Cross, also load the producer workload so we can pick its sample capability.
+        let producer_workload: Option<Workload> = match &producer_target {
+            Some(t) => Some(load_workload(&experiment.path, &t.language, &t.workload)?),
+            None => None,
+        };
+        let producer_path: Option<(Target, PathBuf)> = producer_target.as_ref().map(|t| {
+            let dir = experiment
+                .path
+                .join("workloads")
+                .join(&t.language)
+                .join(&t.workload);
+            (t.clone(), dir)
+        });
+
+        // Pick the capability steps that will be iterated each trial, and the tags used for
+        // template expansion. For Cross, iterate producer.sample and pass consumer.test as
+        // `consumer_test` in RunConfig (realized per-batch inside run_cross).
+        let (iter_steps, iter_tags, iter_dir): (Vec<Step>, HashMap<String, Vec<String>>, PathBuf) =
+            match &test.mode {
+                Mode::Solve => (
+                    workload.steps.capability(Capability::Solve)?.clone(),
+                    workload.steps.tags.clone(),
+                    primary_dir.clone(),
+                ),
+                Mode::Sample { .. } => (
+                    workload.steps.capability(Capability::Sample)?.clone(),
+                    workload.steps.tags.clone(),
+                    primary_dir.clone(),
+                ),
+                Mode::Test { .. } => (
+                    workload.steps.capability(Capability::Test)?.clone(),
+                    workload.steps.tags.clone(),
+                    primary_dir.clone(),
+                ),
+                Mode::Shrink { .. } => (
+                    workload.steps.capability(Capability::Shrink)?.clone(),
+                    workload.steps.tags.clone(),
+                    primary_dir.clone(),
+                ),
+                Mode::Cross { .. } => {
+                    let pw = producer_workload.as_ref().unwrap();
+                    let (_, pdir) = producer_path.as_ref().unwrap();
+                    (
+                        pw.steps.capability(Capability::Sample)?.clone(),
+                        pw.steps.tags.clone(),
+                        pdir.clone(),
+                    )
+                }
+            };
+
+        let consumer_test = match &test.mode {
+            Mode::Cross { .. } => Some(ConsumerSteps {
+                steps: workload.steps.capability(Capability::Test)?.clone(),
+                tags: workload.steps.tags.clone(),
+            }),
+            _ => None,
+        };
+
+        // Base params shared across all tasks.
+        let mut base_params: HashMap<String, String> = HashMap::new();
+        base_params.insert(
             "workload_path".to_string(),
-            workload_dir.display().to_string(),
-        )]);
+            primary_dir.display().to_string(),
+        );
+        if let Some((_, pdir)) = &producer_path {
+            base_params.insert(
+                "producer_workload_path".to_string(),
+                pdir.display().to_string(),
+            );
+        }
 
         if let Some(params_) = &test.params {
             for (key, value) in params_.iter() {
                 tracing::trace!("Adding test parameter: {} = {}", key, value);
-                params.insert(key.clone(), value.to_string());
+                base_params.insert(key.clone(), value.to_string());
             }
-        };
+        }
 
         // CLI params override test.params (highest precedence)
         for (key, value) in cli_params.iter() {
             tracing::trace!("Applying CLI param: {} = {}", key, value);
-            params.insert(key.clone(), value.clone());
+            base_params.insert(key.clone(), value.clone());
         }
+
+        // Resolve InputSource once for Test mode; keep the tempfile alive until we're done.
+        let _input_tempfile: Option<tempfile::NamedTempFile> = match &test.mode {
+            Mode::Test { inputs } => match inputs {
+                InputSource::File(p) => {
+                    base_params.insert("inputs".to_string(), p.display().to_string());
+                    None
+                }
+                InputSource::Inline(items) => {
+                    let mut tf = tempfile::NamedTempFile::new()
+                        .context("Failed to create inputs tempfile")?;
+                    let body = serde_json::to_string(items)
+                        .context("Failed to serialize inline inputs")?;
+                    tf.write_all(body.as_bytes())
+                        .context("Failed to write inputs tempfile")?;
+                    base_params
+                        .insert("inputs".to_string(), tf.path().display().to_string());
+                    Some(tf)
+                }
+            },
+            _ => None,
+        };
+
+        // Resolve a non-FromTask counterexample once up-front. FromTask is resolved per-task below.
+        let _cex_tempfile: Option<tempfile::NamedTempFile> = match &test.mode {
+            Mode::Shrink { counterexample } => match counterexample {
+                CexSource::Inline(s) => {
+                    base_params.insert("counterexample".to_string(), s.clone());
+                    None
+                }
+                CexSource::File(p) => {
+                    let s = std::fs::read_to_string(p)
+                        .with_context(|| format!("Failed to read counterexample file '{}'", p.display()))?;
+                    base_params.insert("counterexample".to_string(), s.trim().to_string());
+                    None
+                }
+                CexSource::FromTask => None,
+            },
+            _ => None,
+        };
 
         tracing::trace!(
             "Checking if all tasks for language '{}' and workload '{}' are already completed",
-            test.language,
-            test.workload
+            primary_lang,
+            primary_wl
         );
 
         {
             let mgr = mgr.lock().unwrap();
             let store = mgr.require_store()?;
+            let mode_name = test.mode.name();
             let all_tasks_completed = test.tasks.iter().all(|task| {
                 task_completed(
-                    &test.language,
-                    &test.workload,
+                    &primary_lang,
+                    &primary_wl,
                     &test.mutations,
                     task,
                     test.timeout,
                     test.trials,
                     short_circuit,
-                    test.cross,
+                    mode_name,
+                    producer_target.as_ref(),
                     &store.metrics,
                 )
             });
@@ -1163,21 +1262,40 @@ pub(crate) fn run_experiment(
             if all_tasks_completed {
                 tracing::info!(
                     "All tasks for the current test with language '{}', workload '{}' and mutations '{:?}' are already completed, skipping the build and run steps.",
-                    test.language,
-                    test.workload,
+                    primary_lang,
+                    primary_wl,
                     test.mutations
                 );
                 return Ok(());
+            } else {
+                tracing::info!(
+                    "Not all tasks for the current test with language '{}', workload '{}' and mutations '{:?}' are completed, proceeding with the build and run steps.",
+                    primary_lang,
+                    primary_wl,
+                    test.mutations
+                );
             }
         }
 
         build(
-            &workload_dir,
+            &primary_dir,
             &workload.steps.setup,
             &workload.steps.build,
-            &params,
+            &base_params,
             &workload.steps.tags,
         )?;
+
+        if let (Some(pw), Some((_, pdir))) = (&producer_workload, &producer_path) {
+            build(
+                pdir,
+                &pw.steps.setup,
+                &pw.steps.build,
+                &base_params,
+                &pw.steps.tags,
+            )?;
+        }
+
+        let experiment_hash = experiment.hash()?;
 
         for task in test.tasks.iter() {
             // Check cancellation before each task
@@ -1188,37 +1306,60 @@ pub(crate) fn run_experiment(
                 }
             }
 
+            let mut params = base_params.clone();
             params.extend(task.clone());
 
-            // Run the experiment
+            // FromTask counterexample: pull from the task map.
+            if let Mode::Shrink {
+                counterexample: CexSource::FromTask,
+            } = &test.mode
+            {
+                let cex = task.get("counterexample").cloned().ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "Shrink mode with CexSource::FromTask requires task to have a 'counterexample' field"
+                    )
+                })?;
+                params.insert("counterexample".to_string(), cex);
+            }
+
             let run_config = RunConfig {
-                language: test.language.clone(),
-                workload_dir: workload_dir.clone(),
-                experiment_hash: experiment.hash()?,
-                trials: test.trials,
-                workload: test.workload.clone(),
+                experiment_name: experiment.name.clone(),
+                experiment_hash: experiment_hash.clone(),
+                language: primary_lang.clone(),
+                workload: primary_wl.clone(),
+                workload_dir: primary_dir.clone(),
                 mutations: test.mutations.clone(),
                 task: task.clone(),
+                trials: test.trials,
                 timeout: test.timeout,
                 short_circuit,
-                cross: test.cross,
                 parallel,
                 seed: None,
-                experiment_name: experiment.name.clone(),
+                mode: test.mode.clone(),
+                producer: producer_path
+                    .as_ref()
+                    .map(|(t, dir)| TargetPath {
+                        target: t.clone(),
+                        dir: dir.clone(),
+                    }),
+                consumer_test: consumer_test.clone(),
             };
 
             let result = run(
                 mgr.clone(),
                 &run_config,
-                &workload.steps.test,
+                &iter_steps,
                 &mut params,
-                &workload.steps.tags,
+                &iter_tags,
                 cancel_flag.clone(),
             );
 
             if let Err(e) = &result {
                 tracing::error!("Failed to run experiment: {}", e);
             }
+
+            // Silence the unused-read warning for iter_dir.
+            let _ = &iter_dir;
         }
 
         Ok(())

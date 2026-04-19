@@ -2,10 +2,11 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import { handleWebviewMessage } from './messageHandler';
+import { ensureServerRunning } from '../server/serverManager';
 
 let currentPanel: vscode.WebviewPanel | undefined;
 
-export function openDashboard(context: vscode.ExtensionContext): void {
+export async function openDashboard(context: vscode.ExtensionContext): Promise<void> {
   const columnToShowIn = vscode.window.activeTextEditor
     ? vscode.window.activeTextEditor.viewColumn
     : undefined;
@@ -15,6 +16,9 @@ export function openDashboard(context: vscode.ExtensionContext): void {
     currentPanel.reveal(columnToShowIn);
     return;
   }
+
+  // Make sure a server is reachable (spawn one locally if needed).
+  await ensureServerRunning();
 
   // Create a new panel
   currentPanel = vscode.window.createWebviewPanel(

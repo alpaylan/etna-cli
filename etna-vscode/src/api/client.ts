@@ -246,9 +246,11 @@ export class EtnaApiClient {
   }
 
   // Store
-  async queryMetrics(filter?: string): Promise<QueryResult> {
+  async queryMetrics(filter?: string, experimentName?: string): Promise<QueryResult> {
     try {
-      const params = filter ? { filter } : {};
+      const params: Record<string, string> = {};
+      if (filter) params.filter = filter;
+      if (experimentName) params.experiment = experimentName;
       const response = await this.client.get<QueryResult>('/api/v1/store/query', { params });
       return response.data;
     } catch (error) {
@@ -267,6 +269,17 @@ export class EtnaApiClient {
   }
 
   // Mutations
+  async listWorkloadMutations(language: string, workload: string): Promise<string[]> {
+    try {
+      const response = await this.client.get<string[]>(
+        `/api/v1/workloads/${encodeURIComponent(language)}/${encodeURIComponent(workload)}/mutations`
+      );
+      return response.data;
+    } catch (error) {
+      this.handleError(error);
+    }
+  }
+
   async listMutations(path: string): Promise<FileMutationsInfo[]> {
     try {
       const response = await this.client.get<FileMutationsInfo[]>('/api/v1/mutations', {

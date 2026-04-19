@@ -81,12 +81,12 @@ fn publish_gist(path: &std::path::Path) -> anyhow::Result<String> {
     Ok(format!("Gist: {}\nView: {}", gist_url, view_url))
 }
 
-pub fn invoke(
-    mut mgr: Manager,
-    experiment: ExperimentMetadata,
-    output: Option<PathBuf>,
-    publish: bool,
-) -> anyhow::Result<()> {
+/// Render the report HTML for an experiment without writing it to disk.
+/// Side effects: loads the experiment store into `mgr`.
+pub fn render_html(
+    mgr: &mut Manager,
+    experiment: &ExperimentMetadata,
+) -> anyhow::Result<String> {
     // Load metrics
     mgr.set_store_path(experiment.store.clone())?;
     mgr.require_store_mut()?.load_metrics()?;
@@ -106,7 +106,7 @@ pub fn invoke(
         .collect();
 
     // Load workload docs for mutation matrix filtering
-    let workload_docs = load_workload_docs(&mgr);
+    let workload_docs = load_workload_docs(mgr);
 
     let metrics_json_raw = serde_json::to_string(&metrics)?;
 
@@ -141,7 +141,17 @@ pub fn invoke(
         generated_at_json => &generated_at_json,
     })?;
 
-    // Write output
+    Ok(html)
+}
+
+pub fn invoke(
+    mut mgr: Manager,
+    experiment: ExperimentMetadata,
+    output: Option<PathBuf>,
+    publish: bool,
+) -> anyhow::Result<()> {
+    let html = render_html(&mut mgr, &experiment)?;
+
     let output_path = output.unwrap_or_else(|| experiment.path.join("report.html"));
     std::fs::write(&output_path, &html).context("Failed to write report HTML")?;
 

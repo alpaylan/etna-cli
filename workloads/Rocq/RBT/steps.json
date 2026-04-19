@@ -40,62 +40,6 @@
       }
     }
   ],
-  "test_steps": [
-    {
-      "Match": {
-        "value": "strategy",
-        "options": {
-          "fuzzer": {
-            "Command": {
-              "command": "${workload_path}/main_exec",
-              "args": [
-                "\"${strategy}_exec $property\""
-              ],
-              "params": [
-                "workload_path",
-                "property",
-                "strategy"
-              ]
-            }
-          },
-          "generator": {
-            "Match": {
-              "value": "cross",
-              "options": {
-                "false": {
-                  "Command": {
-                    "command": "${workload_path}/${strategy}_test_runner.native",
-                    "args": [
-                      "$property"
-                    ],
-                    "params": [
-                      "workload_path",
-                      "property",
-                      "strategy"
-                    ]
-                  }
-                },
-                "true": {
-                  "Command": {
-                    "command": "${workload_path}/${strategy}_sampler.native",
-                    "args": [
-                      "$property",
-                      "$tests"
-                    ],
-                    "params": [
-                      "workload_path",
-                      "property",
-                      "strategy"
-                    ]
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  ],
   "tags": {
     "BespokeGenerator": [
       "generator",
@@ -120,6 +64,79 @@
     ],
     "sampler": [
       "BespokeGenerator"
+    ]
+  },
+  "capabilities": {
+    "solve": [
+      {
+        "Match": {
+          "value": "strategy",
+          "options": {
+            "fuzzer": {
+              "Command": {
+                "command": "${workload_path}/main_exec",
+                "args": [
+                  "\"${strategy}_exec $property\""
+                ],
+                "params": [
+                  "workload_path",
+                  "property",
+                  "strategy"
+                ]
+              }
+            },
+            "generator": {
+              "Command": {
+                "command": "${workload_path}/${strategy}_test_runner.native",
+                "args": [
+                  "$property"
+                ],
+                "params": [
+                  "workload_path",
+                  "property",
+                  "strategy"
+                ]
+              }
+            }
+          }
+        }
+      }
+    ],
+    "sample": [
+      {
+        "Match": {
+          "value": "strategy",
+          "options": {
+            "fuzzer": {
+              "Command": {
+                "command": "${workload_path}/main_exec",
+                "args": [
+                  "\"${strategy}_exec $property\""
+                ],
+                "params": [
+                  "workload_path",
+                  "property",
+                  "strategy"
+                ]
+              }
+            },
+            "generator": {
+              "Command": {
+                "command": "${workload_path}/${strategy}_sampler.native",
+                "args": [
+                  "$property",
+                  "$tests"
+                ],
+                "params": [
+                  "workload_path",
+                  "property",
+                  "strategy"
+                ]
+              }
+            }
+          }
+        }
+      }
     ]
   }
 }

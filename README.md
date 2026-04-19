@@ -31,6 +31,30 @@ We are currently working on expanding the coverage of ETNA with more workloads a
 - [ ] Rust - Proptest (September 15-21)
 - [ ] Rust - LibAFL (September 22-28)
 
+## Development
+
+### Running tests
+
+```bash
+make test              # cargo test --workspace (serialised)
+make coverage          # writes lcov.info at the repo root
+make coverage-html     # browsable report at target/coverage/html/index.html
+make coverage-summary  # percentages only, no artifacts
+```
+
+Coverage requires `cargo-llvm-cov` (`cargo install cargo-llvm-cov`) and the
+`llvm-tools-preview` rustup component.
+
+### Test environment overrides
+
+Integration tests isolate themselves from the user's real `~/.etna` via two
+environment variables, which are also useful when experimenting locally:
+
+- `ETNA_HOME` — override the `~/.etna` location (config, experiments, cache).
+- `ETNA_OFFLINE=1` — skip the `git pull` on `.etna_cache` during
+  `workload add` and `bash`, useful when running against a pre-populated
+  cache without network access.
+
 ## Research Papers
 
 ICFP'23: Etna: An Evaluation Platform for Property-Based Testing (Experience Report)

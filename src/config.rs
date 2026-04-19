@@ -44,6 +44,12 @@ impl EtnaConfig {
     }
 
     pub(crate) fn get_etna_dir() -> anyhow::Result<PathBuf> {
+        if let Some(override_dir) = std::env::var_os("ETNA_HOME") {
+            if !override_dir.is_empty() {
+                return Ok(PathBuf::from(override_dir));
+            }
+        }
+
         dirs::home_dir()
             .map(|home_dir| home_dir.join(".etna"))
             .ok_or_else(|| anyhow::anyhow!("Failed to get home directory"))

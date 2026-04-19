@@ -211,6 +211,10 @@ pub(crate) fn init_repo_via_cli(repo_path: &Path) -> anyhow::Result<()> {
 }
 
 pub(crate) fn pull_via_cli(repo_path: &Path) -> anyhow::Result<()> {
+    if std::env::var_os("ETNA_OFFLINE").is_some() {
+        tracing::debug!("Skipping git pull at '{}': ETNA_OFFLINE is set", repo_path.display());
+        return Ok(());
+    }
     tracing::debug!("Pulling path from remote");
     tracing::debug!("run: 'git -C {} pull'", repo_path.display(),);
     let status = std::process::Command::new("git")

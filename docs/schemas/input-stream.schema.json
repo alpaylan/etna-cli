@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://etna.dev/schemas/input-stream.schema.json",
+  "title": "Etna Input Stream",
+  "description": "Output format produced by a workload's `sample` capability. A JSON array where each element is one generated input together with optional per-input metadata. Consumers of the `test` capability (including the `Cross` mode) read this same shape.",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": ["value"],
+    "properties": {
+      "value": {
+        "type": "string",
+        "description": "Opaque representation of the generated input. The exact shape is workload-specific; producers and consumers must agree on the encoding (e.g. s-expression, JSON string, pretty printer output)."
+      },
+      "time": {
+        "type": "string",
+        "description": "Wall-clock time spent generating this input, as a human-readable duration (e.g. \"123ns\", \"1.5ms\", \"2s\"). Parsed with the `parse_duration` crate.",
+        "pattern": "^[0-9]+(\\.[0-9]+)?\\s*(ns|us|µs|ms|s|m|h)$"
+      },
+      "status": {
+        "type": "string",
+        "description": "Optional status for this individual input if the producer ran a property against it (e.g. when a sampler is also checking).",
+        "enum": ["passed", "found_bug", "gave_up", "timed_out", "aborted", "unknown"]
+      },
+      "features": {
+        "type": "object",
+        "description": "Optional runtime observations attached to this input (e.g. coverage bits, stat counters). Free-form per workload."
+      }
+    }
+  }
+}

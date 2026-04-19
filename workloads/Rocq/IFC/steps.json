@@ -40,41 +40,6 @@
       }
     }
   ],
-  "test_steps": [
-    {
-      "Match": {
-        "value": "strategy",
-        "options": {
-          "fuzzer": {
-            "Command": {
-              "command": "${workload_path}/main_exec",
-              "args": [
-                "\"${strategy}_exec $property\""
-              ],
-              "params": [
-                "workload_path",
-                "property",
-                "strategy"
-              ]
-            }
-          },
-          "generator": {
-            "Command": {
-              "command": "${workload_path}/${strategy}_test_runner.native",
-              "args": [
-                "$property"
-              ],
-              "params": [
-                "workload_path",
-                "property",
-                "strategy"
-              ]
-            }
-          }
-        }
-      }
-    }
-  ],
   "tags": {
     "BespokeGenerator": [
       "generator"
@@ -95,6 +60,78 @@
     ],
     "fuzzer": [
       "TypeBasedFuzzer"
+    ]
+  },
+  "capabilities": {
+    "solve": [
+      {
+        "Match": {
+          "value": "strategy",
+          "options": {
+            "fuzzer": {
+              "Command": {
+                "command": "${workload_path}/main_exec",
+                "args": [
+                  "\"${strategy}_exec $property\""
+                ],
+                "params": [
+                  "workload_path",
+                  "property",
+                  "strategy"
+                ]
+              }
+            },
+            "generator": {
+              "Command": {
+                "command": "${workload_path}/${strategy}_test_runner.native",
+                "args": [
+                  "$property"
+                ],
+                "params": [
+                  "workload_path",
+                  "property",
+                  "strategy"
+                ]
+              }
+            }
+          }
+        }
+      }
+    ],
+    "sample": [
+      {
+        "Match": {
+          "value": "strategy",
+          "options": {
+            "fuzzer": {
+              "Command": {
+                "command": "${workload_path}/main_exec",
+                "args": [
+                  "\"${strategy}_exec $property\""
+                ],
+                "params": [
+                  "workload_path",
+                  "property",
+                  "strategy"
+                ]
+              }
+            },
+            "generator": {
+              "Command": {
+                "command": "${workload_path}/${strategy}_test_runner.native",
+                "args": [
+                  "$property"
+                ],
+                "params": [
+                  "workload_path",
+                  "property",
+                  "strategy"
+                ]
+              }
+            }
+          }
+        }
+      }
     ]
   }
 }

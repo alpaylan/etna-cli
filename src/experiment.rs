@@ -88,15 +88,88 @@ impl ExperimentMetadata {
     }
 }
 
+/// Where the input list comes from for a `Test` mode invocation.
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+#[serde(rename_all = "snake_case")]
+pub enum InputSource {
+    /// Read inputs from a file on disk.
+    File(std::path::PathBuf),
+    /// Inline list of opaque input strings.
+    Inline(Vec<String>),
+}
+
+/// Where the counterexample comes from for a `Shrink` mode invocation.
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+#[serde(rename_all = "snake_case")]
+pub enum CexSource {
+    /// Inline opaque counterexample string.
+    Inline(String),
+    /// Read counterexample from a file on disk.
+    File(std::path::PathBuf),
+    /// Pull `counterexample` field from the current task.
+    FromTask,
+}
+
+/// What `sample` should collect.
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone, Copy, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum SampleCollect {
+    /// Collect inputs only.
+    InputsOnly,
+    /// Collect inputs plus per-input metadata (time, stats).
+    #[default]
+    InputsAndStats,
+}
+
+/// A (language, workload) pair identifying the workload to draw a capability from.
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+pub struct Target {
+    pub language: String,
+    pub workload: String,
+}
+
+/// The experiment mode — selects which capability pipeline to run.
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+pub enum Mode {
+    /// Run the full PBT campaign in the workload's framework.
+    Solve,
+    /// Produce inputs (with optional per-input metadata).
+    Sample {
+        #[serde(default)]
+        collect: SampleCollect,
+    },
+    /// Consume a list of inputs and run the property over them.
+    Test { inputs: InputSource },
+    /// Take a single failing input and shrink it.
+    Shrink { counterexample: CexSource },
+    /// Cross-framework: producer's `sample` capability feeds consumer's `test` capability.
+    Cross { producer: Target, consumer: Target },
+}
+
+impl Mode {
+    /// Short discriminant string used as the `mode` key in metric records.
+    pub fn name(&self) -> &'static str {
+        match self {
+            Mode::Solve => "solve",
+            Mode::Sample { .. } => "sample",
+            Mode::Test { .. } => "test",
+            Mode::Shrink { .. } => "shrink",
+            Mode::Cross { .. } => "cross",
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct Test {
+    /// Required for non-Cross modes; ignored for Cross (which carries its own targets).
+    #[serde(default)]
     pub language: String,
+    #[serde(default)]
     pub workload: String,
     pub trials: usize,
     pub timeout: f64,
     pub mutations: Vec<String>,
-    #[serde(default)]
-    pub cross: bool,
+    pub mode: Mode,
     #[serde(default)]
     pub params: Option<serde_json::Map<String, serde_json::Value>>,
     #[serde(default)]
@@ -107,8 +180,8 @@ impl Display for Test {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "(language: {}, workload: {}, trials: {}, timeout: {}, cross: {}, mutations: {:?}, tasks: {:?})",
-            self.language, self.workload, self.trials, self.timeout, self.cross, self.mutations, self.tasks
+            "(language: {}, workload: {}, trials: {}, timeout: {}, mode: {}, mutations: {:?}, tasks: {:?})",
+            self.language, self.workload, self.trials, self.timeout, self.mode.name(), self.mutations, self.tasks
         )
     }
 }

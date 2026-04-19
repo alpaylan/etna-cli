@@ -14,6 +14,11 @@ pub struct ExperimentInfo {
     pub path: PathBuf,
     pub store: PathBuf,
     pub workloads: Vec<WorkloadMetadata>,
+    /// Unix timestamp (seconds) of the most recent git commit touching the
+    /// experiment path. `None` when the path is not a git repository or has
+    /// no history.
+    #[serde(default)]
+    pub last_activity: Option<i64>,
 }
 
 /// Options for creating a new experiment

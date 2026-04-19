@@ -52,6 +52,10 @@ pub fn api_routes() -> Router<AppState> {
             "/api/v1/experiments/{name}/visualize",
             post(handlers::experiments::visualize),
         )
+        .route(
+            "/api/v1/experiments/{name}/report",
+            get(handlers::experiments::get_report),
+        )
         // Workloads
         .route(
             "/api/v1/experiments/{name}/workloads",
@@ -83,6 +87,10 @@ pub fn api_routes() -> Router<AppState> {
             get(handlers::jobs::get_job_metrics),
         )
         // Mutations
+        .route(
+            "/api/v1/workloads/{language}/{workload}/mutations",
+            get(handlers::mutations::get_workload_mutations),
+        )
         .route(
             "/api/v1/mutations",
             get(handlers::mutations::list_mutations),

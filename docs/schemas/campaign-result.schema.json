@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://etna.dev/schemas/campaign-result.schema.json",
+  "title": "Etna Campaign Result",
+  "description": "Output format produced by the `solve`, `test`, and `shrink` capabilities. A single JSON object summarizing the outcome of a campaign (or a single test / shrink invocation). The driver also expects this shape from the consumer side of a `Cross` run.",
+  "type": "object",
+  "required": ["status"],
+  "properties": {
+    "status": {
+      "type": "string",
+      "description": "Terminal status for the campaign.",
+      "enum": ["passed", "found_bug", "gave_up", "timed_out", "aborted", "unknown"]
+    },
+    "tests": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of inputs that were run against the property."
+    },
+    "discarded": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of inputs that were generated and then discarded (e.g. failed a precondition)."
+    },
+    "shrinks": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of shrink steps performed to minimize the counterexample. Only meaningful when status = found_bug or for the `shrink` capability."
+    },
+    "time": {
+      "type": "string",
+      "description": "Total wall-clock time spent, as a human-readable duration (e.g. \"1.5s\", \"250ms\", \"123ns\"). Parsed with the `parse_duration` crate.",
+      "pattern": "^[0-9]+(\\.[0-9]+)?\\s*(ns|us|µs|ms|s|m|h)$"
+    },
+    "counterexample": {
+      "type": ["string", "null"],
+      "description": "Opaque minimized-or-raw input that witnessed the failure. Present iff status = found_bug. The encoding is workload-specific and must match the `input-stream.schema.json` `value` shape so it can be fed back into `test` / `shrink`."
+    },
+    "error": {
+      "type": "string",
+      "description": "Free-form error message. Typically present when status = aborted."
+    },
+    "status_reason": {
+      "type": "string",
+      "description": "Optional human-readable reason, e.g. the assertion message that produced status = found_bug."
+    }
+  }
+}
