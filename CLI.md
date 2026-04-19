@@ -10,15 +10,22 @@ etna --help
 
 Top-level commands:
 
-- `experiment` - manage experiments and run/visualize tests
-- `workload` - add/remove/list workloads in an experiment
-- `store` - write/query/remove metrics
-- `config` - show CLI configuration
-- `setup` - initialize global ETNA config
-- `check` - integrity checks and cleanup/restore helpers
-- `analyze` - analysis helpers
-- `mutation` - inspect and control mutation variants
-- `bash` - generate bash script from workload config
+- `experiment` — manage experiments and run/visualize tests
+- `workload` — add/remove/list workloads in an experiment
+- `config` — show CLI configuration
+- `setup` — initialize global ETNA config
+- `check` — integrity checks and cleanup/restore helpers
+- `analyze` — analysis helpers
+- `mutation` — inspect and control mutation variants
+- `bash` — generate bash script from workload config (Unix only)
+- `completions` — generate shell completions
+
+Most commands operate on an experiment. The experiment is resolved in this order:
+
+1. explicit `--name <NAME>` flag (where supported);
+2. current directory — if `$PWD` is inside a registered experiment, that experiment is used.
+
+If neither resolves and the command requires an experiment, it fails with a message pointing at `etna experiment list`.
 
 ---
 
@@ -44,12 +51,14 @@ Options:
 Register an existing experiment directory in tracking metadata.
 
 ```text
-Usage: etna experiment register <NAME> [PATH]
+Usage: etna experiment register [NAME] [PATH]
 ```
+
+Both arguments are optional: if `NAME` is omitted it is inferred from the directory, and if `PATH` is omitted the current directory is used.
 
 ### `experiment run`
 
-Run one or more test files from the experiment `tests/` directory.
+Run one or more test files from the experiment's `tests/` directory.
 
 ```text
 Usage: etna experiment run [OPTIONS]
@@ -59,8 +68,10 @@ Options:
       --tests <TESTS>
   -s, --short-circuit
   -p, --parallel
-      --params <PARAMS>
+      --params <KEY=VALUE>
 ```
+
+`--params` may be repeated; values passed here override parameters defined in the test JSON files. `--parallel` requires the tested run to be effect-free — effectful runs in parallel are not guaranteed to produce deterministic results.
 
 ### `experiment show`
 
@@ -68,6 +79,24 @@ Show one experiment by name.
 
 ```text
 Usage: etna experiment show --name <NAME>
+```
+
+### `experiment create-test`
+
+Create a new test file with default values.
+
+```text
+Usage: etna experiment create-test [OPTIONS] --language <LANGUAGE> --workload <WORKLOAD>
+
+Options:
+  -n, --name <NAME>
+      --language <LANGUAGE>
+      --workload <WORKLOAD>
+      --test <TEST>                # default: <workload>-<language>
+      --trials <TRIALS>            # default: 10
+      --timeout <TIMEOUT>          # default: 60 (seconds)
+      --mode <MODE>                # default: solve  | solve | sample | test | shrink | cross
+      --mutation <MUTATION>        # repeatable
 ```
 
 ### `experiment amend-test`
@@ -86,9 +115,9 @@ Options:
 ```
 
 Behavior:
-- if task has no strategy: set it
-- if task has different strategy: duplicate task with new strategy
-- if task already has same strategy: no-op
+- if the task has no strategy: set it;
+- if the task has a different strategy: duplicate the task with the new strategy;
+- if the task already has the same strategy: no-op.
 
 ### `experiment visualize`
 
@@ -101,19 +130,34 @@ Options:
       --name <NAME>
       --figure <FIGURE>
   -t, --tests <TESTS>...
-  -g, --groupby <GROUPBY>
-  -a, --aggby <AGGBY>
-  -m, --metric <METRIC>              # discards | tests | shrinks | time
-  -b, --buckets <BUCKETS>...
+  -g, --groupby <GROUPBY>...       # default: language workload strategy mode
+  -a, --aggby <AGGBY>...           # default: language workload strategy property mutations mode
+  -m, --metric <METRIC>            # default: time     | time | memory | size | coverage
+  -b, --buckets <BUCKETS>...       # default: 0.1 1.0 10.0 60.0
       --max <MAX>
-  -v, --visualization-type <TYPE>    # bucket | bar | line
-      --hatched [<HATCHED>...]
+  -v, --visualization-type <TYPE>  # default: bucket   | bucket | bar | line
+      --hatched <IDX,IDX,...>      # 0-indexed group indices to render with hatching
 ```
 
 ### `experiment visualize-json`
 
+Render a bucket chart from a pre-computed JSON file.
+
 ```text
 Usage: etna experiment visualize-json --input <INPUT> --output <OUTPUT>
+```
+
+### `experiment report`
+
+Generate an interactive HTML report for the experiment.
+
+```text
+Usage: etna experiment report [OPTIONS]
+
+Options:
+  -n, --name <NAME>
+  -o, --output <OUTPUT>       # default: <experiment_path>/report.html
+      --publish               # publish as a public GitHub Gist via `gh` and print a gisthost.github.io URL
 ```
 
 ### `experiment list`
@@ -139,8 +183,7 @@ Options:
   -e, --experiment <EXPERIMENT>
 ```
 
-If `docs/workloads/<workload>.json` exists, ETNA auto-generates a test file:
-- `tests/<workload>-<language>.json` (lowercased)
+If `docs/workloads/<workload>.json` exists, ETNA auto-generates a test file at `tests/<workload>-<language>.json` (lowercased).
 
 ### `workload remove`
 
@@ -158,39 +201,9 @@ Usage: etna workload list [OPTIONS]
 
 Options:
   -e, --experiment <EXPERIMENT>
-  -l, --language <LANGUAGE>
-  -k, --kind <KIND>   # available | experiment
+  -l, --language <LANGUAGE>   # default: all
+  -k, --kind <KIND>           # default: experiment | available | experiment
 ```
-
----
-
-## Store Commands
-
-```bash
-etna store --help
-```
-
-### `store write`
-
-```text
-Usage: etna store write [OPTIONS] <EXPERIMENT_ID> <METRIC>
-```
-
-### `store query`
-
-```text
-Usage: etna store query [OPTIONS] <FILTER>
-```
-
-### `store remove`
-
-```text
-Usage: etna store remove [OPTIONS] <FILTER>
-```
-
-All store subcommands use an experiment-local store. Use either:
-- `-e, --experiment <EXPERIMENT>`
-- run the command inside the experiment directory
 
 ---
 
@@ -204,14 +217,14 @@ etna mutation --help
 
 ```text
 Usage: etna mutation list [OPTIONS]
-  -p, --path <PATH>
+  -p, --path <PATH>   # default: .
 ```
 
 ### `mutation set`
 
 ```text
 Usage: etna mutation set [OPTIONS] <VARIANT>
-  -p, --path <PATH>
+  -p, --path <PATH>   # default: .
   -g, --glob <GLOB>
 ```
 
@@ -219,7 +232,7 @@ Usage: etna mutation set [OPTIONS] <VARIANT>
 
 ```text
 Usage: etna mutation reset [OPTIONS]
-  -p, --path <PATH>
+  -p, --path <PATH>   # default: .
 ```
 
 ---
@@ -254,11 +267,23 @@ Usage: etna analyze bucket [OPTIONS]
   -n, --name <NAME>
 ```
 
-### `bash`
+### `bash` (Unix only)
 
 ```text
 Usage: etna bash [OPTIONS]
   -p, --path <PATH>
+```
+
+### `completions`
+
+```text
+Usage: etna completions <SHELL>
+```
+
+`<SHELL>` is one of the shells supported by `clap_complete` (`bash`, `zsh`, `fish`, `powershell`, `elvish`). Write the output to the shell's completions directory, e.g.:
+
+```bash
+etna completions zsh > ~/.zfunc/_etna
 ```
 
 ---
@@ -280,7 +305,11 @@ etna <command> --help
   test harness to isolate runs; handy for experimenting without disturbing
   your real setup.
 - `ETNA_OFFLINE=1` — skip `git pull` inside `.etna_cache` during
-  `workload add` and `bash`. Let's you run the CLI against a manually-primed
+  `workload add` and `bash`. Lets you run the CLI against a manually-primed
   cache without network access.
 - `ETNA_REMOTE` — override the repo URL cloned during `etna setup` (defaults
   to the upstream `etna-cli` repo).
+- `RUST_LOG` — standard `tracing` filter. When set, stdout logs are colored
+  with the module/level/file/line decorations; when unset, the CLI emits
+  plain INFO messages to stdout and only decorates WARN/ERROR. Logs are
+  always mirrored to `etna.log` in the current directory.
