@@ -309,7 +309,7 @@ etna <command> --help
   cache without network access.
 - `ETNA_REMOTE` — override the repo URL cloned during `etna setup` (defaults
   to the upstream `etna-cli` repo).
-- `RUST_LOG` — standard `tracing` filter. When set, stdout logs are colored
+- `ETNA_LOG` — standard `tracing` filter. When set, stdout logs are colored
   with the module/level/file/line decorations; when unset, the CLI emits
   plain INFO messages to stdout and only decorates WARN/ERROR. Logs are
   always mirrored to `etna.log` in the current directory.

@@ -30,9 +30,9 @@ use tracing_subscriber::{
 /// (e.g., store in a global or a field) so file logs get flushed.
 pub fn init_tracing() -> anyhow::Result<WorkerGuard> {
     // Base filter:
-    // - If RUST_LOG exists, use it.
+    // - If ETNA_LOG exists, use it.
     // - Else default to `info` and clamp some noisy modules.
-    let mut base_filter = if env::var_os("RUST_LOG").is_some() {
+    let mut base_filter = if env::var_os("ETNA_LOG").is_some() {
         EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"))
     } else {
         // You can add more directives here if you like.
@@ -57,9 +57,9 @@ pub fn init_tracing() -> anyhow::Result<WorkerGuard> {
         ;
 
     // -------- Stdout layer(s) --------
-    let stdout_is_colored_mode = env::var_os("RUST_LOG").is_some();
+    let stdout_is_colored_mode = env::var_os("ETNA_LOG").is_some();
 
-    // Case 1: RUST_LOG is set → one colored stdout layer, normal formatting
+    // Case 1: ETNA_LOG is set → one colored stdout layer, normal formatting
     let stdout_layer_colored = fmt::layer()
         .with_writer(std::io::stdout)
         .with_ansi(true)
@@ -69,7 +69,7 @@ pub fn init_tracing() -> anyhow::Result<WorkerGuard> {
         .with_line_number(true)
         .without_time();
 
-    // Case 2: RUST_LOG is NOT set → two stdout layers:
+    // Case 2: ETNA_LOG is NOT set → two stdout layers:
     //  (a) INFO-only, plain message (println-like, no ANSI)
     let info_only_filter = filter::filter_fn(|meta| meta.level() == &Level::INFO);
     let stdout_info_plain = fmt::layer()
