@@ -1,8 +1,0 @@
-resolver: lts-20.5
-compiler: ghc-9.2.5
-allow-newer: true
-system-ghc: true
-
-packages:
-    - .
-    - ../common/etna-lib

@@ -1,5 +1,0 @@
-(library
- (name RARE)
- (libraries qcheck crowbar util core)
- (preprocess
-  (pps ppx_jane)))

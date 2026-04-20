@@ -1,8 +1,0 @@
-(library
- (name util)
- (public_name util)
- (modules runner io parse core_plus)
- (private_modules parse)
- (libraries unix qcheck crowbar core)
- (preprocess
-  (pps ppx_jane)))

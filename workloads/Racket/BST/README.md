@@ -1,3 +1,0 @@
-BST
-===
-README text here.

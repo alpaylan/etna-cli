@@ -1,3 +1,0 @@
-STLC
-===
-README text here.

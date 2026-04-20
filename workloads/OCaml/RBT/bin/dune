@@ -1,4 +1,0 @@
-(executables
- (public_names rbt rbt-sampler)
- (names main main_sampler)
- (libraries rbt cmdliner unix qcheck threads))

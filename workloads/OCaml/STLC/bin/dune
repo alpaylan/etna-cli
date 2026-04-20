@@ -1,4 +1,0 @@
-(executables
- (public_names stlc stlc-sampler)
- (names main main_sampler)
- (libraries stlc cmdliner unix qcheck threads))
