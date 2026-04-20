@@ -50,7 +50,7 @@
       { "name": "arroy",       "url": "https://github.com/alpaylan/arroy-etna" },
       { "name": "roaring-rs",  "url": "https://github.com/alpaylan/roaring-rs-etna" },
       { "name": "im-rs",       "url": "https://github.com/alpaylan/im-rs-etna" },
-      { "name": "bstr",        "url": "https://github.com/alpaylan/bstr-etna", "status": "wip" },
+      { "name": "bstr",        "url": "https://github.com/alpaylan/bstr-etna" },
       { "name": "petgraph",    "url": "https://github.com/alpaylan/petgraph-etna", "status": "wip" }
     ]
   },
