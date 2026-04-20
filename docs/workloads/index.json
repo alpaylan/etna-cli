@@ -1,0 +1,50 @@
+{
+  "description": "Canonical URLs for Etna workload and shared-library repos. Add via `etna workload add <url>`.",
+  "workloads": {
+    "Haskell": [
+      { "name": "BST",      "url": "https://github.com/alpaylan/etna-haskell-bst" },
+      { "name": "RBT",      "url": "https://github.com/alpaylan/etna-haskell-rbt" },
+      { "name": "STLC",     "url": "https://github.com/alpaylan/etna-haskell-stlc" },
+      { "name": "FSUB",     "url": "https://github.com/alpaylan/etna-haskell-fsub" },
+      { "name": "LuParser", "url": "https://github.com/alpaylan/etna-haskell-luparser" }
+    ],
+    "OCaml": [
+      { "name": "BST",  "url": "https://github.com/alpaylan/etna-ocaml-bst" },
+      { "name": "RBT",  "url": "https://github.com/alpaylan/etna-ocaml-rbt" },
+      { "name": "STLC", "url": "https://github.com/alpaylan/etna-ocaml-stlc" },
+      { "name": "RARE", "url": "https://github.com/alpaylan/etna-ocaml-rare" }
+    ],
+    "Python": [
+      { "name": "bst", "url": "https://github.com/alpaylan/etna-python-bst" }
+    ],
+    "Racket": [
+      { "name": "BST",     "url": "https://github.com/alpaylan/etna-racket-bst" },
+      { "name": "RBT",     "url": "https://github.com/alpaylan/etna-racket-rbt" },
+      { "name": "STLC",    "url": "https://github.com/alpaylan/etna-racket-stlc" },
+      { "name": "SYSTEMF", "url": "https://github.com/alpaylan/etna-racket-systemf" }
+    ],
+    "Rocq": [
+      { "name": "BST",             "url": "https://github.com/alpaylan/etna-rocq-bst" },
+      { "name": "RBT",             "url": "https://github.com/alpaylan/etna-rocq-rbt" },
+      { "name": "STLC",            "url": "https://github.com/alpaylan/etna-rocq-stlc" },
+      { "name": "IFC",             "url": "https://github.com/alpaylan/etna-rocq-ifc" },
+      { "name": "BSTProplang",     "url": "https://github.com/alpaylan/etna-rocq-bst-proplang" },
+      { "name": "RBTProplang",     "url": "https://github.com/alpaylan/etna-rocq-rbt-proplang" },
+      { "name": "STLCProplang",    "url": "https://github.com/alpaylan/etna-rocq-stlc-proplang" },
+      { "name": "IFCProplang",     "url": "https://github.com/alpaylan/etna-rocq-ifc-proplang" },
+      { "name": "SortingProplang", "url": "https://github.com/alpaylan/etna-rocq-sorting-proplang" }
+    ],
+    "Rust": [
+      { "name": "bst",    "url": "https://github.com/alpaylan/etna-rust-bst" },
+      { "name": "rbt",    "url": "https://github.com/alpaylan/etna-rust-rbt" },
+      { "name": "stlc",   "url": "https://github.com/alpaylan/etna-rust-stlc" },
+      { "name": "sudoku", "url": "https://github.com/alpaylan/etna-rust-sudoku", "status": "stub" }
+    ]
+  },
+  "shared_libs": [
+    { "name": "etna-haskell-lib", "url": "https://github.com/alpaylan/etna-haskell-lib", "consumed_by": "Haskell workloads", "submodule_path": "./etna-lib" },
+    { "name": "etna-ocaml-util",  "url": "https://github.com/alpaylan/etna-ocaml-util",  "consumed_by": "OCaml workloads (RBT, STLC, RARE)", "submodule_path": "./util" },
+    { "name": "etna-rocq-lib",    "url": "https://github.com/alpaylan/etna-rocq-lib",    "consumed_by": "Rocq *Proplang workloads", "submodule_path": "./Lib" },
+    { "name": "etna-rs-utils",    "url": "https://github.com/alpaylan/etna-rs-utils",    "consumed_by": "Rust workloads", "submodule_path": null }
+  ]
+}
