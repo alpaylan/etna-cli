@@ -39,7 +39,23 @@
       { "name": "rbt",    "url": "https://github.com/alpaylan/etna-rust-rbt" },
       { "name": "stlc",   "url": "https://github.com/alpaylan/etna-rust-stlc" },
       { "name": "sudoku", "url": "https://github.com/alpaylan/etna-rust-sudoku", "status": "stub" }
+    ],
+    "RustCrates": [
+      { "name": "time",        "url": "https://github.com/alpaylan/time-etna" },
+      { "name": "rust-csv",    "url": "https://github.com/alpaylan/rust-csv-etna" },
+      { "name": "regex",       "url": "https://github.com/alpaylan/regex-etna" },
+      { "name": "num-bigint",  "url": "https://github.com/alpaylan/num-bigint-etna" },
+      { "name": "nom",         "url": "https://github.com/alpaylan/nom-rs-etna" },
+      { "name": "buf-list",    "url": "https://github.com/alpaylan/buf-list-etna" },
+      { "name": "arroy",       "url": "https://github.com/alpaylan/arroy-etna" },
+      { "name": "roaring-rs",  "url": "https://github.com/alpaylan/roaring-rs-etna" },
+      { "name": "im-rs",       "url": "https://github.com/alpaylan/im-rs-etna" },
+      { "name": "bstr",        "url": "https://github.com/alpaylan/bstr-etna", "status": "wip" },
+      { "name": "petgraph",    "url": "https://github.com/alpaylan/petgraph-etna", "status": "wip" }
     ]
+  },
+  "notes": {
+    "RustCrates": "Forks of real Rust crates with Etna mutation variants declared in `etna.toml` as `[[variant]]` tables. This is a different schema from the standard `name`/`language` manifest used by the other workloads and is not consumed by the current CLI's `WorkloadManifest` parser. `wip` entries do not yet have `etna.toml`/`steps.json`."
   },
   "shared_libs": [
     { "name": "etna-haskell-lib", "url": "https://github.com/alpaylan/etna-haskell-lib", "consumed_by": "Haskell workloads", "submodule_path": "./etna-lib" },
