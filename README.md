@@ -14,22 +14,18 @@ curl --proto '=https' --tlsv1.2 -LsSf https://github.com/alpaylan/etna-cli/relea
 
 ## Coverage
 
-We are currently working on expanding the coverage of ETNA with more workloads and testing tools. Below is a list of the currently supported workloads and tools:
+We are currently working on expanding the coverage of ETNA with more workloads and testing tools. Each workload lives in its own repository and is added to an experiment via `etna workload add <url>`:
 
-| Language | Testing Tools                              | Workloads                            |
-| :------- | :----------------------------------------- | :----------------------------------- |
-| Haskell  | QuickCheck, LeanCheck, SmallCheck          | BST, RBT, STLC, System F<:, LuParser |
-| Rocq     | QuickChick                                 | BST, RBT, STLC, IFC                  |
-| Racket   | RackCheck                                  | BST, RBT, STLC, System F             |
-| Rust     | QuickCheck(fork)                           | BST, RBT, STLC                       |
-| OCaml    | QCheck, Base_quickcheck(WIP), Crowbar(WIP) | BST, RBT, STLC                       |
+| Language | Testing Tools                              | Workloads                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| :------- | :----------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Haskell  | QuickCheck, LeanCheck, SmallCheck          | [BST](https://github.com/alpaylan/etna-haskell-bst), [RBT](https://github.com/alpaylan/etna-haskell-rbt), [STLC](https://github.com/alpaylan/etna-haskell-stlc), [System F<:](https://github.com/alpaylan/etna-haskell-fsub), [LuParser](https://github.com/alpaylan/etna-haskell-luparser)                                                                                                                                                                                                                                                                       |
+| Rocq     | QuickChick, PropLang                       | [BST](https://github.com/alpaylan/etna-rocq-bst), [RBT](https://github.com/alpaylan/etna-rocq-rbt), [STLC](https://github.com/alpaylan/etna-rocq-stlc), [IFC](https://github.com/alpaylan/etna-rocq-ifc), [BSTProplang](https://github.com/alpaylan/etna-rocq-bst-proplang), [RBTProplang](https://github.com/alpaylan/etna-rocq-rbt-proplang), [STLCProplang](https://github.com/alpaylan/etna-rocq-stlc-proplang), [IFCProplang](https://github.com/alpaylan/etna-rocq-ifc-proplang), [SortingProplang](https://github.com/alpaylan/etna-rocq-sorting-proplang) |
+| Racket   | RackCheck                                  | [BST](https://github.com/alpaylan/etna-racket-bst), [RBT](https://github.com/alpaylan/etna-racket-rbt), [STLC](https://github.com/alpaylan/etna-racket-stlc), [System F](https://github.com/alpaylan/etna-racket-systemf)                                                                                                                                                                                                                                                                                                                                         |
+| Rust     | QuickCheck(fork)                           | [BST](https://github.com/alpaylan/etna-rust-bst), [RBT](https://github.com/alpaylan/etna-rust-rbt), [STLC](https://github.com/alpaylan/etna-rust-stlc), [Sudoku (stub)](https://github.com/alpaylan/etna-rust-sudoku)                                                                                                                                                                                                                                                                                                                                             |
+| OCaml    | QCheck, Base_quickcheck(WIP), Crowbar(WIP) | [BST](https://github.com/alpaylan/etna-ocaml-bst), [RBT](https://github.com/alpaylan/etna-ocaml-rbt), [STLC](https://github.com/alpaylan/etna-ocaml-stlc), [RARE](https://github.com/alpaylan/etna-ocaml-rare)                                                                                                                                                                                                                                                                                                                                                    |
+| Python   | Hypothesis                                 | [BST](https://github.com/alpaylan/etna-python-bst)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 
-## Roadmap
-
-- [ ] Python - Hypothesis (September 1-7th)
-- [ ] Rust - Bolero (September 8-14th)
-- [ ] Rust - Proptest (September 15-21)
-- [ ] Rust - LibAFL (September 22-28)
+Shared support libraries (consumed as git submodules by their dependents): [etna-haskell-lib](https://github.com/alpaylan/etna-haskell-lib), [etna-ocaml-util](https://github.com/alpaylan/etna-ocaml-util), [etna-rocq-lib](https://github.com/alpaylan/etna-rocq-lib), [etna-rs-utils](https://github.com/alpaylan/etna-rs-utils).
 
 ## Development
 
