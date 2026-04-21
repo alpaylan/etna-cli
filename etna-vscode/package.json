@@ -2,7 +2,7 @@
   "name": "etna-vscode",
   "displayName": "Etna",
   "description": "VSCode extension for Etna experiment management, mutation testing, and metrics visualization",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "etna",
   "engines": {
     "vscode": "^1.85.0"
