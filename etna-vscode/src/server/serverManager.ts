@@ -93,7 +93,9 @@ async function resolveBinary(context: vscode.ExtensionContext): Promise<string> 
 async function startServer(url: URL, context: vscode.ExtensionContext): Promise<void> {
   const binary = await resolveBinary(context);
   const port = url.port || (url.protocol === 'https:' ? '443' : '3000');
-  const host = url.hostname;
+  // etna-server's --host parses as an IP literal (no DNS). Node's URL
+  // lowercases localhost, but the server can't resolve it — map to 127.0.0.1.
+  const host = url.hostname === 'localhost' ? '127.0.0.1' : url.hostname;
 
   const channel = getOutputChannel();
   channel.appendLine(`[${new Date().toISOString()}] spawning: ${binary} --host ${host} --port ${port}`);
