@@ -1,0 +1,65 @@
+name = "tinyvec_like"
+description = "Test fixture mirroring the tinyvec injection shape: two marauders-based bugs with full source provenance."
+language = "rust"
+crate = "tinyvec"
+base_commit = "0123456789abcdef0123456789abcdef01234567"
+
+[[tasks]]
+mutations = ["debug_alternate_empty_a711c72_1"]
+
+[tasks.source]
+repo = "https://github.com/Lokathor/tinyvec"
+commits = ["a711c72eef6d555ebc7bbbe78bf5039e72f790ac"]
+commit_subjects = ["fix Debug alternate mode for empty containers"]
+prs = [147]
+summary = "Debug impl was emitting a stray comma/newline for empty ArrayVec."
+
+[tasks.injection]
+kind = "marauders"
+files = ["src/arrayvec.rs"]
+locations = [{ file = "src/arrayvec.rs", line = 1839, symbol = "impl<A: Array> Debug for ArrayVec<A>" }]
+
+[tasks.bug]
+short_name = "debug_alternate_empty"
+invariant = "ArrayVec's Debug output must match the underlying slice's Debug output in both plain and alternate modes."
+how_triggered = "The mutation reinstates the pre-fix manual impl that unconditionally emits a leading newline and trailing comma."
+
+[[tasks.tasks]]
+property = "ArrayvecDebugMatchesSlice"
+witnesses = [
+  { test_fn = "witness_arrayvec_debug_matches_slice_case_empty", note = "exposes the stray comma on empty input" },
+  { test_fn = "witness_arrayvec_debug_matches_slice_case_three_elements" },
+]
+
+[[tasks]]
+mutations = ["swap_remove_last_71ad62a_1"]
+
+[tasks.source]
+repo = "https://github.com/Lokathor/tinyvec"
+commits = ["71ad62a90f2ff95dae4e43d646a55b0329b1eedc"]
+commit_subjects = ["Fix ArrayishVec::swap_remove for last element"]
+prs = [132]
+issues = [131]
+summary = "swap_remove panicked when called on the last element because pop shrank the vec before the index-write."
+
+[tasks.injection]
+kind = "marauders"
+files = ["src/arrayvec.rs"]
+locations = [{ file = "src/arrayvec.rs", line = 1168, symbol = "ArrayVec::swap_remove" }]
+
+[tasks.bug]
+short_name = "swap_remove_last"
+invariant = "swap_remove(len - 1) must return the tail element without panicking, matching Vec::swap_remove."
+how_triggered = "The pre-fix body pops first, then indexes self[index]; when index == len - 1 the index is now out of range."
+
+[[tasks.tasks]]
+property = "SwapRemoveLastReturnsTail"
+witnesses = [
+  { test_fn = "witness_swap_remove_last_returns_tail_case_single" },
+  { test_fn = "witness_swap_remove_last_returns_tail_case_four_elements", note = "hits the tail-index boundary on a populated vec" },
+]
+
+[[dropped]]
+commit = "cafebabe1234567890abcdef1234567890abcdef"
+reason = "Whitespace-only lint fix; no invariant bug to inject."
+subject = "style: rustfmt pass"

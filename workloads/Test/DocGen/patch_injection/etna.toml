@@ -1,0 +1,29 @@
+name = "patch_injection"
+language = "rust"
+base_commit = "1111111111111111111111111111111111111111"
+
+[[tasks]]
+mutations = ["ac_patched_0000000_1"]
+
+[tasks.source]
+repo = "https://github.com/BurntSushi/aho-corasick"
+commits = ["ac00000000000000000000000000000000000000"]
+commit_subjects = ["fix edge case in automaton construction"]
+origin = "internal fuzzer finding, no upstream PR"
+summary = "Discovered by in-house fuzzer; reported to upstream but not yet accepted."
+
+[tasks.injection]
+kind = "patch"
+files = ["src/lib.rs"]
+patch = "patches/ac_patched.patch"
+
+[tasks.bug]
+short_name = "ac_patched"
+invariant = "Matches found by the automaton must be a subset of byte-level search matches."
+how_triggered = "Patch relaxes a bounds check that upstream fix later tightened."
+
+[[tasks.tasks]]
+property = "Matches"
+witnesses = [
+  { input = "b\"aaab\"" },
+]

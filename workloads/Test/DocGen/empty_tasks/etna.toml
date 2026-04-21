@@ -1,0 +1,3 @@
+name = "empty_tasks"
+description = "Generator-style workload with no injected bugs (like BST/RBT/STLC). `etna workload doc` must no-op."
+language = "rust"

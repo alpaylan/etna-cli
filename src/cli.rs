@@ -199,7 +199,7 @@ pub(crate) fn run() -> anyhow::Result<()> {
             }
             ExperimentCommand::Visualize { name: _, figure, tests, groupby, aggby, metric, buckets, max, visualization_type, hatched } => commands::experiment::visualize::invoke(mgr, experiment.unwrap(), figure, tests, groupby, aggby, metric, buckets, max, visualization_type, hatched),
             ExperimentCommand::VisualizeJson { input, output } => commands::experiment::visualize::draw_bucket_chart_from_json(&input, &output),
-            ExperimentCommand::Report { name: _, output, publish } => commands::experiment::report::invoke(mgr, experiment.unwrap(), output, publish),
+            ExperimentCommand::Report { name: _, output, publish, strip_counterexamples } => commands::experiment::report::invoke(mgr, experiment.unwrap(), output, publish, strip_counterexamples),
             ExperimentCommand::List {} => commands::experiment::list::invoke(mgr),
         },
         Command::Workload(wl) => match wl {
@@ -218,6 +218,7 @@ pub(crate) fn run() -> anyhow::Result<()> {
                 kind,
             } => commands::workload::list_workloads::invoke(mgr, experiment.unwrap(), kind),
             WorkloadCommand::Update {} => commands::workload::update_index::invoke(),
+            WorkloadCommand::Doc { dir } => commands::workload::doc::invoke(dir),
         },
         Command::Config(cl) => match cl {
             ConfigCommand::Show => commands::config::show::invoke(),
@@ -431,6 +432,11 @@ enum ExperimentCommand {
         /// and print a viewable URL via gisthost.github.io
         #[clap(long, default_value = "false")]
         publish: bool,
+        /// Drop per-trial `counterexample` fields from the embedded metrics
+        /// payload. Useful when counterexamples blow the Gist size limit,
+        /// at the cost of losing them from the interactive report.
+        #[clap(long, default_value = "false")]
+        strip_counterexamples: bool,
     },
     #[clap(name = "list", about = "List all experiments")]
     List {},
@@ -480,6 +486,16 @@ enum WorkloadCommand {
         about = "Refresh the cached workload catalog from its canonical URL"
     )]
     Update {},
+    #[clap(
+        name = "doc",
+        about = "Regenerate BUGS.md and TASKS.md from a workload's etna.toml"
+    )]
+    Doc {
+        /// Path to the workload directory (contains `etna.toml`).
+        /// Defaults to the current directory.
+        #[clap(default_value = ".")]
+        dir: PathBuf,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -632,6 +648,7 @@ impl Command {
                 WorkloadCommand::RemoveWorkload { experiment, .. } => experiment.as_ref(),
                 WorkloadCommand::ListWorkloads { experiment, .. } => experiment.as_ref(),
                 WorkloadCommand::Update {} => None,
+                WorkloadCommand::Doc { .. } => None,
             },
             _ => None,
         }
@@ -657,6 +674,7 @@ impl Command {
                 WorkloadCommand::RemoveWorkload { .. } => true,
                 WorkloadCommand::ListWorkloads { .. } => true,
                 WorkloadCommand::Update {} => false,
+                WorkloadCommand::Doc { .. } => false,
             },
             _ => false,
         }
