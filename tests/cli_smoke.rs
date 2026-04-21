@@ -41,8 +41,10 @@ fn experiment_pipeline_produces_store() {
     let exp_path = fx.scratch().join("toy");
     TestEtna::plant_marauder_config(&exp_path);
 
+    let t1 = fx.plant_workload_repo("T1");
     etna()
-        .args(["workload", "add", "--experiment", "toy", "Test", "T1"])
+        .args(["workload", "add", "--experiment", "toy"])
+        .arg(t1.to_str().unwrap())
         .assert()
         .success();
 
@@ -52,8 +54,6 @@ fn experiment_pipeline_produces_store() {
             "create-test",
             "--name",
             "toy",
-            "--language",
-            "Test",
             "--workload",
             "T1",
             "--test",
@@ -98,8 +98,10 @@ fn visualize_emits_figure_files() {
     let exp_path = fx.scratch().join("viz");
     TestEtna::plant_marauder_config(&exp_path);
 
+    let t1 = fx.plant_workload_repo("T1");
     etna()
-        .args(["workload", "add", "--experiment", "viz", "Test", "T1"])
+        .args(["workload", "add", "--experiment", "viz"])
+        .arg(t1.to_str().unwrap())
         .assert()
         .success();
     etna()
@@ -108,8 +110,6 @@ fn visualize_emits_figure_files() {
             "create-test",
             "--name",
             "viz",
-            "--language",
-            "Test",
             "--workload",
             "T1",
             "--test",

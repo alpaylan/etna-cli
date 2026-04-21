@@ -45,6 +45,12 @@ impl TestEtna {
 
         std::env::set_var("ETNA_HOME", home.path());
         std::env::set_var("ETNA_OFFLINE", "1");
+        // Git 2.38+ refuses `file://` and absolute-path clones by default
+        // (CVE-2022-39253). Re-enable for this test process — we're only
+        // ever submodule-cloning fixtures we just created.
+        std::env::set_var("GIT_CONFIG_COUNT", "1");
+        std::env::set_var("GIT_CONFIG_KEY_0", "protocol.file.allow");
+        std::env::set_var("GIT_CONFIG_VALUE_0", "always");
         std::env::set_var("GIT_AUTHOR_NAME", "etna-test");
         std::env::set_var("GIT_AUTHOR_EMAIL", "etna-test@example.com");
         std::env::set_var("GIT_COMMITTER_NAME", "etna-test");
@@ -84,6 +90,27 @@ impl TestEtna {
 
     pub fn scratch(&self) -> &Path {
         self.scratch.path()
+    }
+
+    /// Stage a Test-fixture workload as its own standalone git repo and return
+    /// its absolute path — suitable to pass to `wl_svc::add_workload` as the
+    /// URL. `git submodule add` clones from filesystem paths without hitting
+    /// the network, so this keeps the tests offline.
+    pub fn plant_workload_repo(&self, name: &str) -> PathBuf {
+        let src = repo_root().join("workloads/Test").join(name);
+        assert!(
+            src.exists(),
+            "fixture workload not found at {}",
+            src.display()
+        );
+        let dst = self.home.path().join("workload-repos").join(name);
+        copy_tree(&src, &dst);
+        // Embed the shared harness inside the planted repo so steps.json's
+        // `${workload_path}/harness/...` resolves once the workload is
+        // submodule-cloned into an experiment.
+        copy_tree(&repo_root().join("workloads/Test/harness"), &dst.join("harness"));
+        git_init_commit(&dst);
+        dst
     }
 
     /// Write a minimal `marauder.toml` registering the custom "Test" language

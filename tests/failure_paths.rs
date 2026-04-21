@@ -46,16 +46,17 @@ fn exp_name(path: &Path) -> String {
 #[test]
 #[serial]
 fn missing_workload_returns_error() {
-    let (_fx, exp) = fresh("exp_missing");
+    let (fx, exp) = fresh("exp_missing");
     let mgr = Manager::load().expect("Manager::load");
     let meta = mgr.get_experiment(&exp_name(&exp)).unwrap();
 
-    let err = wl_svc::add_workload(&mgr, &meta, "Test", "DoesNotExist")
+    let bogus = fx.etna_home().join("does-not-exist");
+    let err = wl_svc::add_workload(&mgr, &meta, bogus.to_str().unwrap(), None)
         .err()
         .expect("add_workload should fail for a missing workload");
-    let msg = format!("{err:?}");
+    let msg = format!("{err:?}").to_lowercase();
     assert!(
-        msg.contains("DoesNotExist") || msg.contains("not found") || msg.contains("No such"),
+        msg.contains("does-not-exist") || msg.contains("clone") || msg.contains("not found"),
         "unexpected error: {msg}"
     );
 }
@@ -63,12 +64,14 @@ fn missing_workload_returns_error() {
 #[test]
 #[serial]
 fn invalid_mode_json_fails_run() {
-    let (_fx, exp) = fresh("exp_badmode");
+    let (fx, exp) = fresh("exp_badmode");
 
     {
         let mgr = Manager::load().expect("Manager::load");
         let meta = mgr.get_experiment(&exp_name(&exp)).unwrap();
-        wl_svc::add_workload(&mgr, &meta, "Test", "T1").expect("add_workload");
+        let t1 = fx.plant_workload_repo("T1");
+        wl_svc::add_workload(&mgr, &meta, t1.to_str().unwrap(), None)
+            .expect("add_workload");
     }
 
     // Hand-write a tests/*.json with a bogus Mode discriminant — the file
@@ -114,19 +117,20 @@ fn invalid_mode_json_fails_run() {
 #[test]
 #[serial]
 fn cancel_flag_aborts_run() {
-    let (_fx, exp) = fresh("exp_cancel");
+    let (fx, exp) = fresh("exp_cancel");
 
     {
         let mgr = Manager::load().expect("Manager::load");
         let meta = mgr.get_experiment(&exp_name(&exp)).unwrap();
-        wl_svc::add_workload(&mgr, &meta, "Test", "T1").expect("add_workload");
+        let t1 = fx.plant_workload_repo("T1");
+        wl_svc::add_workload(&mgr, &meta, t1.to_str().unwrap(), None)
+            .expect("add_workload");
         // A Solve test with a larger trial count so we can set the flag
         // mid-flight — the driver checks the flag between trials.
         exp_svc::create_test(
             &mgr,
             &meta,
             "t",
-            "Test",
             "T1",
             /*trials*/ 50,
             /*timeout*/ 10.0,

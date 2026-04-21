@@ -37,21 +37,15 @@ fn create_experiment(fx: &TestEtna, name: &str) -> std::path::PathBuf {
     info.path
 }
 
-fn add_workload(exp_path: &Path, language: &str, workload: &str) {
+fn add_workload(exp_path: &Path, url: &Path) {
     let mgr = Manager::load().expect("Manager::load");
     let meta = mgr
         .get_experiment(&exp_name(exp_path))
         .expect("experiment registered");
-    wl_svc::add_workload(&mgr, &meta, language, workload).expect("add_workload");
+    wl_svc::add_workload(&mgr, &meta, url.to_str().unwrap(), None).expect("add_workload");
 }
 
-fn create_test(
-    exp_path: &Path,
-    test_name: &str,
-    language: &str,
-    workload: &str,
-    mode: Mode,
-) {
+fn create_test(exp_path: &Path, test_name: &str, workload: &str, mode: Mode) {
     let mgr = Manager::load().expect("Manager::load");
     let meta = mgr
         .get_experiment(&exp_name(exp_path))
@@ -60,7 +54,6 @@ fn create_test(
         &mgr,
         &meta,
         test_name,
-        language,
         workload,
         /*trials*/ 1,
         /*timeout*/ 10.0,
@@ -124,8 +117,9 @@ fn assert_metric_mode(metrics: &[serde_json::Value], mode: &str) {
 fn solve_mode_runs_and_logs_metric() {
     let fx = TestEtna::new();
     let exp = create_experiment(&fx, "exp_solve");
-    add_workload(&exp, "Test", "T1");
-    create_test(&exp, "t", "Test", "T1", Mode::Solve);
+    let t1 = fx.plant_workload_repo("T1");
+    add_workload(&exp, &t1);
+    create_test(&exp, "t", "T1", Mode::Solve);
 
     run("exp_solve", "t").expect("run_experiment");
 
@@ -148,11 +142,11 @@ fn solve_mode_runs_and_logs_metric() {
 fn sample_mode_runs() {
     let fx = TestEtna::new();
     let exp = create_experiment(&fx, "exp_sample");
-    add_workload(&exp, "Test", "T1");
+    let t1 = fx.plant_workload_repo("T1");
+    add_workload(&exp, &t1);
     create_test(
         &exp,
         "t",
-        "Test",
         "T1",
         Mode::Sample {
             collect: SampleCollect::InputsAndStats,
@@ -171,11 +165,11 @@ fn sample_mode_runs() {
 fn test_mode_counts_supplied_inputs() {
     let fx = TestEtna::new();
     let exp = create_experiment(&fx, "exp_test");
-    add_workload(&exp, "Test", "T1");
+    let t1 = fx.plant_workload_repo("T1");
+    add_workload(&exp, &t1);
     create_test(
         &exp,
         "t",
-        "Test",
         "T1",
         Mode::Test {
             inputs: InputSource::Inline(vec!["a".into(), "b".into(), "c".into()]),
@@ -204,11 +198,11 @@ fn test_mode_counts_supplied_inputs() {
 fn shrink_mode_reports_shrink_count() {
     let fx = TestEtna::new();
     let exp = create_experiment(&fx, "exp_shrink");
-    add_workload(&exp, "Test", "T1");
+    let t1 = fx.plant_workload_repo("T1");
+    add_workload(&exp, &t1);
     create_test(
         &exp,
         "t",
-        "Test",
         "T1",
         Mode::Shrink {
             counterexample: CexSource::Inline("xxxx".into()),
@@ -235,25 +229,20 @@ fn shrink_mode_reports_shrink_count() {
 fn cross_mode_producer_feeds_consumer() {
     let fx = TestEtna::new();
     let exp = create_experiment(&fx, "exp_cross");
-    add_workload(&exp, "Test", "T1");
-    add_workload(&exp, "Test", "T2");
+    let t1 = fx.plant_workload_repo("T1");
+    let t2 = fx.plant_workload_repo("T2");
+    add_workload(&exp, &t1);
+    add_workload(&exp, &t2);
     // Producer T1 emits inputs; consumer T2 runs `test --invert`, so a
     // property like "crash" (which T1 would find a bug for) does NOT fail
     // on T2 — the two workloads genuinely disagree, exercising Cross.
     create_test(
         &exp,
         "t",
-        "Test",
         "T2",
         Mode::Cross {
-            producer: Target {
-                language: "Test".into(),
-                workload: "T1".into(),
-            },
-            consumer: Target {
-                language: "Test".into(),
-                workload: "T2".into(),
-            },
+            producer: Target { workload: "T1".into() },
+            consumer: Target { workload: "T2".into() },
         },
     );
 
@@ -263,15 +252,11 @@ fn cross_mode_producer_feeds_consumer() {
     assert!(
         metrics.iter().any(|m| {
             m.get("data")
-                .and_then(|d| d.get("producer_language"))
+                .and_then(|d| d.get("producer_workload"))
                 .and_then(|v| v.as_str())
-                == Some("Test")
-                && m.get("data")
-                    .and_then(|d| d.get("producer_workload"))
-                    .and_then(|v| v.as_str())
-                    == Some("T1")
+                == Some("T1")
         }),
-        "cross metric missing producer fields: {:#?}",
+        "cross metric missing producer_workload: {:#?}",
         metrics
     );
 }
