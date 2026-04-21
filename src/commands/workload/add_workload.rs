@@ -1,21 +1,16 @@
 use crate::{experiment::ExperimentMetadata, manager::Manager, service::workload::add_workload};
 
-/// Add a workload to an experiment using the service layer.
-///
-/// The CLI handles argument parsing and delegates to the service layer
-/// for the actual workload addition logic.
+/// Add a remote workload (git URL) to an experiment via the service layer.
 pub fn invoke(
     mgr: Manager,
     experiment: ExperimentMetadata,
-    language: String,
-    workload: String,
+    url: String,
+    reference: Option<String>,
 ) -> anyhow::Result<()> {
-    // Call service layer
-    let result = add_workload(&mgr, &experiment, &language, &workload)?;
+    let result = add_workload(&mgr, &experiment, &url, reference.as_deref())?;
 
     tracing::info!(
-        "Workload '{}/{}' added to experiment '{}'",
-        result.language,
+        "Workload '{}' added to experiment '{}'",
         result.name,
         experiment.name
     );

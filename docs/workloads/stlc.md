@@ -1,6 +1,6 @@
 # STLC
 
-The STLC workload tests a simply-typed lambda calculus in de Bruijn form with booleans. Source is `workloads/Rocq/STLC/Src/Impl.v`; spec is `workloads/Rocq/STLC/Src/Spec.v`; reference counterexamples live in `docs/workloads/stlc.json`.
+The STLC workload tests a simply-typed lambda calculus in de Bruijn form with booleans. Source is each workload's `Impl` module; spec is the corresponding `Spec` module; reference counterexamples live in each `stlc-*` repo's `etna.toml` under `[[tasks]]`.
 
 Syntax:
 
@@ -172,7 +172,7 @@ Definition substTop (s: Expr) (e: Expr) : Expr := subst 0 (shift 1 s) e.
 
 ## Reading the counterexamples
 
-Counterexamples in `docs/workloads/stlc.json` are S-expressions matching the `ShowExpr` encoder:
+Counterexamples in each `stlc-*` repo's `etna.toml` are S-expressions matching the `ShowExpr` encoder:
 
 - `Var n` / `Bool #t` / `Bool #f`
 - `Abs T e` with `T` = `TBool` or `(TFun T1 T2)`

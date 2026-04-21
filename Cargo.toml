@@ -33,11 +33,11 @@ process_control = { version = "5.0.0", default-features = false }
 regex = "1.11.2"
 serde = { version = "1.0.210", default-features = false }
 serde_derive = { version = "1.0.210", default-features = false }
-serde_json = { version = "1.0.128", default-features = false }
+serde_json = { version = "1.0.128", default-features = false, features = ["preserve_order"] }
 tabled = { version = "0.16.0", default-features = false, features = ["std"] }
 tempfile = "3.20.0"
 tokio = { version = "1", features = ["full"] }
-toml = { version = "0.8.19", default-features = false }
+toml = { version = "0.8.19", default-features = false, features = ["parse"] }
 tower-http = { version = "0.6", features = ["cors", "trace"] }
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "ansi"] }

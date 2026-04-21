@@ -168,15 +168,17 @@ pub(crate) fn run() -> anyhow::Result<()> {
             ExperimentCommand::Register { name, path } => {
                 commands::experiment::register::invoke(mgr, name, path)
             }
+            ExperimentCommand::Clone { url, path, reference } => {
+                commands::experiment::clone::invoke(mgr, url, path, reference)
+            }
             ExperimentCommand::Run { name: _, tests, short_circuit, parallel, params } => commands::experiment::run::invoke(mgr, experiment.unwrap(), tests, short_circuit, parallel, params),
             ExperimentCommand::Show {
                         name,
                     } => commands::experiment::show::invoke(mgr, name),
-            ExperimentCommand::CreateTest { name: _, language, workload, test, trials, timeout, mode, mutation } => {
+            ExperimentCommand::CreateTest { name: _, workload, test, trials, timeout, mode, mutation } => {
                 commands::experiment::create_test::invoke(
                     mgr,
                     experiment.unwrap(),
-                    language,
                     workload,
                     test,
                     trials,
@@ -203,20 +205,18 @@ pub(crate) fn run() -> anyhow::Result<()> {
         Command::Workload(wl) => match wl {
             WorkloadCommand::AddWorkload {
                 experiment: _,
-                language,
-                workload,
-            } => commands::workload::add_workload::invoke(mgr, experiment.unwrap(), language, workload),
+                url,
+                reference,
+            } => commands::workload::add_workload::invoke(mgr, experiment.unwrap(), url, reference),
             WorkloadCommand::RemoveWorkload {
                 experiment: _,
-                language,
                 workload,
-            } => commands::workload::remove_workload::invoke(experiment.unwrap(), language, workload)
+            } => commands::workload::remove_workload::invoke(experiment.unwrap(), workload)
                 .context("Try running `etna workload remove` in an experiment directory, or explicitly specify the experiment name with `etna workload remove --experiment <NAME>`"),
             WorkloadCommand::ListWorkloads {
                 experiment: _,
-                language,
                 kind,
-            } => commands::workload::list_workloads::invoke(experiment.unwrap(), language, kind),
+            } => commands::workload::list_workloads::invoke(mgr, experiment.unwrap(), kind),
         },
         Command::Config(cl) => match cl {
             ConfigCommand::Show => commands::config::show::invoke(),
@@ -267,6 +267,22 @@ enum ExperimentCommand {
         /// An optional root path, if not provided, the current directory is used
         path: Option<PathBuf>,
     },
+    #[clap(
+        name = "clone",
+        about = "Clone a remote experiment repo and register it"
+    )]
+    Clone {
+        /// Git URL of the experiment repo (root must contain `etna.toml`)
+        url: String,
+        /// Parent directory to clone into. Defaults to the current directory.
+        /// The experiment lands at `<path>/<name>/` where `<name>` comes from
+        /// the repo's `etna.toml`.
+        #[clap(long)]
+        path: Option<PathBuf>,
+        /// Optional branch/tag/commit to check out (passed as `--branch`).
+        #[clap(long = "ref")]
+        reference: Option<String>,
+    },
     #[clap(name = "run", about = "Run an experiment")]
     Run {
         /// Name of the experiment to run
@@ -304,14 +320,11 @@ enum ExperimentCommand {
         /// [default: current directory]
         #[clap(short, long)]
         name: Option<String>,
-        /// Language of the workload
-        #[clap(long)]
-        language: String,
-        /// Workload name
+        /// Workload name (must already be added to the experiment)
         #[clap(long)]
         workload: String,
         /// Test file name (without .json extension)
-        /// [default: <workload>-<language>]
+        /// [default: <workload>]
         #[clap(long)]
         test: Option<String>,
         /// Number of trials
@@ -361,10 +374,10 @@ enum ExperimentCommand {
         #[clap(short, long, value_parser, num_args = 1.., value_delimiter = ' ')]
         tests: Vec<String>,
         /// Group by fields
-        #[clap(short, long, default_values_t = vec!["language".to_string(), "workload".to_string(), "strategy".to_string(), "mode".to_string()])]
+        #[clap(short, long, default_values_t = vec!["workload".to_string(), "strategy".to_string(), "mode".to_string()])]
         groupby: Vec<String>,
         /// Aggregate by fields
-        #[clap(short, long, default_values_t = vec!["language".to_string(), "workload".to_string(), "strategy".to_string(), "property".to_string(), "mutations".to_string(), "mode".to_string()])]
+        #[clap(short, long, default_values_t = vec!["workload".to_string(), "strategy".to_string(), "property".to_string(), "mutations".to_string(), "mode".to_string()])]
         aggby: Vec<String>,
         /// Metric to visualize
         /// [default: "time"]
@@ -423,20 +436,20 @@ enum ExperimentCommand {
 }
 #[derive(Debug, Subcommand)]
 enum WorkloadCommand {
-    #[clap(name = "add", about = "Add a workload to the experiment")]
+    #[clap(
+        name = "add",
+        about = "Add a remote workload (git URL) to the experiment"
+    )]
     AddWorkload {
         /// Name of the experiment
         /// [default: current directory]
         #[clap(short, long, default_value = None)]
         experiment: Option<String>,
-        /// Language of the workload
-        /// [default: coq]
-        /// [possible_values(coq, haskell, racket, ocaml)]
-        language: String,
-        /// Workload to be added
-        /// [default: bst]
-        /// [possible_values(bst, rbt, stlc, systemf, ifc)]
-        workload: String,
+        /// Git URL of the workload repo (must contain etna.toml + steps.json)
+        url: String,
+        /// Optional branch/tag/ref to clone
+        #[clap(long = "ref")]
+        reference: Option<String>,
     },
     #[clap(name = "remove", about = "Remove a workload from the experiment")]
     RemoveWorkload {
@@ -444,11 +457,7 @@ enum WorkloadCommand {
         /// [default: current directory]
         #[clap(short, long, default_value = None)]
         experiment: Option<String>,
-        /// Language of the workload
-        /// [possible_values(coq, haskell, racket)]
-        language: String,
-        /// Workload to be removed
-        /// [possible_values(bst, rbt, stlc, ifc)]
+        /// Name of the workload to remove (as declared in its etna.toml)
         workload: String,
     },
     #[clap(name = "list", about = "List all workloads")]
@@ -457,10 +466,6 @@ enum WorkloadCommand {
         /// [default: current directory]
         #[clap(short, long, default_value = None)]
         experiment: Option<String>,
-        /// Language of the workload
-        /// [possible_values(coq, haskell, racket)]
-        #[clap(short, long, default_value = "all")]
-        language: String,
         /// Available or experiment workloads
         /// [possible_values(available, experiment)]
         #[clap(short, long, default_value = "experiment")]
@@ -603,6 +608,7 @@ impl Command {
             Command::Experiment(exp) => match exp {
                 ExperimentCommand::New { .. } => None,
                 ExperimentCommand::Register { .. } => None,
+                ExperimentCommand::Clone { .. } => None,
                 ExperimentCommand::Run { name, .. } => name.as_ref(),
                 ExperimentCommand::Show { name, .. } => Some(name),
                 ExperimentCommand::CreateTest { name, .. } => name.as_ref(),
@@ -626,6 +632,7 @@ impl Command {
             Command::Experiment(exp) => match exp {
                 ExperimentCommand::New { .. } => false,
                 ExperimentCommand::Register { .. } => false,
+                ExperimentCommand::Clone { .. } => false,
                 ExperimentCommand::Run { .. } => true,
                 ExperimentCommand::Show { .. } => true,
                 ExperimentCommand::CreateTest { .. } => true,

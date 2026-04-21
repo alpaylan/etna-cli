@@ -58,7 +58,7 @@ pub fn invoke(
         let mut updated_tasks = test.tasks.clone();
 
         for (i, task) in test.tasks.iter().enumerate() {
-            let property = task.get("property");
+            let property = task.get("property").and_then(|v| v.as_str());
             let property_match = property_filters.is_empty()
                 || property.is_some_and(|p| property_filters.contains(p));
             if !property_match {
@@ -66,18 +66,24 @@ pub fn invoke(
             }
             selected_tasks += 1;
 
-            match task.get("strategy") {
+            match task.get("strategy").and_then(|v| v.as_str()) {
                 None => {
-                    updated_tasks[i].insert("strategy".to_string(), strategy.clone());
+                    updated_tasks[i].insert(
+                        "strategy".to_string(),
+                        serde_json::Value::String(strategy.clone()),
+                    );
                     inserted_missing_strategy += 1;
                     changed = true;
                 }
-                Some(existing) if existing == &strategy => {
+                Some(existing) if existing == strategy => {
                     unchanged += 1;
                 }
                 Some(_) => {
                     let mut duplicated = task.clone();
-                    duplicated.insert("strategy".to_string(), strategy.clone());
+                    duplicated.insert(
+                        "strategy".to_string(),
+                        serde_json::Value::String(strategy.clone()),
+                    );
 
                     if !updated_tasks.contains(&duplicated) {
                         updated_tasks.push(duplicated);

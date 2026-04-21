@@ -297,32 +297,6 @@ impl Steps {
         }
     }
 
-    pub(crate) fn with_default(json: &serde_json::Value, default: &Steps) -> Self {
-        let setup = Self::get_steps(json, "setup_steps").unwrap_or(default.setup.clone());
-        let build = Self::get_steps(json, "build_steps").unwrap_or(default.build.clone());
-
-        // Workload capabilities override language-level capabilities per-key.
-        let mut capabilities = default.capabilities.clone();
-        if let Some(workload_caps) = Self::get_capabilities(json) {
-            for (k, v) in workload_caps {
-                capabilities.insert(k, v);
-            }
-        }
-
-        let tags = if let Some(tags) = json.get("tags") {
-            serde_json::from_value(tags.clone()).unwrap_or_else(|_| default.tags.clone())
-        } else {
-            default.tags.clone()
-        };
-
-        Self {
-            setup,
-            build,
-            capabilities,
-            tags,
-        }
-    }
-
     pub(crate) fn from_value(json: &serde_json::Value) -> anyhow::Result<Self> {
         let setup = Self::get_steps(json, "setup_steps").context("could not find setup_steps")?;
         let build = Self::get_steps(json, "build_steps").context("could not find build_steps")?;
@@ -355,12 +329,14 @@ impl Steps {
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Hash, Eq)]
 pub struct WorkloadMetadata {
     pub name: String,
-    pub language: String,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 pub struct Workload {
     pub name: String,
+    /// Source language. Read from the workload's own `etna.toml`. Used for
+    /// marauders file-extension resolution and for tagging metric rows; not
+    /// part of the workload's public identity.
     pub language: String,
     pub dir: PathBuf,
     pub properties: Vec<Property>,
@@ -369,8 +345,51 @@ pub struct Workload {
     pub(crate) steps: Steps,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct Language {
+/// Deserialized form of `etna.toml` at a workload repo root.
+#[derive(Debug, Deserialize, Clone, PartialEq)]
+pub struct WorkloadManifest {
     pub name: String,
-    pub(crate) steps: Steps,
+    #[serde(default)]
+    pub description: Option<String>,
+    /// Required: used by marauders to pick the file-extension glob.
+    pub language: String,
+    #[serde(default)]
+    pub tasks: Vec<ManifestTaskGroup>,
+}
+
+/// One `[[tasks]]` block: a set of mutations paired with the properties to
+/// evaluate against them. Converted at workload-add time into a `Test` entry
+/// in the experiment's `tests/<name>.json`.
+#[derive(Debug, Deserialize, Clone, PartialEq)]
+pub struct ManifestTaskGroup {
+    pub mutations: Vec<String>,
+    pub tasks: Vec<ManifestTask>,
+}
+
+#[derive(Debug, Deserialize, Clone, PartialEq)]
+pub struct ManifestTask {
+    pub property: String,
+    #[serde(default)]
+    pub witnesses: Vec<Witness>,
+}
+
+/// A known failing input. `Input` is a literal serialised value in the
+/// workload's language; `TestFn` names a test function in the workload's
+/// test suite (used by the `-etna` crate forks).
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
+#[serde(untagged)]
+pub enum Witness {
+    Input { input: String },
+    TestFn { test_fn: String },
+}
+
+impl WorkloadManifest {
+    /// Read `<dir>/etna.toml` and parse it.
+    pub fn read(dir: &std::path::Path) -> anyhow::Result<Self> {
+        let manifest_path = dir.join("etna.toml");
+        let body = std::fs::read_to_string(&manifest_path)
+            .with_context(|| format!("Failed to read '{}'", manifest_path.display()))?;
+        toml::from_str::<Self>(&body)
+            .with_context(|| format!("Failed to parse '{}'", manifest_path.display()))
+    }
 }

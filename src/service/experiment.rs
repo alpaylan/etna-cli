@@ -10,7 +10,7 @@ use anyhow::bail;
 use crate::{
     driver::run_experiment as driver_run_experiment,
     error_context::Context,
-    experiment::{ExperimentMetadata, Test},
+    experiment::{ExperimentManifest, ExperimentMetadata, Test},
     git_driver,
     manager::Manager,
     store::Store,
@@ -162,6 +162,7 @@ pub fn create_experiment(
     })?;
 
     // Create the template files
+    let manifest_body = format!("name = \"{name}\"\n");
     let template_files = [
         (
             "Collect.py",
@@ -180,6 +181,7 @@ pub fn create_experiment(
             include_str!("../../templates/experimentation/Visualize.pyt"),
         ),
         (".gitignore", include_str!("../../templates/.gitignoret")),
+        ("etna.toml", manifest_body.as_str()),
     ];
 
     tracing::trace!("creating template files in the experiment directory");
@@ -273,6 +275,94 @@ pub fn create_experiment(
         path: metadata.path.clone(),
         store: metadata.store,
         workloads: vec![],
+        last_activity: last_commit_time(&metadata.path),
+    })
+}
+
+/// Clone a remote experiment repo into `<parent>/<name>/` and register it.
+///
+/// Uses `git clone --recurse-submodules` so workloads (which the author
+/// published as submodules) come down in one shot. The repo's `etna.toml` is
+/// the source of truth for the experiment's name.
+pub fn clone_experiment(
+    mgr: &mut Manager,
+    url: &str,
+    reference: Option<&str>,
+    parent: Option<PathBuf>,
+) -> ServiceResult<ExperimentInfo> {
+    let parent_dir = match parent {
+        Some(p) => {
+            fs::create_dir_all(&p).with_context(|| {
+                format!("Failed to create parent directory '{}'", p.display())
+            })?;
+            p
+        }
+        None => std::env::current_dir().context("Failed to get current directory")?,
+    };
+
+    let tmp_suffix = format!(".tmp-clone-{}", uuid::Uuid::new_v4());
+    let tmp_dir = parent_dir.join(&tmp_suffix);
+
+    let clone_result: anyhow::Result<ExperimentMetadata> = (|| {
+        git_driver::git_clone_recursive(url, reference, &tmp_dir)?;
+
+        let manifest = ExperimentManifest::read(&tmp_dir)?;
+        if manifest.name.is_empty() {
+            bail!("etna.toml at '{}' must declare a non-empty `name`", url);
+        }
+
+        if mgr.get_experiment(&manifest.name).is_some() {
+            bail!("Experiment '{}' is already registered", manifest.name);
+        }
+
+        let dest = parent_dir.join(&manifest.name);
+        if dest.exists() {
+            bail!(
+                "Destination '{}' already exists — refusing to overwrite",
+                dest.display()
+            );
+        }
+
+        let store_path = tmp_dir.join("store.jsonl");
+        if !store_path.exists() {
+            fs::write(&store_path, "").with_context(|| {
+                format!(
+                    "Failed to seed empty store.jsonl at '{}'",
+                    store_path.display()
+                )
+            })?;
+        }
+
+        fs::rename(&tmp_dir, &dest).with_context(|| {
+            format!("Failed to move cloned experiment into '{}'", dest.display())
+        })?;
+
+        Ok(ExperimentMetadata {
+            name: manifest.name.clone(),
+            path: dest.clone(),
+            store: dest.join("store.jsonl"),
+        })
+    })();
+
+    if tmp_dir.exists() {
+        let _ = fs::remove_dir_all(&tmp_dir);
+    }
+    let metadata = clone_result?;
+
+    mgr.add_experiment(metadata.name.clone(), metadata.clone())?;
+
+    tracing::info!(
+        "Experiment '{}' cloned from '{}' to '{}'",
+        metadata.name,
+        url,
+        metadata.path.display()
+    );
+
+    Ok(ExperimentInfo {
+        name: metadata.name.clone(),
+        path: metadata.path.clone(),
+        store: metadata.store.clone(),
+        workloads: metadata.workloads(),
         last_activity: last_commit_time(&metadata.path),
     })
 }
@@ -521,12 +611,12 @@ pub fn save_test(
     Ok(())
 }
 
-/// Create a new test file, populating tasks from docs when available
+/// Create a new test file, populating tasks from the workload's `etna.toml`
+/// `[[tasks]]` blocks when available.
 pub fn create_test(
-    mgr: &crate::manager::Manager,
+    _mgr: &crate::manager::Manager,
     experiment: &crate::experiment::ExperimentMetadata,
     test_name: &str,
-    language: &str,
     workload: &str,
     trials: usize,
     timeout: f64,
@@ -543,29 +633,30 @@ pub fn create_test(
         bail!("Test '{}' already exists at '{}'", test_name, test_path.display());
     }
 
-    anyhow::ensure!(
-        experiment.has_workload(language, workload),
-        "Workload '{}/{}' not found in experiment '{}'. Add it first with `etna workload add {} {}`.",
-        language,
-        workload,
-        experiment.name,
-        language,
-        workload,
-    );
+    let workload_path = experiment.workload_path(workload).ok_or_else(|| {
+        anyhow::anyhow!(
+            "Workload '{}' not found in experiment '{}'. Add it first with `etna workload add <url>`.",
+            workload,
+            experiment.name,
+        )
+    })?;
 
-    let repo_dir = mgr.config.repo_dir();
-    let mut tests =
-        super::workload::tests_from_docs(&repo_dir, language, workload, trials, timeout, mode.clone())?;
+    let manifest = crate::workload::WorkloadManifest::read(&workload_path)?;
+    let mut tests = super::workload::tests_from_manifest(&manifest);
+
+    // Override the manifest-seeded defaults with caller-supplied trial/timeout/mode.
+    for test in tests.iter_mut() {
+        test.trials = trials;
+        test.timeout = timeout;
+        test.mode = mode.clone();
+    }
 
     if !mutations.is_empty() {
-        // Filter to entries whose mutations match any of the requested ones
         tests.retain(|t| t.mutations.iter().any(|m| mutations.contains(m)));
     }
 
     if tests.is_empty() {
-        // No docs or no matching entries — create a single empty test
         tests.push(crate::experiment::Test {
-            language: language.to_string(),
             workload: workload.to_string(),
             trials,
             timeout,

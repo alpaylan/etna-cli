@@ -30,6 +30,26 @@ pub struct CreateExperimentResponse {
     pub experiment: ExperimentInfo,
 }
 
+/// Request body for cloning a remote experiment repo.
+#[derive(Debug, Deserialize)]
+pub struct CloneExperimentRequest {
+    /// Git URL of the experiment repo. Its root must contain `etna.toml`.
+    pub url: String,
+    /// Optional branch/tag/ref to check out.
+    #[serde(default, rename = "ref")]
+    pub reference: Option<String>,
+    /// Parent directory to clone into. Defaults to the managed
+    /// `<etna-dir>/experiments/` on the server side.
+    #[serde(default)]
+    pub path: Option<String>,
+}
+
+/// Response for cloning an experiment
+#[derive(Debug, Serialize)]
+pub struct CloneExperimentResponse {
+    pub experiment: ExperimentInfo,
+}
+
 /// Request body for running an experiment
 #[derive(Debug, Deserialize)]
 pub struct RunExperimentRequest {
@@ -112,6 +132,28 @@ pub async fn create_experiment(
     let experiment = exp_service::create_experiment(&mut manager, options)?;
 
     Ok(Json(CreateExperimentResponse { experiment }))
+}
+
+/// Clone a remote experiment repo and register it.
+pub async fn clone_experiment(
+    State(state): State<AppState>,
+    Json(request): Json<CloneExperimentRequest>,
+) -> Result<Json<CloneExperimentResponse>, ServerError> {
+    let mut manager = state.manager.write().unwrap();
+
+    let parent = match request.path {
+        Some(p) => PathBuf::from(p),
+        None => manager.config.etna_dir.join("experiments"),
+    };
+
+    let experiment = exp_service::clone_experiment(
+        &mut manager,
+        &request.url,
+        request.reference.as_deref(),
+        Some(parent),
+    )?;
+
+    Ok(Json(CloneExperimentResponse { experiment }))
 }
 
 /// Delete an experiment
@@ -305,7 +347,6 @@ pub async fn visualize(
 /// Test definition for API serialization
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TestDefinition {
-    pub language: String,
     pub workload: String,
     pub trials: usize,
     pub timeout: f64,
@@ -314,13 +355,12 @@ pub struct TestDefinition {
     #[serde(default)]
     pub params: Option<serde_json::Map<String, serde_json::Value>>,
     #[serde(default)]
-    pub tasks: Vec<std::collections::HashMap<String, String>>,
+    pub tasks: Vec<std::collections::HashMap<String, serde_json::Value>>,
 }
 
 impl From<crate::experiment::Test> for TestDefinition {
     fn from(test: crate::experiment::Test) -> Self {
         Self {
-            language: test.language,
             workload: test.workload,
             trials: test.trials,
             timeout: test.timeout,
@@ -335,7 +375,6 @@ impl From<crate::experiment::Test> for TestDefinition {
 impl From<TestDefinition> for crate::experiment::Test {
     fn from(def: TestDefinition) -> Self {
         Self {
-            language: def.language,
             workload: def.workload,
             trials: def.trials,
             timeout: def.timeout,

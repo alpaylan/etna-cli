@@ -230,3 +230,179 @@ pub(crate) fn pull_via_cli(repo_path: &Path) -> anyhow::Result<()> {
     tracing::debug!("Pulled path from remote");
     Ok(())
 }
+
+/// `ETNA_OFFLINE=1` means "don't hit the network." Local paths (`file://`,
+/// absolute filesystem paths) don't, so they're allowed through.
+fn is_local_git_url(url: &str) -> bool {
+    url.starts_with("file://") || Path::new(url).is_absolute()
+}
+
+/// Shell out to `git clone [--branch <ref>] <url> <dest>`. Refuses when
+/// `ETNA_OFFLINE` is set and the URL is not a local path.
+pub(crate) fn git_clone(url: &str, reference: Option<&str>, dest: &Path) -> anyhow::Result<()> {
+    if std::env::var_os("ETNA_OFFLINE").is_some() && !is_local_git_url(url) {
+        anyhow::bail!("Cannot clone '{}' while ETNA_OFFLINE is set", url);
+    }
+    let mut cmd = std::process::Command::new("git");
+    cmd.arg("clone");
+    if let Some(r) = reference {
+        cmd.arg("--branch").arg(r);
+    }
+    cmd.arg(url).arg(dest);
+    let status = cmd
+        .status()
+        .with_context(|| format!("Failed to invoke 'git clone {}'", url))?;
+    if !status.success() {
+        anyhow::bail!("git clone {} failed with status {}", url, status);
+    }
+    Ok(())
+}
+
+/// Like `git_clone` but passes `--recurse-submodules` so submodule'd workloads
+/// come down with the experiment.
+pub(crate) fn git_clone_recursive(
+    url: &str,
+    reference: Option<&str>,
+    dest: &Path,
+) -> anyhow::Result<()> {
+    if std::env::var_os("ETNA_OFFLINE").is_some() && !is_local_git_url(url) {
+        anyhow::bail!("Cannot clone '{}' while ETNA_OFFLINE is set", url);
+    }
+    let mut cmd = std::process::Command::new("git");
+    cmd.arg("clone").arg("--recurse-submodules");
+    if let Some(r) = reference {
+        cmd.arg("--branch").arg(r);
+    }
+    cmd.arg(url).arg(dest);
+    let status = cmd
+        .status()
+        .with_context(|| format!("Failed to invoke 'git clone --recurse-submodules {}'", url))?;
+    if !status.success() {
+        anyhow::bail!(
+            "git clone --recurse-submodules {} failed with status {}",
+            url,
+            status
+        );
+    }
+    Ok(())
+}
+
+/// Run `git -C <repo> submodule add [--branch <ref>] <url> <path_in_repo>`,
+/// then initialise any nested submodules inside the freshly added repo so a
+/// workload that itself depends on submodules (e.g. a shared support lib)
+/// arrives with its full source tree populated. The caller is responsible for
+/// committing the resulting staged changes (`.gitmodules` + the new submodule
+/// gitlink).
+pub(crate) fn git_submodule_add(
+    repo: &Path,
+    url: &str,
+    reference: Option<&str>,
+    path_in_repo: &Path,
+) -> anyhow::Result<()> {
+    if std::env::var_os("ETNA_OFFLINE").is_some() && !is_local_git_url(url) {
+        anyhow::bail!(
+            "Cannot add submodule '{}' while ETNA_OFFLINE is set",
+            url
+        );
+    }
+    let mut cmd = std::process::Command::new("git");
+    cmd.arg("-C").arg(repo).arg("submodule").arg("add");
+    if let Some(r) = reference {
+        cmd.arg("--branch").arg(r);
+    }
+    cmd.arg(url).arg(path_in_repo);
+    let status = cmd.status().with_context(|| {
+        format!(
+            "Failed to invoke 'git -C {} submodule add {}'",
+            repo.display(),
+            url
+        )
+    })?;
+    if !status.success() {
+        anyhow::bail!(
+            "git submodule add {} in {} failed with status {}",
+            url,
+            repo.display(),
+            status
+        );
+    }
+
+    // `git submodule add` does not recurse, so nested submodules end up as
+    // empty gitlinks. Fix that up in a second pass scoped to the new path.
+    let added_path = repo.join(path_in_repo);
+    let nested_status = std::process::Command::new("git")
+        .arg("-C")
+        .arg(&added_path)
+        .arg("submodule")
+        .arg("update")
+        .arg("--init")
+        .arg("--recursive")
+        .status()
+        .with_context(|| {
+            format!(
+                "Failed to invoke 'git -C {} submodule update --init --recursive'",
+                added_path.display()
+            )
+        })?;
+    if !nested_status.success() {
+        anyhow::bail!(
+            "git submodule update --init --recursive in {} failed with status {}",
+            added_path.display(),
+            nested_status
+        );
+    }
+    Ok(())
+}
+
+/// Run `git -C <repo> submodule deinit -f <path>` followed by `git -C <repo>
+/// rm -f <path>` so a removed workload leaves the outer repo in a clean,
+/// committable state (both `.gitmodules` update and the gitlink removal are
+/// staged).
+pub(crate) fn git_submodule_remove(repo: &Path, path_in_repo: &Path) -> anyhow::Result<()> {
+    let deinit = std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .arg("submodule")
+        .arg("deinit")
+        .arg("-f")
+        .arg(path_in_repo)
+        .status()
+        .with_context(|| {
+            format!(
+                "Failed to invoke 'git -C {} submodule deinit {}'",
+                repo.display(),
+                path_in_repo.display()
+            )
+        })?;
+    if !deinit.success() {
+        anyhow::bail!(
+            "git submodule deinit {} in {} failed with status {}",
+            path_in_repo.display(),
+            repo.display(),
+            deinit
+        );
+    }
+    let rm = std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .arg("rm")
+        .arg("-f")
+        .arg(path_in_repo)
+        .status()
+        .with_context(|| {
+            format!(
+                "Failed to invoke 'git -C {} rm {}'",
+                repo.display(),
+                path_in_repo.display()
+            )
+        })?;
+    if !rm.success() {
+        anyhow::bail!(
+            "git rm {} in {} failed with status {}",
+            path_in_repo.display(),
+            repo.display(),
+            rm
+        );
+    }
+    Ok(())
+}

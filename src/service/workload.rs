@@ -1,212 +1,73 @@
-use std::{collections::HashMap, fs, path::Path, process::Command};
+use std::{collections::HashMap, fs, path::Path};
 
 use anyhow::bail;
-use serde::Deserialize;
 
 use crate::{
     error_context::Context,
     experiment::{ExperimentMetadata, Test},
     git_driver,
     manager::Manager,
-    workload::WorkloadMetadata,
+    workload::{WorkloadManifest, WorkloadMetadata},
 };
 
 use super::types::ServiceResult;
 
-/// Copy language files to the experiment workloads directory
-fn copy_language(repo_dir: &Path, workloads_dir: &Path, language: &str) -> anyhow::Result<()> {
-    git_driver::pull_via_cli(repo_dir)?;
+/// Default trial count seeded into `tests/<name>.json` when adding a workload.
+/// Users can edit the file afterwards; this is just the first-run baseline.
+const DEFAULT_TRIALS: usize = 10;
+/// Default per-trial timeout (seconds).
+const DEFAULT_TIMEOUT: f64 = 60.0;
 
-    for entry in repo_dir.join("workloads").join(language).read_dir()? {
-        let entry = entry?;
-        let path = entry.path();
-        if path.is_file() {
-            fs::copy(
-                &path,
-                workloads_dir.join(language).join(
-                    path.file_name()
-                        .context("Failed to get file name")?
-                        .to_str()
-                        .context("Failed to convert file name to string")?,
-                ),
-            )
-            .with_context(|| {
-                format!(
-                    "Failed to copy file '{}' to '{}'",
-                    path.display(),
-                    workloads_dir
-                        .join(language)
-                        .join(
-                            path.file_name()
-                                .context("Failed to get file name")
-                                .unwrap_or_default()
-                                .to_str()
-                                .unwrap_or_default()
-                        )
-                        .display()
-                )
-            })?;
-        } else if path.is_dir() && !path.join("steps.json").exists() {
-            // copy the entire directory
-            Command::new("cp")
-                .arg("-r")
-                .arg(&path)
-                .arg(
-                    workloads_dir.join(language).join(
-                        path.file_name()
-                            .context("Failed to get directory name")?
-                            .to_str()
-                            .context("Failed to convert directory name to string")?,
-                    ),
-                )
-                .status()
-                .with_context(|| {
-                    format!(
-                        "Failed to copy directory '{}' to '{}'",
-                        path.display(),
-                        workloads_dir
-                            .join(language)
-                            .join(
-                                path.file_name()
-                                    .context("Failed to get directory name")
-                                    .unwrap_or_default()
-                                    .to_str()
-                                    .unwrap_or_default()
-                            )
-                            .display()
-                    )
-                })?;
-        }
-    }
-
-    Ok(())
-}
-
-#[derive(Debug, Deserialize)]
-struct DocTask {
-    property: String,
-    #[serde(default)]
-    counterexample: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct DocWorkloadEntry {
-    mutations: Vec<String>,
-    tasks: Vec<DocTask>,
-}
-
-/// Build `Test` entries from `docs/workloads/<workload>.json`.
-/// Returns an empty vec when the docs file doesn't exist.
-pub(crate) fn tests_from_docs(
-    repo_dir: &Path,
-    language: &str,
-    workload: &str,
-    trials: usize,
-    timeout: f64,
-    mode: crate::experiment::Mode,
-) -> anyhow::Result<Vec<Test>> {
-    let workload_slug = workload.to_lowercase();
-    let docs_path = repo_dir
-        .join("docs")
-        .join("workloads")
-        .join(format!("{workload_slug}.json"));
-
-    if !docs_path.exists() {
-        tracing::debug!(
-            "No docs workload definition found at '{}', skipping test generation",
-            docs_path.display()
-        );
-        return Ok(vec![]);
-    }
-
-    let docs_content = fs::read_to_string(&docs_path).with_context(|| {
-        format!(
-            "Failed to read workload docs file at '{}'",
-            docs_path.display()
-        )
-    })?;
-
-    if docs_content.trim().is_empty() {
-        tracing::debug!(
-            "Docs workload file '{}' is empty, skipping test generation",
-            docs_path.display()
-        );
-        return Ok(vec![]);
-    }
-
-    let entries: Vec<DocWorkloadEntry> =
-        serde_json::from_str(&docs_content).with_context(|| {
-            format!(
-                "Failed to parse workload docs file at '{}'",
-                docs_path.display()
-            )
-        })?;
-
-    if entries.is_empty() {
-        tracing::debug!(
-            "Docs workload file '{}' has no entries, skipping test generation",
-            docs_path.display()
-        );
-        return Ok(vec![]);
-    }
-
-    let generated = entries
-        .into_iter()
-        .map(|entry| {
-            let tasks = entry
+/// Build `Test` entries from a workload's `etna.toml` manifest. Each
+/// `[[tasks]]` block becomes one `Test` keyed by its mutation subset. Returns
+/// an empty vec when the manifest has no `[[tasks]]` blocks.
+pub(crate) fn tests_from_manifest(manifest: &WorkloadManifest) -> Vec<Test> {
+    manifest
+        .tasks
+        .iter()
+        .map(|group| Test {
+            workload: manifest.name.clone(),
+            trials: DEFAULT_TRIALS,
+            timeout: DEFAULT_TIMEOUT,
+            mutations: group.mutations.clone(),
+            mode: crate::experiment::Mode::Solve,
+            params: None,
+            tasks: group
                 .tasks
-                .into_iter()
+                .iter()
                 .map(|task| {
                     let mut map = HashMap::new();
-                    map.insert("property".to_string(), task.property);
-                    if !task.counterexample.is_empty() {
-                        map.insert("minimal_counterexample".to_string(), task.counterexample);
+                    map.insert(
+                        "property".to_string(),
+                        serde_json::Value::String(task.property.clone()),
+                    );
+                    if !task.witnesses.is_empty() {
+                        map.insert(
+                            "witnesses".to_string(),
+                            serde_json::to_value(&task.witnesses)
+                                .unwrap_or(serde_json::Value::Null),
+                        );
                     }
                     map
                 })
-                .collect();
-
-            Test {
-                language: language.to_string(),
-                workload: workload.to_string(),
-                trials,
-                timeout,
-                mutations: entry.mutations,
-                mode: mode.clone(),
-                params: None,
-                tasks,
-            }
+                .collect(),
         })
-        .collect();
-
-    Ok(generated)
+        .collect()
 }
 
-fn generate_tests_from_docs(
-    repo_dir: &Path,
+fn seed_tests_file(
     experiment: &ExperimentMetadata,
-    language: &str,
-    workload: &str,
+    manifest: &WorkloadManifest,
 ) -> anyhow::Result<()> {
-    let generated = tests_from_docs(
-        repo_dir,
-        language,
-        workload,
-        10,
-        60.0,
-        crate::experiment::Mode::Solve,
-    )?;
-
+    let generated = tests_from_manifest(manifest);
     if generated.is_empty() {
         return Ok(());
     }
 
-    let workload_slug = workload.to_lowercase();
-    let language_slug = language.to_lowercase();
     let test_path = experiment
         .path
         .join("tests")
-        .join(format!("{workload_slug}-{language_slug}"))
+        .join(&manifest.name)
         .with_extension("json");
 
     if let Some(parent) = test_path.parent() {
@@ -220,134 +81,178 @@ fn generate_tests_from_docs(
         .with_context(|| format!("Failed to write test file at '{}'", test_path.display()))?;
 
     tracing::info!(
-        "Generated test file '{}' from docs/workloads for workload '{}/{}'",
+        "Seeded '{}' from etna.toml for workload '{}'",
         test_path.display(),
-        language,
-        workload
+        manifest.name
     );
 
     Ok(())
 }
 
-/// Add a workload to an experiment
+/// Add a remote workload to an experiment as a git submodule.
+///
+/// Two-phase:
+/// 1. Shallow-clone `<url>` to a temp dir just to read `etna.toml` so we know
+///    where the workload should live (`workloads/<name>/`). The temp clone is
+///    then removed.
+/// 2. Run `git -C <experiment> submodule add [--branch <ref>] <url>
+///    workloads/<name>`. This performs the real clone, writes `.gitmodules`,
+///    and stages both the submodule gitlink and `.gitmodules` entry so the
+///    subsequent commit captures the workload at a pinned SHA — ready to be
+///    pushed as part of an experiment repo.
+///
+/// The `.git` directory inside the added workload is still the provenance
+/// record (URL / SHA / ref recoverable via `git -C <wl> …`).
 pub fn add_workload(
-    mgr: &Manager,
+    _mgr: &Manager,
     experiment: &ExperimentMetadata,
-    language: &str,
-    workload: &str,
+    url: &str,
+    reference: Option<&str>,
 ) -> ServiceResult<WorkloadMetadata> {
     tracing::debug!(
-        "adding workload '{}/{}' to {:?}",
-        language,
-        workload,
+        "adding workload from '{}' (ref: {:?}) to '{}'",
+        url,
+        reference,
         experiment.name
     );
 
-    // Check if the workload already exists
-    if experiment.has_workload(language, workload) {
-        bail!("Workload already exists: {}/{}", language, workload);
+    let workloads_dir = experiment.path.join("workloads");
+    fs::create_dir_all(&workloads_dir).with_context(|| {
+        format!(
+            "Failed to create workloads directory '{}'",
+            workloads_dir.display()
+        )
+    })?;
+
+    let tmp_suffix = format!(".tmp-discover-{}", uuid::Uuid::new_v4());
+    let tmp_dir = workloads_dir.join(&tmp_suffix);
+
+    let manifest_result: anyhow::Result<WorkloadManifest> = (|| {
+        git_driver::git_clone(url, reference, &tmp_dir)?;
+
+        let manifest = WorkloadManifest::read(&tmp_dir)?;
+        if manifest.name.is_empty() {
+            bail!("etna.toml at '{}' must declare a non-empty `name`", url);
+        }
+        if !tmp_dir.join("steps.json").exists() {
+            bail!(
+                "Workload repo '{}' is missing a `steps.json` at its root",
+                url
+            );
+        }
+        Ok(manifest)
+    })();
+
+    if tmp_dir.exists() {
+        let _ = fs::remove_dir_all(&tmp_dir);
     }
+    let manifest = manifest_result?;
 
-    // Get etna directory
-    let repo_dir = mgr.config.repo_dir();
-
-    // Get the workload path
-    let workload_path = repo_dir.join("workloads").join(language).join(workload);
-
-    // Check if the workload exists, pull from remote if not
-    if !workload_path.exists() {
-        tracing::warn!(
-            "Workload '{}' not found, pulling from remote",
-            workload_path.display()
+    if experiment.workload_path(&manifest.name).is_some() {
+        bail!(
+            "Workload '{}' is already registered in experiment '{}'",
+            manifest.name,
+            experiment.name
         );
-        git_driver::pull_via_cli(&repo_dir)?;
     }
 
-    let dest_path = experiment
-        .path
-        .join("workloads")
-        .join(language)
-        .join(workload);
+    let dest = workloads_dir.join(&manifest.name);
+    if dest.exists() {
+        bail!(
+            "Workload '{}' already exists in experiment '{}'",
+            manifest.name,
+            experiment.name
+        );
+    }
 
-    std::fs::create_dir_all(
-        dest_path
-            .parent()
-            .context("Failed to get parent directory")?,
-    )
-    .context("Failed to create parent directory")?;
+    // Phase 2: real add as a submodule, pinned to whatever ref we were given.
+    let submodule_path = Path::new("workloads").join(&manifest.name);
+    git_driver::git_submodule_add(&experiment.path, url, reference, &submodule_path)
+        .with_context(|| {
+            format!(
+                "Failed to add workload '{}' as submodule in experiment '{}'",
+                manifest.name, experiment.name
+            )
+        })?;
 
-    // Copy the language files
-    copy_language(&repo_dir, &experiment.path.join("workloads"), language)?;
+    // Seed tests from the manifest's `[[tasks]]` blocks (no-op if absent).
+    // Failure is logged but non-fatal — the workload is still registered.
+    if let Err(e) = seed_tests_file(experiment, &manifest) {
+        tracing::warn!(
+            "Failed to seed test file for '{}': {:#}",
+            manifest.name,
+            e
+        );
+    }
 
-    // Copy the workload
-    Command::new("cp")
-        .arg("-r")
-        .arg(&workload_path)
-        .arg(&dest_path)
-        .status()
-        .context(format!(
-            "Failed to copy workload at '{}' to '{}'",
-            fs::canonicalize(&workload_path)
-                .context("Failed to get canonical path")?
-                .display(),
-            dest_path.display()
-        ))?;
+    let wl_meta = WorkloadMetadata {
+        name: manifest.name,
+    };
 
-    // Generate test definitions from docs/workloads/<workload>.json when available.
-    generate_tests_from_docs(&repo_dir, experiment, language, workload)?;
-
-    // Create a commit
     git_driver::commit(
         &experiment.path,
-        format!("add workload '{}/{}'", language, workload).as_str(),
+        &format!("add workload '{}' from {}", wl_meta.name, url),
     )
-    .with_context(|| format!("Failed to commit adding '{language}/{workload}'"))?;
+    .with_context(|| format!("Failed to commit adding '{}'", wl_meta.name))?;
 
     tracing::info!(
-        "Workload '{}/{}' added to experiment '{}'",
-        language,
-        workload,
+        "Workload '{}' added to experiment '{}'",
+        wl_meta.name,
         experiment.name
     );
 
-    Ok(WorkloadMetadata {
-        name: workload.to_string(),
-        language: language.to_string(),
-    })
+    Ok(wl_meta)
 }
 
-/// Remove a workload from an experiment
+/// Remove a workload from an experiment by name.
+///
+/// Workloads are tracked as git submodules, so a clean removal has to
+/// `git submodule deinit` and `git rm` the submodule — a plain `rm -rf`
+/// would leave `.gitmodules` and the gitlink in a dirty state.
 pub fn remove_workload(
     experiment: &ExperimentMetadata,
-    language: &str,
     workload: &str,
 ) -> ServiceResult<()> {
-    // Check if the workload exists
-    if !experiment.has_workload(language, workload) {
-        bail!("Workload not found: {}/{}", language, workload);
+    let dest = experiment.workload_path(workload).ok_or_else(|| {
+        anyhow::anyhow!(
+            "Workload '{}' not found in experiment '{}'",
+            workload,
+            experiment.name
+        )
+    })?;
+
+    let submodule_path = dest
+        .strip_prefix(&experiment.path)
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|_| Path::new("workloads").join(workload));
+
+    let submodule_result = git_driver::git_submodule_remove(&experiment.path, &submodule_path);
+
+    // Fall back to a plain rm if the submodule machinery balked (e.g. the
+    // workload was added before submodule support — legacy layouts). Git also
+    // leaves `<repo>/.git/modules/<path>` behind on deinit+rm; clean that too.
+    if submodule_result.is_err() && dest.exists() {
+        fs::remove_dir_all(&dest).context(format!(
+            "Failed to remove workload at '{}'",
+            dest.display()
+        ))?;
+    }
+    let modules_leftover = experiment
+        .path
+        .join(".git")
+        .join("modules")
+        .join(&submodule_path);
+    if modules_leftover.exists() {
+        let _ = fs::remove_dir_all(&modules_leftover);
     }
 
-    // Remove the workload from the experiment directory
-    let dest_path = experiment
-        .path
-        .join("workloads")
-        .join(language)
-        .join(workload);
-
-    fs::remove_dir_all(&dest_path).context(format!(
-        "Failed to remove workload at '{}'",
-        dest_path.display()
-    ))?;
-
-    // Create a commit
     git_driver::commit(
         &experiment.path,
-        format!("remove '{language}/{workload}'").as_str(),
+        &format!("remove workload '{}'", workload),
     )?;
 
     tracing::info!(
-        "Workload '{}/{}' removed from experiment '{}'",
-        language,
+        "Workload '{}' removed from experiment '{}'",
         workload,
         experiment.name
     );
@@ -355,22 +260,13 @@ pub fn remove_workload(
     Ok(())
 }
 
-/// List workloads in an experiment
-pub fn list_workloads(
-    experiment: &ExperimentMetadata,
-    language_filter: Option<&str>,
-) -> ServiceResult<Vec<WorkloadMetadata>> {
-    let mut workloads: Vec<WorkloadMetadata> = experiment
-        .workloads()
-        .into_iter()
-        .filter(|wl| {
-            language_filter.is_none()
-                || language_filter == Some("all")
-                || language_filter == Some(&wl.language)
-        })
-        .collect();
+/// List workloads in an experiment.
+pub fn list_workloads(experiment: &ExperimentMetadata) -> ServiceResult<Vec<WorkloadMetadata>> {
+    Ok(experiment.workloads())
+}
 
-    workloads.sort_by(|a, b| a.language.cmp(&b.language).then(a.name.cmp(&b.name)));
-
-    Ok(workloads)
+/// List workloads available to add. MVP: no catalog — the extension/CLI add by
+/// URL. Kept as a stub so the server route stays stable when a catalog lands.
+pub fn list_available_workloads() -> ServiceResult<Vec<WorkloadMetadata>> {
+    Ok(vec![])
 }

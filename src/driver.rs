@@ -16,7 +16,7 @@ use crate::{
     manager::Manager,
     open_pbt_format::Status,
     store::{Metric, Store},
-    workload::{Capability, Command, Language, Step, Steps, Workload},
+    workload::{Capability, Command, Step, Steps, Workload, WorkloadManifest},
 };
 
 use process_control::{ChildExt, Control};
@@ -53,6 +53,9 @@ pub(crate) struct RunConfig {
 #[derive(Debug, Clone)]
 pub(crate) struct TargetPath {
     pub(crate) target: Target,
+    /// Producer's language resolved at load time (from its `etna.toml`).
+    /// Used for metric tagging; the filter only matches on workload.
+    pub(crate) language: String,
     pub(crate) dir: PathBuf,
 }
 
@@ -62,61 +65,32 @@ pub(crate) struct ConsumerSteps {
     pub(crate) tags: HashMap<String, Vec<String>>,
 }
 
-fn load_language(experiment_path: &Path, language: &str) -> anyhow::Result<Language> {
-    let language_path = experiment_path.join("workloads").join(language);
-    let steps_path = language_path.join("steps.json");
-    tracing::debug!("Loading language config from '{}'", steps_path.display());
-    let steps: Steps = serde_json::from_str(
+pub(crate) fn load_workload(
+    experiment: &ExperimentMetadata,
+    workload: &str,
+) -> anyhow::Result<Workload> {
+    let workload_path = experiment.workload_path(workload).ok_or_else(|| {
+        anyhow::anyhow!(
+            "Workload '{}' not found under '{}/workloads'",
+            workload,
+            experiment.path.display()
+        )
+    })?;
+
+    let steps_path = workload_path.join("steps.json");
+    let steps_json: serde_json::Value = serde_json::from_str(
         &std::fs::read_to_string(&steps_path)
             .with_context(|| format!("could not read steps at '{}'", steps_path.display()))?,
     )
     .with_context(|| format!("steps file at '{}' is invalid", steps_path.display()))?;
+    let steps = Steps::from_value(&steps_json)
+        .with_context(|| format!("failed to load steps from '{}'", steps_path.display()))?;
 
-    let language = Language {
-        name: language.to_string(),
-        steps,
-    };
-
-    Ok(language)
-}
-
-pub(crate) fn load_workload(
-    experiment_path: &Path,
-    language: &str,
-    workload: &str,
-) -> anyhow::Result<Workload> {
-    let workload_path = experiment_path
-        .join("workloads")
-        .join(language)
-        .join(workload);
-
-    anyhow::ensure!(
-        workload_path.exists(),
-        "Workload directory not found at '{}'",
-        workload_path.display()
-    );
-
-    let steps_path = workload_path.join("steps.json");
-
-    let workload_steps: Option<serde_json::Value> = std::fs::read_to_string(steps_path)
-        .map(|s| serde_json::from_str(&s).unwrap())
-        .ok();
-
-    let language = load_language(experiment_path, language)?;
-
-    let steps = if let Some(workload_steps) = workload_steps {
-        Steps::with_default(&workload_steps, &language.steps)
-    } else {
-        tracing::warn!(
-            "No steps.json found for workload '{}', using language default steps",
-            workload
-        );
-        language.steps.clone()
-    };
+    let manifest = WorkloadManifest::read(&workload_path)?;
 
     Ok(Workload {
-        name: workload.to_string(),
-        language: language.name,
+        name: manifest.name,
+        language: manifest.language,
         dir: workload_path,
         properties: vec![],
         variations: vec![],
@@ -125,7 +99,13 @@ pub(crate) fn load_workload(
     })
 }
 
-#[allow(clippy::too_many_arguments)]
+/// Non-string entries (e.g. `witnesses`) are metadata, not template params.
+fn task_to_strings(task: &HashMap<String, serde_json::Value>) -> HashMap<String, String> {
+    task.iter()
+        .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
+        .collect()
+}
+
 fn metric_matches<'a>(
     m: &'a Metric,
     language: Option<&str>,
@@ -177,12 +157,7 @@ fn metric_matches<'a>(
     let mode_match =
         mode.is_none_or(|name| m.data.get("mode").and_then(|v| v.as_str()) == Some(name));
     let producer_match = producer.is_none_or(|p| {
-        m.data
-            .get("producer_language")
-            .and_then(|v| v.as_str())
-            == Some(p.language.as_str())
-            && m.data.get("producer_workload").and_then(|v| v.as_str())
-                == Some(p.workload.as_str())
+        m.data.get("producer_workload").and_then(|v| v.as_str()) == Some(p.workload.as_str())
     });
 
     if language_match
@@ -291,7 +266,7 @@ pub(crate) fn run(
     params.insert("experiment".to_string(), run_config.experiment_name.clone());
     params.insert("hash".to_string(), run_config.experiment_hash.clone());
     if let Some(prod) = &run_config.producer {
-        params.insert("producer_language".to_string(), prod.target.language.clone());
+        params.insert("producer_language".to_string(), prod.language.clone());
         params.insert("producer_workload".to_string(), prod.target.workload.clone());
         params.insert(
             "producer_workload_path".to_string(),
@@ -406,7 +381,7 @@ fn build_context(run_config: &RunConfig, trial: usize) -> Object {
     if let Some(prod) = &run_config.producer {
         ctx.insert(
             "producer_language".to_owned(),
-            Value::String(prod.target.language.clone()),
+            Value::String(prod.language.clone()),
         );
         ctx.insert(
             "producer_workload".to_owned(),
@@ -1081,21 +1056,29 @@ pub(crate) fn run_experiment(
     ) -> anyhow::Result<()> {
         // Primary target = where the property runs. For Cross this is the consumer; the
         // producer's sample capability is what we iterate each trial.
-        let (primary_lang, primary_wl, producer_target): (String, String, Option<Target>) =
-            match &test.mode {
-                Mode::Cross { producer, consumer } => (
-                    consumer.language.clone(),
-                    consumer.workload.clone(),
-                    Some(producer.clone()),
-                ),
-                _ => (test.language.clone(), test.workload.clone(), None),
-            };
+        let (primary_wl, producer_target): (String, Option<Target>) = match &test.mode {
+            Mode::Cross { producer, consumer } => {
+                (consumer.workload.clone(), Some(producer.clone()))
+            }
+            _ => (test.workload.clone(), None),
+        };
 
-        let primary_dir = experiment
-            .path
-            .join("workloads")
-            .join(&primary_lang)
-            .join(&primary_wl);
+        let workload: Workload = load_workload(experiment, &primary_wl)?;
+        let primary_lang = workload.language.clone();
+        let primary_dir = workload.dir.clone();
+
+        // For Cross, also load the producer workload so we can pick its sample capability.
+        let producer_workload: Option<Workload> = match &producer_target {
+            Some(t) => Some(load_workload(experiment, &t.workload)?),
+            None => None,
+        };
+        let producer_path: Option<TargetPath> = producer_workload
+            .as_ref()
+            .and_then(|pw| producer_target.as_ref().map(|t| TargetPath {
+                target: t.clone(),
+                language: pw.language.clone(),
+                dir: pw.dir.clone(),
+            }));
 
         // Apply marauders mutations to the primary target only.
         let lang = marauders::Language::name_to_language(&primary_lang, &custom_languages)
@@ -1106,23 +1089,6 @@ pub(crate) fn run_experiment(
         for variant in test.mutations.iter() {
             marauders::set_variant(&mut project, variant)?;
         }
-
-        let workload: Workload =
-            load_workload(&experiment.path, &primary_lang, &primary_wl)?;
-
-        // For Cross, also load the producer workload so we can pick its sample capability.
-        let producer_workload: Option<Workload> = match &producer_target {
-            Some(t) => Some(load_workload(&experiment.path, &t.language, &t.workload)?),
-            None => None,
-        };
-        let producer_path: Option<(Target, PathBuf)> = producer_target.as_ref().map(|t| {
-            let dir = experiment
-                .path
-                .join("workloads")
-                .join(&t.language)
-                .join(&t.workload);
-            (t.clone(), dir)
-        });
 
         // Pick the capability steps that will be iterated each trial, and the tags used for
         // template expansion. For Cross, iterate producer.sample and pass consumer.test as
@@ -1151,11 +1117,11 @@ pub(crate) fn run_experiment(
                 ),
                 Mode::Cross { .. } => {
                     let pw = producer_workload.as_ref().unwrap();
-                    let (_, pdir) = producer_path.as_ref().unwrap();
+                    let pp = producer_path.as_ref().unwrap();
                     (
                         pw.steps.capability(Capability::Sample)?.clone(),
                         pw.steps.tags.clone(),
-                        pdir.clone(),
+                        pp.dir.clone(),
                     )
                 }
             };
@@ -1174,10 +1140,10 @@ pub(crate) fn run_experiment(
             "workload_path".to_string(),
             primary_dir.display().to_string(),
         );
-        if let Some((_, pdir)) = &producer_path {
+        if let Some(pp) = &producer_path {
             base_params.insert(
                 "producer_workload_path".to_string(),
-                pdir.display().to_string(),
+                pp.dir.display().to_string(),
             );
         }
 
@@ -1245,11 +1211,12 @@ pub(crate) fn run_experiment(
             let store = mgr.require_store()?;
             let mode_name = test.mode.name();
             let all_tasks_completed = test.tasks.iter().all(|task| {
+                let task_strings = task_to_strings(task);
                 task_completed(
                     &primary_lang,
                     &primary_wl,
                     &test.mutations,
-                    task,
+                    &task_strings,
                     test.timeout,
                     test.trials,
                     short_circuit,
@@ -1285,9 +1252,9 @@ pub(crate) fn run_experiment(
             &workload.steps.tags,
         )?;
 
-        if let (Some(pw), Some((_, pdir))) = (&producer_workload, &producer_path) {
+        if let (Some(pw), Some(pp)) = (&producer_workload, &producer_path) {
             build(
-                pdir,
+                &pp.dir,
                 &pw.steps.setup,
                 &pw.steps.build,
                 &base_params,
@@ -1306,15 +1273,16 @@ pub(crate) fn run_experiment(
                 }
             }
 
+            let task_strings = task_to_strings(task);
             let mut params = base_params.clone();
-            params.extend(task.clone());
+            params.extend(task_strings.clone());
 
             // FromTask counterexample: pull from the task map.
             if let Mode::Shrink {
                 counterexample: CexSource::FromTask,
             } = &test.mode
             {
-                let cex = task.get("counterexample").cloned().ok_or_else(|| {
+                let cex = task_strings.get("counterexample").cloned().ok_or_else(|| {
                     anyhow::anyhow!(
                         "Shrink mode with CexSource::FromTask requires task to have a 'counterexample' field"
                     )
@@ -1329,19 +1297,14 @@ pub(crate) fn run_experiment(
                 workload: primary_wl.clone(),
                 workload_dir: primary_dir.clone(),
                 mutations: test.mutations.clone(),
-                task: task.clone(),
+                task: task_strings,
                 trials: test.trials,
                 timeout: test.timeout,
                 short_circuit,
                 parallel,
                 seed: None,
                 mode: test.mode.clone(),
-                producer: producer_path
-                    .as_ref()
-                    .map(|(t, dir)| TargetPath {
-                        target: t.clone(),
-                        dir: dir.clone(),
-                    }),
+                producer: producer_path.clone(),
                 consumer_test: consumer_test.clone(),
             };
 

@@ -1,6 +1,6 @@
 # BST
 
-The BST workload tests a binary search tree supporting `insert`, `delete`, and `union` over nat keys and nat values. The specification (`workloads/Rocq/BST/Src/Spec.v`) treats a BST as an association list under the map laws, and each mutation is a specific edit to `workloads/Rocq/BST/Src/Impl.v`. The counterexamples in `docs/workloads/bst.json` are the minimum witnesses for each (mutation, property) pair.
+The BST workload tests a binary search tree supporting `insert`, `delete`, and `union` over nat keys and nat values. The specification treats a BST as an association list under the map laws, and each mutation is a specific edit to the workload's `Impl` module. Each `bst-*` workload repo carries its witnesses (minimum counterexamples per (mutation, property) pair) in `etna.toml` under `[[tasks]]`.
 
 Tree syntax used throughout this doc:
 
@@ -178,10 +178,10 @@ A subtler variant of `union_7`: the `k <? k'` branch is rewritten with explicit 
 
 ## Reading the counterexamples
 
-`docs/workloads/bst.json` stores each task as `{"property": ..., "counterexample": "..."}` in S-expression form. Conventions:
+Each workload's `etna.toml` stores every task as `{ property = ..., witnesses = [{ input = "..." }] }` in S-expression form. Conventions:
 
 - `E` — empty tree.
 - `(T l k v r)` — tree node.
 - Extra numbers at the end are operation arguments in the order declared by the property (see `Spec.v`). For example, `prop_InsertPost` has signature `(t, k, k', v)`, so `((T E 2 1 E) 0 2 0)` reads as "tree, then k=0, k'=2, v=0".
 
-A strategy "solves" a task when it produces any valid-BST input on which the property returns `false` against the mutant; the JSON counterexamples are reference minimums, not required outputs.
+A strategy "solves" a task when it produces any valid-BST input on which the property returns `false` against the mutant; the witnesses in `etna.toml` are reference minimums, not required outputs.

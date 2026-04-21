@@ -120,9 +120,9 @@ Every mutant is a strictly weaker propagation rule for exactly one opcode. Given
 
 A sampled variation is a witness when it exercises the exact opcode whose rule got weakened and stages the right data pattern. Counterexamples are therefore short machine traces — the generator's job is to build an initial `Variation` that reaches the mutated instruction with an H/L disagreement on exactly the label the mutant stops tracking.
 
-## State of `docs/workloads/ifc.json`
+## State of IFC witnesses
 
-`docs/workloads/ifc.json` is currently an empty array — mutation-level counterexamples are not checked in here the way they are for the tree / STLC workloads. The per-mutant naming scheme is algorithmic: `mutate_table` enumerates the cross product of opcodes × rule fields × droppable disjuncts, so the mutant identifier is typically the opcode plus a position index rather than a hand-named tag. To populate the JSON, record each interesting `(opcode, field, drop_index)` tuple alongside a witness `Variation`.
+`etna-rocq-ifc`'s `etna.toml` currently has no `[[tasks]]` blocks — mutation-level counterexamples are not checked in the way they are for the tree / STLC workloads. The per-mutant naming scheme is algorithmic: `mutate_table` enumerates the cross product of opcodes × rule fields × droppable disjuncts, so the mutant identifier is typically the opcode plus a position index rather than a hand-named tag. To populate it, add `[[tasks]]` blocks recording each interesting `(opcode, field, drop_index)` tuple alongside a witness `Variation`.
 
 ## Reading counterexamples (once populated)
 

@@ -10,7 +10,6 @@ use crate::error_context::Context;
 pub fn invoke(
     mgr: Manager,
     experiment: ExperimentMetadata,
-    language: String,
     workload: String,
     test_name: Option<String>,
     trials: usize,
@@ -18,9 +17,7 @@ pub fn invoke(
     mode: String,
     mutations: Vec<String>,
 ) -> anyhow::Result<()> {
-    let test_name = test_name.unwrap_or_else(|| {
-        format!("{}-{}", workload.to_lowercase(), language.to_lowercase())
-    });
+    let test_name = test_name.unwrap_or_else(|| workload.to_lowercase());
 
     let mode = parse_mode(&mode)?;
 
@@ -28,7 +25,6 @@ pub fn invoke(
         &mgr,
         &experiment,
         &test_name,
-        &language,
         &workload,
         trials,
         timeout,
@@ -43,9 +39,8 @@ pub fn invoke(
     .with_context(|| format!("Failed to commit new test '{}'", test_name))?;
 
     tracing::info!(
-        "Created test '{}' for {}/{} in experiment '{}'",
+        "Created test '{}' for workload '{}' in experiment '{}'",
         test_name,
-        language,
         workload,
         experiment.name
     );

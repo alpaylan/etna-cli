@@ -785,6 +785,7 @@ hr { border: 0; border-top: 1px solid var(--tx-border); margin: 20px 0; }
     <div class="table-wrap">
       <table id="dd-table">
         <thead><tr>
+          <th>Strategy</th>
           <th>Trial</th>
           <th>Status</th>
           <th>Time</th>
@@ -1377,6 +1378,16 @@ function renderStrategies() {
   rebuildStrategies();
 }
 
+// For log-scale bar charts, the bar rendering baseline is the axis min, so
+// the smallest data point renders with zero visible height. Pick a min one
+// order of magnitude below the smallest positive value so every bar is visible.
+function logMin(values) {
+  const positive = values.filter(v => v != null && isFinite(v) && v > 0);
+  if (!positive.length) return undefined;
+  const m = Math.min(...positive);
+  return Math.pow(10, Math.floor(Math.log10(m)) - 1);
+}
+
 function getMetricVals(metrics, metricField) {
   if (metricField === 'time') return metrics.map(m => m._time);
   if (metricField === 'shrinking_time') return metrics.map(m => m._shrinking_time);
@@ -1486,6 +1497,7 @@ function rebuildStrategies() {
         y: {
           type: scaleType,
           beginAtZero: scaleType === 'linear',
+          min: scaleType === 'logarithmic' ? logMin(metricEntries.map(e => e.display)) : undefined,
           title: { display: true, text: isTimeMetric ? 'seconds' : metricField },
           ticks: isTimeMetric ? { callback: v => formatTime(v) } : {}
         }
@@ -1551,6 +1563,7 @@ function rebuildStrategies() {
         y: {
           type: scaleType,
           beginAtZero: scaleType === 'linear',
+          min: scaleType === 'logarithmic' ? logMin(distDatasets.flatMap(d => d.data)) : undefined,
           title: { display: true, text: isTimeMetric ? 'seconds' : metricField },
           ticks: isTimeMetric ? { callback: v => formatTime(v) } : {}
         }
@@ -1716,6 +1729,7 @@ function rebuildDrilldown() {
   // Table
   const tbody = document.querySelector('#dd-table tbody');
   tbody.innerHTML = filtered.map(m => `<tr>
+    <td>${m.strategy ?? '-'}</td>
     <td class="num">${m.trial ?? '-'}</td>
     <td class="status-${m._status}">${m._status}</td>
     <td class="num">${formatTime(m._time)}</td>

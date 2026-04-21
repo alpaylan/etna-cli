@@ -1,0 +1,9 @@
+name = "T1"
+description = "Integration-test fixture workload (producer side)."
+language = "Test"
+
+[[tasks]]
+mutations = []
+tasks = [
+  { property = "noop" },
+]

@@ -2,43 +2,43 @@
   "description": "Canonical URLs for Etna workload and shared-library repos. Add via `etna workload add <url>`.",
   "workloads": {
     "Haskell": [
-      { "name": "BST",      "url": "https://github.com/alpaylan/etna-haskell-bst" },
-      { "name": "RBT",      "url": "https://github.com/alpaylan/etna-haskell-rbt" },
-      { "name": "STLC",     "url": "https://github.com/alpaylan/etna-haskell-stlc" },
-      { "name": "FSUB",     "url": "https://github.com/alpaylan/etna-haskell-fsub" },
-      { "name": "LuParser", "url": "https://github.com/alpaylan/etna-haskell-luparser" }
+      { "name": "bst-haskell",      "url": "https://github.com/alpaylan/etna-haskell-bst" },
+      { "name": "rbt-haskell",      "url": "https://github.com/alpaylan/etna-haskell-rbt" },
+      { "name": "stlc-haskell",     "url": "https://github.com/alpaylan/etna-haskell-stlc" },
+      { "name": "fsub-haskell",     "url": "https://github.com/alpaylan/etna-haskell-fsub" },
+      { "name": "luparser-haskell", "url": "https://github.com/alpaylan/etna-haskell-luparser" }
     ],
     "OCaml": [
-      { "name": "BST",  "url": "https://github.com/alpaylan/etna-ocaml-bst" },
-      { "name": "RBT",  "url": "https://github.com/alpaylan/etna-ocaml-rbt" },
-      { "name": "STLC", "url": "https://github.com/alpaylan/etna-ocaml-stlc" },
-      { "name": "RARE", "url": "https://github.com/alpaylan/etna-ocaml-rare" }
+      { "name": "bst-ocaml",  "url": "https://github.com/alpaylan/etna-ocaml-bst" },
+      { "name": "rbt-ocaml",  "url": "https://github.com/alpaylan/etna-ocaml-rbt" },
+      { "name": "stlc-ocaml", "url": "https://github.com/alpaylan/etna-ocaml-stlc" },
+      { "name": "rare-ocaml", "url": "https://github.com/alpaylan/etna-ocaml-rare" }
     ],
     "Python": [
-      { "name": "bst", "url": "https://github.com/alpaylan/etna-python-bst" }
+      { "name": "bst-python", "url": "https://github.com/alpaylan/etna-python-bst" }
     ],
     "Racket": [
-      { "name": "BST",     "url": "https://github.com/alpaylan/etna-racket-bst" },
-      { "name": "RBT",     "url": "https://github.com/alpaylan/etna-racket-rbt" },
-      { "name": "STLC",    "url": "https://github.com/alpaylan/etna-racket-stlc" },
-      { "name": "SYSTEMF", "url": "https://github.com/alpaylan/etna-racket-systemf" }
+      { "name": "bst-racket",     "url": "https://github.com/alpaylan/etna-racket-bst" },
+      { "name": "rbt-racket",     "url": "https://github.com/alpaylan/etna-racket-rbt" },
+      { "name": "stlc-racket",    "url": "https://github.com/alpaylan/etna-racket-stlc" },
+      { "name": "systemf-racket", "url": "https://github.com/alpaylan/etna-racket-systemf" }
     ],
     "Rocq": [
-      { "name": "BST",             "url": "https://github.com/alpaylan/etna-rocq-bst" },
-      { "name": "RBT",             "url": "https://github.com/alpaylan/etna-rocq-rbt" },
-      { "name": "STLC",            "url": "https://github.com/alpaylan/etna-rocq-stlc" },
-      { "name": "IFC",             "url": "https://github.com/alpaylan/etna-rocq-ifc" },
-      { "name": "BSTProplang",     "url": "https://github.com/alpaylan/etna-rocq-bst-proplang" },
-      { "name": "RBTProplang",     "url": "https://github.com/alpaylan/etna-rocq-rbt-proplang" },
-      { "name": "STLCProplang",    "url": "https://github.com/alpaylan/etna-rocq-stlc-proplang" },
-      { "name": "IFCProplang",     "url": "https://github.com/alpaylan/etna-rocq-ifc-proplang" },
-      { "name": "SortingProplang", "url": "https://github.com/alpaylan/etna-rocq-sorting-proplang" }
+      { "name": "bst-rocq",              "url": "https://github.com/alpaylan/etna-rocq-bst" },
+      { "name": "rbt-rocq",              "url": "https://github.com/alpaylan/etna-rocq-rbt" },
+      { "name": "stlc-rocq",             "url": "https://github.com/alpaylan/etna-rocq-stlc" },
+      { "name": "ifc-rocq",              "url": "https://github.com/alpaylan/etna-rocq-ifc" },
+      { "name": "bst-proplang-rocq",     "url": "https://github.com/alpaylan/etna-rocq-bst-proplang" },
+      { "name": "rbt-proplang-rocq",     "url": "https://github.com/alpaylan/etna-rocq-rbt-proplang" },
+      { "name": "stlc-proplang-rocq",    "url": "https://github.com/alpaylan/etna-rocq-stlc-proplang" },
+      { "name": "ifc-proplang-rocq",     "url": "https://github.com/alpaylan/etna-rocq-ifc-proplang" },
+      { "name": "sorting-proplang-rocq", "url": "https://github.com/alpaylan/etna-rocq-sorting-proplang" }
     ],
     "Rust": [
-      { "name": "bst",    "url": "https://github.com/alpaylan/etna-rust-bst" },
-      { "name": "rbt",    "url": "https://github.com/alpaylan/etna-rust-rbt" },
-      { "name": "stlc",   "url": "https://github.com/alpaylan/etna-rust-stlc" },
-      { "name": "sudoku", "url": "https://github.com/alpaylan/etna-rust-sudoku", "status": "stub" }
+      { "name": "bst-rust",    "url": "https://github.com/alpaylan/etna-rust-bst" },
+      { "name": "rbt-rust",    "url": "https://github.com/alpaylan/etna-rust-rbt" },
+      { "name": "stlc-rust",   "url": "https://github.com/alpaylan/etna-rust-stlc" },
+      { "name": "sudoku-rust", "url": "https://github.com/alpaylan/etna-rust-sudoku", "status": "stub" }
     ],
     "RustCrates": [
       { "name": "time",        "url": "https://github.com/alpaylan/time-etna" },

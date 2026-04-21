@@ -8,7 +8,7 @@
           "build",
           "--release",
           "--manifest-path",
-          "${workload_path}/../harness/Cargo.toml"
+          "${workload_path}/harness/Cargo.toml"
         ],
         "params": ["workload_path"]
       }
@@ -19,7 +19,7 @@
     "solve": [
       {
         "Command": {
-          "command": "${workload_path}/../harness/target/release/etna_test_harness",
+          "command": "${workload_path}/harness/target/release/etna_test_harness",
           "args": ["solve", "--property", "${property}", "--invert"],
           "params": ["workload_path", "property"]
         }
@@ -28,7 +28,7 @@
     "sample": [
       {
         "Command": {
-          "command": "${workload_path}/../harness/target/release/etna_test_harness",
+          "command": "${workload_path}/harness/target/release/etna_test_harness",
           "args": ["sample", "--trials", "3"],
           "params": ["workload_path"]
         }
@@ -37,7 +37,7 @@
     "test": [
       {
         "Command": {
-          "command": "${workload_path}/../harness/target/release/etna_test_harness",
+          "command": "${workload_path}/harness/target/release/etna_test_harness",
           "args": ["test", "--property", "${property}", "--inputs", "${inputs}", "--invert"],
           "params": ["workload_path", "property", "inputs"]
         }
@@ -46,7 +46,7 @@
     "shrink": [
       {
         "Command": {
-          "command": "${workload_path}/../harness/target/release/etna_test_harness",
+          "command": "${workload_path}/harness/target/release/etna_test_harness",
           "args": ["shrink", "--property", "${property}", "--counterexample", "${counterexample}", "--invert"],
           "params": ["workload_path", "property", "counterexample"]
         }

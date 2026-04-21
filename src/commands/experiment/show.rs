@@ -7,7 +7,7 @@ pub fn invoke(mgr: Manager, name: String) -> anyhow::Result<()> {
     println!("Path: {}", experiment.path.display());
     println!("Workloads:");
     for wl in experiment.workloads {
-        println!("- {} ({})", wl.name, wl.language);
+        println!("- {}", wl.name);
     }
 
     Ok(())

@@ -212,7 +212,6 @@ fn get_agg_metrics(
         .iter()
         .flat_map(|test| {
             store.metrics.iter().filter_map(|m| {
-                let language = m.data.get("language").and_then(serde_json::Value::as_str)?;
                 let workload = m.data.get("workload").and_then(serde_json::Value::as_str)?;
                 let mutations = m
                     .data
@@ -222,20 +221,18 @@ fn get_agg_metrics(
                 let property = m.data.get("property").and_then(serde_json::Value::as_str)?;
                 let mode = m.data.get("mode").and_then(serde_json::Value::as_str)?;
 
-                // For Cross mode, the metric's (language, workload) = consumer.
-                let (test_lang, test_wl) = match &test.mode {
-                    crate::experiment::Mode::Cross { consumer, .. } => {
-                        (consumer.language.as_str(), consumer.workload.as_str())
-                    }
-                    _ => (test.language.as_str(), test.workload.as_str()),
+                // For Cross mode, the metric's workload = consumer's.
+                let test_wl = match &test.mode {
+                    crate::experiment::Mode::Cross { consumer, .. } => consumer.workload.as_str(),
+                    _ => test.workload.as_str(),
                 };
 
-                let result = test_lang == language
-                    && test_wl == workload
+                let result = test_wl == workload
                     && &test.mutations == mutations
                     && test.tasks.iter().any(|task| {
-                        task.get("strategy").map(String::as_str) == Some(strategy)
-                            && task.get("property").map(String::as_str) == Some(property)
+                        task.get("strategy").and_then(serde_json::Value::as_str) == Some(strategy)
+                            && task.get("property").and_then(serde_json::Value::as_str)
+                                == Some(property)
                     })
                     && test.mode.name() == mode;
 

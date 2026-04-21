@@ -21,6 +21,10 @@ pub fn api_routes() -> Router<AppState> {
             post(handlers::experiments::create_experiment),
         )
         .route(
+            "/api/v1/experiments/clone",
+            post(handlers::experiments::clone_experiment),
+        )
+        .route(
             "/api/v1/experiments/{name}",
             get(handlers::experiments::get_experiment),
         )
@@ -58,6 +62,10 @@ pub fn api_routes() -> Router<AppState> {
         )
         // Workloads
         .route(
+            "/api/v1/workloads/available",
+            get(handlers::workloads::list_available_workloads),
+        )
+        .route(
             "/api/v1/experiments/{name}/workloads",
             get(handlers::workloads::list_workloads),
         )
@@ -66,7 +74,7 @@ pub fn api_routes() -> Router<AppState> {
             post(handlers::workloads::add_workload),
         )
         .route(
-            "/api/v1/experiments/{name}/workloads/{lang}/{wl}",
+            "/api/v1/experiments/{name}/workloads/{workload}",
             delete(handlers::workloads::remove_workload),
         )
         // Store
@@ -88,7 +96,7 @@ pub fn api_routes() -> Router<AppState> {
         )
         // Mutations
         .route(
-            "/api/v1/workloads/{language}/{workload}/mutations",
+            "/api/v1/experiments/{name}/workloads/{workload}/mutations",
             get(handlers::mutations::get_workload_mutations),
         )
         .route(

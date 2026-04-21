@@ -1,4 +1,5 @@
 pub mod amend_test;
+pub mod clone;
 pub mod create_test;
 pub mod list;
 pub mod new;

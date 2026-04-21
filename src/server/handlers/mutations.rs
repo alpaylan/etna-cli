@@ -78,25 +78,24 @@ pub async fn set_mutation(
     }))
 }
 
-/// List mutation variant names available for a specific (language, workload)
-/// pair. Resolves the workload directory from the configured repo_dir and
-/// returns a deduplicated, sorted list of names with "base" pinned first.
+/// List mutation variant names available for a specific workload within an
+/// experiment. Returns a deduplicated, sorted list with "base" pinned first.
 pub async fn get_workload_mutations(
     State(state): State<AppState>,
-    Path((language, workload)): Path<(String, String)>,
+    Path((experiment_name, workload)): Path<(String, String)>,
 ) -> Result<Json<Vec<String>>, ServerError> {
-    let repo_dir = {
+    let workload_path = {
         let manager = state.manager.read().unwrap();
-        manager.config.repo_dir()
+        let experiment = manager.get_experiment(&experiment_name).ok_or_else(|| {
+            ServerError::not_found(format!("Experiment not found: {}", experiment_name))
+        })?;
+        experiment.workload_path(&workload).ok_or_else(|| {
+            ServerError::not_found(format!(
+                "Workload '{}' not found in experiment '{}'",
+                workload, experiment_name
+            ))
+        })?
     };
-    let workload_path = repo_dir.join("workloads").join(&language).join(&workload);
-
-    if !workload_path.exists() {
-        return Err(ServerError::not_found(format!(
-            "Workload not found at {}",
-            workload_path.display()
-        )));
-    }
 
     let files = mutation_service::list_mutations(&workload_path)?;
     let mut names: Vec<String> = files

@@ -1,6 +1,6 @@
 # RBT
 
-The RBT workload extends BST with red–black balancing. Trees carry a color on each node and must satisfy the usual RBT invariants in addition to the BST order. Mutations live in `workloads/Rocq/RBT/Src/Impl.v`; the property-based spec lives in `workloads/Rocq/RBT/Src/Spec.v`; reference counterexamples are in `docs/workloads/rbt.json`.
+The RBT workload extends BST with red–black balancing. Trees carry a color on each node and must satisfy the usual RBT invariants in addition to the BST order. Mutations live in each workload's `Impl` module; the property-based spec lives in the corresponding `Spec` module; reference counterexamples are in each `rbt-*` repo's `etna.toml` under `[[tasks]]`.
 
 Tree syntax:
 
@@ -183,7 +183,7 @@ Without `balance`, a red-red chain slips through whenever insert lands on that s
 
 ## Reading the counterexamples
 
-`docs/workloads/rbt.json` tasks use the S-expression encoding defined by `ShowTree` in `Impl.v`:
+Each `rbt-*` repo's `etna.toml` stores tasks using the S-expression encoding defined by `ShowTree` in `Impl.v`:
 
 - Colors as `R` or `B` — sometimes spelled `(R)` / `(B)` when the encoder output is re-parsed.
 - `(T c l k v r)` — a node with color `c`, subtree `l`, key `k`, value `v`, subtree `r`.
