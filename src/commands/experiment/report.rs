@@ -87,12 +87,16 @@ pub fn render_html(mgr: &mut Manager, experiment: &ExperimentMetadata) -> anyhow
     mgr.set_store_path(experiment.store.clone())?;
     mgr.require_store_mut()?.load_metrics()?;
 
+    // Counterexamples can run to thousands of characters per trial; keeping
+    // them blows up the embedded JSON and the webview's parse time, so drop
+    // them from the report payload.
     let metrics: Vec<serde_json::Value> = mgr
         .require_store()?
         .metrics
         .iter()
         .map(|m| {
             let mut obj = m.data.clone();
+            obj.remove("counterexample");
             obj.insert(
                 "hash".to_string(),
                 serde_json::Value::String(m.hash.clone()),
