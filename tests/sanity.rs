@@ -19,14 +19,6 @@ fn fixture_bootstraps_config() {
         etna_home.join("experiments.json").exists(),
         "experiments.json missing"
     );
-    assert!(
-        etna_home.join(".etna_cache").join(".git").exists(),
-        ".etna_cache is not git-initialized"
-    );
-    assert!(
-        etna_home.join(".etna_cache").join("workloads/Test/T1/steps.json").exists(),
-        "Test/T1 fixture not copied into cache"
-    );
 
     let mgr = etna::manager::Manager::load().expect("Manager::load failed");
     assert!(mgr.experiments.is_empty());

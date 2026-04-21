@@ -171,9 +171,7 @@ fn visualize_emits_figure_files() {
 #[serial]
 fn bash_generates_steps_script() {
     let fx = TestEtna::new();
-    let t1 = fx
-        .etna_home()
-        .join(".etna_cache/workloads/Test/T1");
+    let t1 = fx.plant_workload_repo("T1");
 
     etna().args(["bash", "--path"]).arg(&t1).assert().success();
 

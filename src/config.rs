@@ -28,8 +28,6 @@ impl EtnaConfig {
     //! - Added explicit versioning to the configuration for future changes
     //! - Experiment metrics are stored in each experiment's local `store.jsonl`
     //! - Experiments are now not part of the store, but managed separately in `experiments.json`
-    //! - Added `.etna_cache` directory for pulling in the workloads from a remote git repository
-    //! - The remote git repository can be configured via the `ETNA_REMOTE` environment variable
     //! - Switched to using JSON lines format for consuming metrics and logs instead of using explicitly marked JSONs.
     pub(crate) fn new() -> anyhow::Result<Self> {
         let etna_dir = Self::get_etna_dir()?;
@@ -87,10 +85,6 @@ impl EtnaConfig {
 }
 
 impl EtnaConfig {
-    pub(crate) fn repo_dir(&self) -> PathBuf {
-        self.etna_dir.join(".etna_cache")
-    }
-
     pub(crate) fn store_path(&self) -> PathBuf {
         self.etna_dir.join("store.jsonl")
     }

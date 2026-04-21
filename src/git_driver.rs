@@ -193,23 +193,6 @@ pub(crate) fn _head_hash(repo_path: &Path) -> anyhow::Result<String> {
     Ok(head.id().to_string())
 }
 
-pub(crate) fn init_repo_via_cli(repo_path: &Path) -> anyhow::Result<()> {
-    let url = std::env::var("ETNA_REMOTE")
-        .unwrap_or_else(|_| "https://github.com/alpaylan/etna-cli.git".into());
-    let status = std::process::Command::new("git")
-        .arg("clone")
-        .arg("--branch")
-        .arg("main")
-        .arg(&url)
-        .arg(repo_path)
-        .status()
-        .context("Failed to execute git clone")?;
-    if !status.success() {
-        anyhow::bail!("git clone failed with status: {}", status);
-    }
-    Ok(())
-}
-
 /// `ETNA_OFFLINE=1` means "don't hit the network." Local paths (`file://`,
 /// absolute filesystem paths) don't, so they're allowed through.
 fn is_local_git_url(url: &str) -> bool {

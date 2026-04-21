@@ -3,7 +3,6 @@ use tracing::info;
 use crate::{
     config::{current_version, EtnaConfig},
     error_context::Context,
-    git_driver,
 };
 
 use super::types::{ConfigInfo, ServiceResult};
@@ -16,7 +15,6 @@ pub fn get_config() -> ServiceResult<ConfigInfo> {
         etna_dir: etna_config.etna_dir.clone(),
         store_path: etna_config.store_path(),
         experiments_path: etna_config.experiments_path(),
-        repo_dir: etna_config.repo_dir(),
         configured: etna_config.configured,
         version: etna_config.version,
     })
@@ -54,22 +52,9 @@ pub fn setup(overwrite: bool) -> ServiceResult<ConfigInfo> {
             etna_dir: config.etna_dir.clone(),
             store_path: config.store_path(),
             experiments_path: config.experiments_path(),
-            repo_dir: config.repo_dir(),
             configured: config.configured,
             version: config.version,
         });
-    }
-
-    // Create the `.etna_cache` directory if it does not exist
-    let cache_dir = etna_dir.join(".etna_cache");
-    if !cache_dir.exists() {
-        std::fs::create_dir(&cache_dir).context("Failed to create .etna_cache directory")?;
-    }
-
-    // Initialize a git repository in the `.etna_cache` directory if it is not already a git repository
-    if !cache_dir.join(".git").exists() {
-        info!("Initializing git repository in .etna_cache");
-        git_driver::init_repo_via_cli(&cache_dir)?;
     }
 
     // Create the `experiments.json` file
@@ -96,7 +81,6 @@ pub fn setup(overwrite: bool) -> ServiceResult<ConfigInfo> {
         etna_dir: config.etna_dir.clone(),
         store_path: config.store_path(),
         experiments_path: config.experiments_path(),
-        repo_dir: config.repo_dir(),
         configured: config.configured,
         version: config.version,
     })

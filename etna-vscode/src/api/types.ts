@@ -63,7 +63,6 @@ export interface ConfigInfo {
   etna_dir: string;
   store_path: string;
   experiments_path: string;
-  repo_dir: string;
   configured: boolean;
   version: number;
 }

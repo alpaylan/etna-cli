@@ -1,11 +1,10 @@
 //! Shared integration-test fixture.
 //!
 //! `TestEtna` isolates a test from the user's real `~/.etna` by pointing
-//! `ETNA_HOME` at a tempdir, copying the repo's `workloads/` and `docs/`
-//! into the fake cache, and pre-`git init`-ing it so `etna` skips the
-//! `git clone` + `git pull` network paths. All tests that touch this
-//! fixture must be `#[serial_test::serial]` — env vars and CWD are
-//! process-global.
+//! `ETNA_HOME` at a tempdir and staging per-test workload repos on the
+//! filesystem so `git submodule add` clones them without hitting the
+//! network. All tests that touch this fixture must be
+//! `#[serial_test::serial]` — env vars and CWD are process-global.
 
 #![allow(dead_code)]
 
@@ -55,29 +54,6 @@ impl TestEtna {
         std::env::set_var("GIT_AUTHOR_EMAIL", "etna-test@example.com");
         std::env::set_var("GIT_COMMITTER_NAME", "etna-test");
         std::env::set_var("GIT_COMMITTER_EMAIL", "etna-test@example.com");
-
-        let cache_dir = home.path().join(".etna_cache");
-        std::fs::create_dir_all(&cache_dir).unwrap();
-
-        let root = repo_root();
-        // Only the Test fixture is needed for integration tests. Copying all
-        // workload languages (Rust/Rocq/Haskell/…) takes several seconds per
-        // test, so scope this down.
-        std::fs::create_dir_all(cache_dir.join("workloads")).unwrap();
-        copy_tree(&root.join("workloads/Test"), &cache_dir.join("workloads/Test"));
-        std::fs::create_dir_all(cache_dir.join("docs/workloads")).unwrap();
-        for name in ["t1.json", "t2.json"] {
-            std::fs::copy(
-                root.join("docs/workloads").join(name),
-                cache_dir.join("docs/workloads").join(name),
-            )
-            .expect("failed to copy docs fixture");
-        }
-        // `etna bash` loads templates/scripts/steps.sh.j2 from the cache.
-        copy_tree(&root.join("templates"), &cache_dir.join("templates"));
-
-        // Give the fake cache a committed .git so `setup()` skips `git clone`.
-        git_init_commit(&cache_dir);
 
         std::env::set_current_dir(scratch.path()).unwrap();
 

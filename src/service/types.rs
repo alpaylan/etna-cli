@@ -60,7 +60,6 @@ pub struct ConfigInfo {
     pub etna_dir: PathBuf,
     pub store_path: PathBuf,
     pub experiments_path: PathBuf,
-    pub repo_dir: PathBuf,
     pub configured: bool,
     pub version: usize,
 }
