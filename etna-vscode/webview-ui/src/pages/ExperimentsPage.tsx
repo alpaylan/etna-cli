@@ -15,16 +15,44 @@ function ExperimentsPage({ experiments, jobs, loading, onRefresh, onOpenExperime
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newExperimentName, setNewExperimentName] = useState('');
   const createInputRef = useRef<HTMLInputElement>(null);
+  const [showCloneForm, setShowCloneForm] = useState(false);
+  const [cloneUrl, setCloneUrl] = useState('');
+  const [cloneRef, setCloneRef] = useState('');
+  const [cloning, setCloning] = useState(false);
+  const cloneInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (showCreateForm) requestAnimationFrame(() => createInputRef.current?.focus());
   }, [showCreateForm]);
+
+  useEffect(() => {
+    if (showCloneForm) requestAnimationFrame(() => cloneInputRef.current?.focus());
+  }, [showCloneForm]);
+
+  // When the experiments list refreshes after a clone, clear the in-flight form.
+  useEffect(() => {
+    if (cloning) {
+      setCloning(false);
+      setCloneUrl('');
+      setCloneRef('');
+      setShowCloneForm(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [experiments.length]);
 
   const handleCreate = () => {
     if (!newExperimentName.trim()) return;
     vscode.postMessage({ type: 'createExperiment', name: newExperimentName.trim() });
     setNewExperimentName('');
     setShowCreateForm(false);
+  };
+
+  const handleClone = () => {
+    const url = cloneUrl.trim();
+    if (!url || cloning) return;
+    const ref = cloneRef.trim() || undefined;
+    setCloning(true);
+    vscode.postMessage({ type: 'cloneExperiment', url, ref });
   };
 
   const handleDelete = (e: React.MouseEvent, name: string) => {
@@ -68,6 +96,11 @@ function ExperimentsPage({ experiments, jobs, loading, onRefresh, onOpenExperime
     if (e.key === 'Escape') { setShowCreateForm(false); setNewExperimentName(''); }
   };
 
+  const onCloneKey = (e: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && cloneUrl.trim() && !cloning) handleClone();
+    if (e.key === 'Escape') { setShowCloneForm(false); setCloneUrl(''); setCloneRef(''); }
+  };
+
   return (
     <div className="ex-page">
       <header className="ex-pagehead">
@@ -84,6 +117,12 @@ function ExperimentsPage({ experiments, jobs, loading, onRefresh, onOpenExperime
             <span className="ex-btn-glyph" aria-hidden>↻</span> Refresh
           </button>
           <button
+            className="ex-btn ex-btn-ghost"
+            onClick={() => setShowCloneForm(s => !s)}
+          >
+            <span className="ex-btn-glyph" aria-hidden>↧</span> Clone from URL
+          </button>
+          <button
             className="ex-btn ex-btn-primary"
             onClick={() => setShowCreateForm(s => !s)}
           >
@@ -91,6 +130,52 @@ function ExperimentsPage({ experiments, jobs, loading, onRefresh, onOpenExperime
           </button>
         </div>
       </header>
+
+      {showCloneForm && (
+        <section className="ex-createcard">
+          <div className="ex-createcard-head">
+            <span className="ex-createcard-tag">CLONE</span>
+            <span className="ex-createcard-hint">
+              Paste a repo URL, press <kbd>⏎</kbd> to clone (workloads come down as submodules).
+            </span>
+          </div>
+          <div className="ex-createcard-body">
+            <input
+              ref={cloneInputRef}
+              className="ex-input ex-mono"
+              type="url"
+              value={cloneUrl}
+              onChange={(e) => setCloneUrl(e.target.value)}
+              onKeyDown={onCloneKey}
+              placeholder="https://github.com/owner/repo"
+              disabled={cloning}
+              style={{ flex: '1 1 auto' }}
+            />
+            <input
+              className="ex-input ex-mono"
+              type="text"
+              value={cloneRef}
+              onChange={(e) => setCloneRef(e.target.value)}
+              onKeyDown={onCloneKey}
+              placeholder="ref (optional)"
+              disabled={cloning}
+              style={{ flex: '0 1 160px', minWidth: 120 }}
+            />
+            <div className="ex-createcard-actions">
+              <button
+                className="ex-btn ex-btn-ghost"
+                onClick={() => { setShowCloneForm(false); setCloneUrl(''); setCloneRef(''); }}
+                disabled={cloning}
+              >Cancel</button>
+              <button
+                className="ex-btn ex-btn-primary"
+                onClick={handleClone}
+                disabled={!cloneUrl.trim() || cloning}
+              >{cloning ? 'Cloning…' : 'Clone'}</button>
+            </div>
+          </div>
+        </section>
+      )}
 
       {showCreateForm && (
         <section className="ex-createcard">

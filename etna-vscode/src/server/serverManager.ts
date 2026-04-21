@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as cp from 'child_process';
 import axios from 'axios';
+import { ensureDownloadedBinary } from './serverDownload';
 
 let managedProcess: cp.ChildProcess | undefined;
 let startingPromise: Promise<void> | undefined;
@@ -26,7 +27,7 @@ function isLocalHost(hostname: string): boolean {
   return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
 }
 
-export async function ensureServerRunning(): Promise<boolean> {
+export async function ensureServerRunning(context: vscode.ExtensionContext): Promise<boolean> {
   const cfg = vscode.workspace.getConfiguration('etna');
   const serverUrl = cfg.get<string>('serverUrl', 'http://localhost:3000');
   const autoStart = cfg.get<boolean>('autoStartServer', true);
@@ -65,7 +66,7 @@ export async function ensureServerRunning(): Promise<boolean> {
         title: 'Starting Etna server…',
         cancellable: false,
       },
-      () => startServer(url)
+      () => startServer(url, context)
     )
   );
 
@@ -81,9 +82,16 @@ export async function ensureServerRunning(): Promise<boolean> {
   }
 }
 
-async function startServer(url: URL): Promise<void> {
-  const cfg = vscode.workspace.getConfiguration('etna');
-  const binary = cfg.get<string>('serverBinary', 'etna-server');
+async function resolveBinary(context: vscode.ExtensionContext): Promise<string> {
+  // Explicit override wins (dev / custom install). Empty string (the default)
+  // means "auto-download the latest release binary into globalStorage".
+  const override = vscode.workspace.getConfiguration('etna').get<string>('serverBinary', '').trim();
+  if (override.length > 0) return override;
+  return ensureDownloadedBinary(context);
+}
+
+async function startServer(url: URL, context: vscode.ExtensionContext): Promise<void> {
+  const binary = await resolveBinary(context);
   const port = url.port || (url.protocol === 'https:' ? '443' : '3000');
   const host = url.hostname;
 

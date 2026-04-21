@@ -3,7 +3,7 @@ import { vscode, onMessage, ExperimentInfo, JobInfo, QueryResult, WebviewMessage
 import ExperimentsPage from './pages/ExperimentsPage';
 import ExperimentWorkspace from './pages/ExperimentWorkspace';
 
-type Sub = 'tests' | 'dashboard' | 'jobs' | 'metrics';
+type Sub = 'tests' | 'workloads' | 'dashboard' | 'jobs' | 'metrics';
 
 function App() {
   const [selectedExperiment, setSelectedExperiment] = useState<string | null>(null);

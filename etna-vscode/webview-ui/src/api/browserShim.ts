@@ -55,6 +55,16 @@ export async function handleBrowserMessage(message: Msg): Promise<void> {
         dispatch({ type: 'experiments', data });
         break;
       }
+      case 'cloneExperiment': {
+        const url = message.url as string;
+        const ref = message.ref as string | undefined;
+        const body: Record<string, string> = { url };
+        if (ref) body.ref = ref;
+        await req('POST', '/api/v1/experiments/clone', body);
+        const data = await req('GET', '/api/v1/experiments');
+        dispatch({ type: 'experiments', data });
+        break;
+      }
       case 'deleteExperiment': {
         await req('DELETE', `/api/v1/experiments/${encodeURIComponent(message.name as string)}`);
         const data = await req('GET', '/api/v1/experiments');
@@ -152,20 +162,66 @@ export async function handleBrowserMessage(message: Msg): Promise<void> {
         dispatch({ type: 'config', data });
         break;
       }
+      case 'getWorkloads': {
+        const experimentName = message.experimentName as string;
+        const workloads = await req(
+          'GET',
+          `/api/v1/experiments/${encodeURIComponent(experimentName)}/workloads`
+        );
+        dispatch({ type: 'workloads', data: { experimentName, workloads } });
+        break;
+      }
+      case 'getAvailableWorkloads': {
+        const workloads = await req('GET', '/api/v1/workloads/available');
+        dispatch({ type: 'availableWorkloads', data: { workloads } });
+        break;
+      }
+      case 'addWorkload': {
+        const experimentName = message.experimentName as string;
+        const url = message.url as string;
+        const ref = message.ref as string | undefined;
+        const body: Record<string, string> = { url };
+        if (ref) body.ref = ref;
+        await req(
+          'POST',
+          `/api/v1/experiments/${encodeURIComponent(experimentName)}/workloads`,
+          body
+        );
+        const workloads = await req(
+          'GET',
+          `/api/v1/experiments/${encodeURIComponent(experimentName)}/workloads`
+        );
+        dispatch({ type: 'workloads', data: { experimentName, workloads } });
+        break;
+      }
+      case 'removeWorkload': {
+        const experimentName = message.experimentName as string;
+        const workload = message.workload as string;
+        await req(
+          'DELETE',
+          `/api/v1/experiments/${encodeURIComponent(experimentName)}/workloads/${encodeURIComponent(workload)}`
+        );
+        const workloads = await req(
+          'GET',
+          `/api/v1/experiments/${encodeURIComponent(experimentName)}/workloads`
+        );
+        dispatch({ type: 'workloads', data: { experimentName, workloads } });
+        break;
+      }
       case 'getWorkloadMutations': {
-        const language = message.language as string;
+        const experimentName = message.experimentName as string;
         const workload = message.workload as string;
         try {
           const mutations = await req<string[]>(
             'GET',
-            `/api/v1/workloads/${encodeURIComponent(language)}/${encodeURIComponent(workload)}/mutations`
+            `/api/v1/experiments/${encodeURIComponent(experimentName)}/workloads/${encodeURIComponent(workload)}/mutations`
           );
-          dispatch({ type: 'workloadMutations', data: { language, workload, mutations } });
+          dispatch({ type: 'workloadMutations', data: { experimentName, workload, mutations } });
         } catch (err) {
-          // Scope the failure to this language/workload so the editor can mark
+          // Scope the failure to this workload so the editor can mark
           // suggestions as unavailable without tearing down the whole page.
           const emsg = err instanceof Error ? err.message : String(err);
-          dispatch({ type: 'workloadMutations', data: { language, workload, mutations: null, error: emsg } });
+          dispatch({ type: 'workloadMutations', data: { experimentName, workload, mutations: null, error: emsg } });
         }
         break;
       }

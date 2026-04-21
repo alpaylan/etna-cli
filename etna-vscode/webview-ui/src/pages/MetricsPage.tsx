@@ -69,10 +69,9 @@ function getValueAtPath(obj: unknown, segments: string[]): unknown {
 
 const EXAMPLES: { label: string; query: string }[] = [
   { label: 'all metrics', query: '.[]' },
-  { label: 'rust only', query: '.[] | select(.language == "Rust")' },
   { label: 'failed', query: '.[] | select(.success == false)' },
   { label: 'group by workload', query: 'group_by(.workload) | map({workload: .[0].workload, count: length})' },
-  { label: 'avg time by language', query: 'group_by(.language) | map({language: .[0].language, avg_time: (map(.time) | add / length)})' },
+  { label: 'avg time by workload', query: 'group_by(.workload) | map({workload: .[0].workload, avg_time: (map(.time) | add / length)})' },
 ];
 
 function MetricsPage({ queryResult, experimentName }: Props) {
@@ -202,7 +201,7 @@ function MetricsPage({ queryResult, experimentName }: Props) {
     }
     const all = Array.from(seen.values()).map(v => pathFromSegments(v.segments, v.expandable));
 
-    const priority = ['language', 'workload', 'status', 'time', 'trial', 'mutations', 'strategy', 'property'];
+    const priority = ['workload', 'status', 'time', 'trial', 'mutations', 'strategy', 'property'];
     const priIdx = (c: ColumnPath) => {
       if (c.segments.length !== 1) return priority.length + 1;
       const i = priority.indexOf(c.segments[0]);
@@ -375,7 +374,7 @@ function MetricsPage({ queryResult, experimentName }: Props) {
           onChange={(e) => setFilter(e.target.value)}
           onKeyDown={onFilterKey}
           spellCheck={false}
-          placeholder='.[] | select(.language == "Rust")'
+          placeholder='.[] | select(.workload == "bst-rust")'
         />
         <div className="mp-querycard-foot">
           <div className="mp-examples" role="toolbar" aria-label="Example queries">

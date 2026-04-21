@@ -34,6 +34,15 @@ export async function handleWebviewMessage(message: WebviewMessage): Promise<Web
         return { type: 'experiments', data: experiments };
       }
 
+      case 'cloneExperiment': {
+        const url = message.url as string;
+        const ref = message.ref as string | undefined;
+        // No `path` — server defaults to the managed `<etna-dir>/experiments/` dir.
+        await client.cloneExperiment({ url, ref });
+        const experiments = await client.listExperiments();
+        return { type: 'experiments', data: experiments };
+      }
+
       case 'deleteExperiment': {
         const name = message.name as string;
         await client.deleteExperiment(name);
@@ -127,10 +136,38 @@ export async function handleWebviewMessage(message: WebviewMessage): Promise<Web
       }
 
       case 'getWorkloadMutations': {
-        const language = message.language as string;
+        const experimentName = message.experimentName as string;
         const workload = message.workload as string;
-        const mutations = await client.listWorkloadMutations(language, workload);
-        return { type: 'workloadMutations', data: { language, workload, mutations } };
+        const mutations = await client.listWorkloadMutations(experimentName, workload);
+        return { type: 'workloadMutations', data: { experimentName, workload, mutations } };
+      }
+
+      case 'getWorkloads': {
+        const experimentName = message.experimentName as string;
+        const workloads = await client.listWorkloads(experimentName);
+        return { type: 'workloads', data: { experimentName, workloads } };
+      }
+
+      case 'getAvailableWorkloads': {
+        const workloads = await client.listAvailableWorkloads();
+        return { type: 'availableWorkloads', data: { workloads } };
+      }
+
+      case 'addWorkload': {
+        const experimentName = message.experimentName as string;
+        const url = message.url as string;
+        const ref = message.ref as string | undefined;
+        await client.addWorkload(experimentName, { url, ref });
+        const workloads = await client.listWorkloads(experimentName);
+        return { type: 'workloads', data: { experimentName, workloads } };
+      }
+
+      case 'removeWorkload': {
+        const experimentName = message.experimentName as string;
+        const workload = message.workload as string;
+        await client.removeWorkload(experimentName, workload);
+        const workloads = await client.listWorkloads(experimentName);
+        return { type: 'workloads', data: { experimentName, workloads } };
       }
 
       default:

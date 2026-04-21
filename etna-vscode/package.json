@@ -11,6 +11,10 @@
     "Testing",
     "Other"
   ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/alpaylan/etna-cli"
+  },
   "activationEvents": [
     "onStartupFinished"
   ],
@@ -62,8 +66,8 @@
         },
         "etna.serverBinary": {
           "type": "string",
-          "default": "etna-server",
-          "description": "Path or name of the etna-server executable used for auto-start."
+          "default": "",
+          "description": "Path to an etna-server executable for auto-start. When empty (the default), the extension downloads the latest release from github.com/alpaylan/etna-cli into its global storage on first use. Set this only to point at a local build or a manually installed binary."
         },
         "etna.autoRefreshInterval": {
           "type": "number",

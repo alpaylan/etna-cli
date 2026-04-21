@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 import {
   ExperimentInfo,
   CreateExperimentRequest,
+  CloneExperimentRequest,
   RunExperimentRequest,
   RunExperimentResponse,
   JobInfo,
@@ -17,6 +18,7 @@ import {
   ApiError,
   TestInfo,
   TestDefinition,
+  WorkloadMetadata,
 } from './types';
 
 export class EtnaApiClient {
@@ -114,6 +116,18 @@ export class EtnaApiClient {
     }
   }
 
+  async cloneExperiment(request: CloneExperimentRequest): Promise<{ experiment: ExperimentInfo }> {
+    try {
+      const response = await this.client.post<{ experiment: ExperimentInfo }>(
+        '/api/v1/experiments/clone',
+        request,
+      );
+      return response.data;
+    } catch (error) {
+      this.handleError(error);
+    }
+  }
+
   async deleteExperiment(name: string): Promise<void> {
     try {
       await this.client.delete(`/api/v1/experiments/${encodeURIComponent(name)}`);
@@ -135,11 +149,20 @@ export class EtnaApiClient {
   }
 
   // Workloads
-  async listWorkloads(experimentName: string): Promise<{ name: string; language: string }[]> {
+  async listWorkloads(experimentName: string): Promise<WorkloadMetadata[]> {
     try {
-      const response = await this.client.get<{ name: string; language: string }[]>(
+      const response = await this.client.get<WorkloadMetadata[]>(
         `/api/v1/experiments/${encodeURIComponent(experimentName)}/workloads`
       );
+      return response.data;
+    } catch (error) {
+      this.handleError(error);
+    }
+  }
+
+  async listAvailableWorkloads(): Promise<WorkloadMetadata[]> {
+    try {
+      const response = await this.client.get<WorkloadMetadata[]>('/api/v1/workloads/available');
       return response.data;
     } catch (error) {
       this.handleError(error);
@@ -157,10 +180,10 @@ export class EtnaApiClient {
     }
   }
 
-  async removeWorkload(experimentName: string, language: string, workloadName: string): Promise<void> {
+  async removeWorkload(experimentName: string, workloadName: string): Promise<void> {
     try {
       await this.client.delete(
-        `/api/v1/experiments/${encodeURIComponent(experimentName)}/workloads/${encodeURIComponent(language)}/${encodeURIComponent(workloadName)}`
+        `/api/v1/experiments/${encodeURIComponent(experimentName)}/workloads/${encodeURIComponent(workloadName)}`
       );
     } catch (error) {
       this.handleError(error);
@@ -269,10 +292,10 @@ export class EtnaApiClient {
   }
 
   // Mutations
-  async listWorkloadMutations(language: string, workload: string): Promise<string[]> {
+  async listWorkloadMutations(experimentName: string, workload: string): Promise<string[]> {
     try {
       const response = await this.client.get<string[]>(
-        `/api/v1/workloads/${encodeURIComponent(language)}/${encodeURIComponent(workload)}/mutations`
+        `/api/v1/experiments/${encodeURIComponent(experimentName)}/workloads/${encodeURIComponent(workload)}/mutations`
       );
       return response.data;
     } catch (error) {

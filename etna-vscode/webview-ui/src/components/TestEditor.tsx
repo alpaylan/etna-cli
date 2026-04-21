@@ -14,11 +14,10 @@ type MutationCatalogEntry =
   | { status: 'ready'; values: string[] }
   | { status: 'error'; error: string };
 
-const catalogKey = (lang: string, wl: string) => `${lang.trim()}/${wl.trim()}`;
+const catalogKey = (wl: string) => wl.trim();
 
 const MAX_HISTORY = 50;
 
-const LANGUAGE_SUGGESTIONS = ['Rust', 'OCaml', 'Racket', 'Haskell', 'Coq', 'Rocq', 'Python'];
 const WORKLOAD_SUGGESTIONS = [
   'BST', 'RBT', 'STLC', 'SystemF', 'IFC', 'Sorting',
   'BSTProplang', 'RBTProplang', 'STLCProplang', 'IFCProplang', 'SortingProplang',
@@ -43,12 +42,8 @@ interface ParamsStatus {
 }
 
 function targetLabel(t: TestDefinition): string {
-  const l = t.language?.trim();
   const w = t.workload?.trim();
-  if (l && w) return `${l} · ${w}`;
-  if (l) return l;
-  if (w) return w;
-  return 'Untitled target';
+  return w || 'Untitled target';
 }
 
 function targetSummary(t: TestDefinition): string {
@@ -167,14 +162,14 @@ function TestEditor({ experimentName, testName, initialTests, onSave, onCancel, 
   useEffect(() => {
     const unsub = onMessage((m) => {
       if (m.type !== 'workloadMutations') return;
-      const { language, workload, mutations, error } = (m.data ?? {}) as {
-        language: string;
+      const { workload, mutations, error } = (m.data ?? {}) as {
+        experimentName: string;
         workload: string;
         mutations: string[] | null;
         error?: string;
       };
-      if (!language || !workload) return;
-      const key = catalogKey(language, workload);
+      if (!workload) return;
+      const key = catalogKey(workload);
       setMutationCatalog(prev => ({
         ...prev,
         [key]: mutations
@@ -203,7 +198,6 @@ function TestEditor({ experimentName, testName, initialTests, onSave, onCancel, 
   }, [activeTestIndex]);
 
   const activeTest = tests[activeTestIndex] || {
-    language: '',
     workload: '',
     trials: 10,
     timeout: 60,
@@ -215,25 +209,23 @@ function TestEditor({ experimentName, testName, initialTests, onSave, onCancel, 
 
   // Debounced request for the active target's mutation catalog.
   useEffect(() => {
-    const lang = activeTest.language?.trim();
     const wl = activeTest.workload?.trim();
-    if (!lang || !wl) return;
-    const key = catalogKey(lang, wl);
+    if (!wl) return;
+    const key = catalogKey(wl);
     if (requestedMutationsRef.current.has(key)) return;
     const timer = setTimeout(() => {
       requestedMutationsRef.current.add(key);
       setMutationCatalog(prev => prev[key] ? prev : { ...prev, [key]: { status: 'loading' } });
-      vscode.postMessage({ type: 'getWorkloadMutations', language: lang, workload: wl });
+      vscode.postMessage({ type: 'getWorkloadMutations', experimentName, workload: wl });
     }, 250);
     return () => clearTimeout(timer);
-  }, [activeTest.language, activeTest.workload]);
+  }, [activeTest.workload, experimentName]);
 
   const activeCatalog: MutationCatalogEntry | undefined = useMemo(() => {
-    const lang = activeTest.language?.trim();
     const wl = activeTest.workload?.trim();
-    if (!lang || !wl) return undefined;
-    return mutationCatalog[catalogKey(lang, wl)];
-  }, [mutationCatalog, activeTest.language, activeTest.workload]);
+    if (!wl) return undefined;
+    return mutationCatalog[catalogKey(wl)];
+  }, [mutationCatalog, activeTest.workload]);
 
   const availableMutations = activeCatalog?.status === 'ready' ? activeCatalog.values : [];
   const mutationSuggestions = availableMutations.filter(m => !(activeTest.mutations || []).includes(m));
@@ -248,7 +240,7 @@ function TestEditor({ experimentName, testName, initialTests, onSave, onCancel, 
 
   const addTest = () => {
     setTestsWithHistory(prev => [...prev, {
-      language: '', workload: '', trials: 10, timeout: 60,
+      workload: '', trials: 10, timeout: 60,
       mutations: ['base'], cross: false, params: {}, tasks: [{ strategy: '', property: '' }],
     }]);
     setActiveTestIndex(tests.length);
@@ -442,7 +434,7 @@ function TestEditor({ experimentName, testName, initialTests, onSave, onCancel, 
   const invalidIndices = useMemo(() => {
     const bad: number[] = [];
     tests.forEach((t, i) => {
-      if (!t.language?.trim() || !t.workload?.trim()) bad.push(i);
+      if (!t.workload?.trim()) bad.push(i);
     });
     return bad;
   }, [tests]);
@@ -559,7 +551,6 @@ function TestEditor({ experimentName, testName, initialTests, onSave, onCancel, 
             {tests.map((t, i) => {
               const invalid = showValidation && invalidIndices.includes(i);
               const isActive = i === activeTestIndex;
-              const lang = t.language?.trim();
               const wl = t.workload?.trim();
               return (
                 <li key={i}>
@@ -570,12 +561,8 @@ function TestEditor({ experimentName, testName, initialTests, onSave, onCancel, 
                     <span className="tx-target-index">{ord(i)}</span>
                     <span className="tx-target-body">
                       <span className="tx-target-title">
-                        {lang || wl ? (
-                          <>
-                            <span className="tx-target-lang">{lang || '—'}</span>
-                            <span className="tx-target-slash" aria-hidden>/</span>
-                            <span className="tx-target-wl">{wl || '—'}</span>
-                          </>
+                        {wl ? (
+                          <span className="tx-target-wl">{wl}</span>
                         ) : (
                           <span className="tx-target-placeholder">Untitled target</span>
                         )}
@@ -641,7 +628,7 @@ function TestEditor({ experimentName, testName, initialTests, onSave, onCancel, 
               </span>
               {activeTest.cross && (
                 <span className="tx-runplan-foot-item tx-runplan-foot-cross">
-                  <span className="tx-runplan-foot-dot" aria-hidden /> cross-language
+                  <span className="tx-runplan-foot-dot" aria-hidden /> cross
                 </span>
               )}
               {(plan.muts === 0 || plan.tsks === 0) && (
@@ -659,24 +646,10 @@ function TestEditor({ experimentName, testName, initialTests, onSave, onCancel, 
               <span className="tx-section-index">01</span>
               <div className="tx-section-headings">
                 <h3 className="tx-section-title">Identity &amp; budget</h3>
-                <p className="tx-section-sub">Language and workload pick <em>what</em> runs; trials and timeout bound the <em>cost</em>.</p>
+                <p className="tx-section-sub">Workload picks <em>what</em> runs; trials and timeout bound the <em>cost</em>.</p>
               </div>
             </header>
             <div className="tx-setup-grid">
-              <label className="tx-field tx-field-wide">
-                <span className="tx-field-label">Language <em>required</em></span>
-                <input
-                  type="text"
-                  list="tx-lang-suggestions"
-                  className={`tx-input ${activeInvalid && !activeTest.language?.trim() ? 'is-invalid' : ''}`}
-                  value={activeTest.language}
-                  onChange={(e) => updateActiveTest({ language: e.target.value })}
-                  placeholder="Rust, OCaml, Racket …"
-                />
-                {activeInvalid && !activeTest.language?.trim() && (
-                  <span className="tx-field-error">Pick a target language.</span>
-                )}
-              </label>
               <label className="tx-field tx-field-wide">
                 <span className="tx-field-label">Workload <em>required</em></span>
                 <input
@@ -685,15 +658,12 @@ function TestEditor({ experimentName, testName, initialTests, onSave, onCancel, 
                   className={`tx-input ${activeInvalid && !activeTest.workload?.trim() ? 'is-invalid' : ''}`}
                   value={activeTest.workload}
                   onChange={(e) => updateActiveTest({ workload: e.target.value })}
-                  placeholder="BST, RBT, STLC …"
+                  placeholder="bst-rust, rbt-ocaml …"
                 />
                 {activeInvalid && !activeTest.workload?.trim() && (
                   <span className="tx-field-error">Pick a workload.</span>
                 )}
               </label>
-              <datalist id="tx-lang-suggestions">
-                {LANGUAGE_SUGGESTIONS.map(s => <option key={s} value={s} />)}
-              </datalist>
               <datalist id="tx-workload-suggestions">
                 {WORKLOAD_SUGGESTIONS.map(s => <option key={s} value={s} />)}
               </datalist>
@@ -725,7 +695,7 @@ function TestEditor({ experimentName, testName, initialTests, onSave, onCancel, 
                 <span className="tx-field-hint">wall-clock seconds</span>
               </label>
               <div className="tx-field">
-                <span className="tx-field-label">Cross-language</span>
+                <span className="tx-field-label">Cross</span>
                 <label className="tx-toggle">
                   <input
                     type="checkbox"
@@ -735,7 +705,7 @@ function TestEditor({ experimentName, testName, initialTests, onSave, onCancel, 
                   <span className="tx-toggle-track"><span className="tx-toggle-thumb" /></span>
                   <span className="tx-toggle-label">{activeTest.cross ? 'enabled' : 'disabled'}</span>
                 </label>
-                <span className="tx-field-hint">compare across backends</span>
+                <span className="tx-field-hint">compare across workloads</span>
               </div>
             </div>
           </section>
@@ -749,7 +719,7 @@ function TestEditor({ experimentName, testName, initialTests, onSave, onCancel, 
                 <p className="tx-section-sub">Source variants to evaluate. <code>base</code> is the unmutated reference.</p>
               </div>
               {activeCatalog?.status === 'ready' && (
-                <span className="tx-section-action tx-catalog-tag" title={`${availableMutations.length} mutations available for ${activeTest.language}/${activeTest.workload}`}>
+                <span className="tx-section-action tx-catalog-tag" title={`${availableMutations.length} mutations available for ${activeTest.workload}`}>
                   {availableMutations.length} known
                 </span>
               )}
@@ -773,7 +743,7 @@ function TestEditor({ experimentName, testName, initialTests, onSave, onCancel, 
                   <span
                     key={m}
                     className={cls}
-                    title={isUnknown ? `"${m}" is not listed for ${activeTest.language}/${activeTest.workload}` : undefined}
+                    title={isUnknown ? `"${m}" is not listed for ${activeTest.workload}` : undefined}
                   >
                     {isUnknown && <span className="tx-chip-warn" aria-hidden>!</span>}
                     <span className="tx-chip-text">{m}</span>
@@ -805,14 +775,14 @@ function TestEditor({ experimentName, testName, initialTests, onSave, onCancel, 
             {activeCatalog?.status === 'loading' && (
               <div className="tx-catalog-note is-loading">
                 <span className="tx-catalog-dot" aria-hidden />
-                <span>Loading mutations for <code>{activeTest.language}/{activeTest.workload}</code>…</span>
+                <span>Loading mutations for <code>{activeTest.workload}</code>…</span>
               </div>
             )}
             {activeCatalog?.status === 'error' && (
               <div className="tx-catalog-note is-error">
                 <span className="tx-catalog-rune" aria-hidden>!</span>
                 <span>
-                  Couldn't load the mutation catalog for <code>{activeTest.language}/{activeTest.workload}</code>.{' '}
+                  Couldn't load the mutation catalog for <code>{activeTest.workload}</code>.{' '}
                   <span className="tx-catalog-detail">{activeCatalog.error}</span>
                 </span>
               </div>

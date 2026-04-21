@@ -18,7 +18,7 @@ export async function openDashboard(context: vscode.ExtensionContext): Promise<v
   }
 
   // Make sure a server is reachable (spawn one locally if needed).
-  await ensureServerRunning();
+  await ensureServerRunning(context);
 
   // Create a new panel
   currentPanel = vscode.window.createWebviewPanel(
@@ -339,7 +339,7 @@ function getPlaceholderHtml(webview: vscode.Webview): string {
         function renderMetrics() {
             return '<div class="card"><div class="card-title">Query Metrics</div>' +
                 '<p>Enter a JQ filter expression to query metrics:</p>' +
-                '<textarea id="jqFilter" rows="3" placeholder=".[] | select(.language == \\"Rust\\")">.[]</textarea>' +
+                '<textarea id="jqFilter" rows="3" placeholder=".[] | select(.workload == \\"bst-rust\\")">.[]</textarea>' +
                 '<br><br><button onclick="queryMetrics()">Execute Query</button>' +
                 '</div><div id="metricsResult"></div>';
         }

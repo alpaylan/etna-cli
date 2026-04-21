@@ -1,11 +1,12 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { vscode, ExperimentInfo, JobInfo, QueryResult, TestInfo } from '../api/vscodeApi';
 import TestsPanel from './workspace/TestsPanel';
+import WorkloadsPanel from './workspace/WorkloadsPanel';
 import JobsPage from './JobsPage';
 import MetricsPage from './MetricsPage';
 import ExperimentDashboard from '../components/ExperimentDashboard';
 
-type Sub = 'tests' | 'dashboard' | 'jobs' | 'metrics';
+type Sub = 'tests' | 'workloads' | 'dashboard' | 'jobs' | 'metrics';
 
 interface Props {
   experiment: ExperimentInfo;
@@ -142,11 +143,23 @@ function ExperimentWorkspace({
         </button>
         <button
           role="tab"
+          aria-selected={sub === 'workloads'}
+          className={`ws-subtab ${sub === 'workloads' ? 'is-active' : ''}`}
+          onClick={() => setSub('workloads')}
+        >
+          <span className="ws-subtab-ord">02</span>
+          <span className="ws-subtab-label">Workloads</span>
+          {experiment.workloads.length > 0 && (
+            <span className="ws-subtab-count">{experiment.workloads.length}</span>
+          )}
+        </button>
+        <button
+          role="tab"
           aria-selected={sub === 'dashboard'}
           className={`ws-subtab ${sub === 'dashboard' ? 'is-active' : ''}`}
           onClick={() => setSub('dashboard')}
         >
-          <span className="ws-subtab-ord">02</span>
+          <span className="ws-subtab-ord">03</span>
           <span className="ws-subtab-label">Dashboard</span>
         </button>
         <button
@@ -155,7 +168,7 @@ function ExperimentWorkspace({
           className={`ws-subtab ${sub === 'jobs' ? 'is-active' : ''} ${hasUnseen ? 'has-unseen' : ''}`}
           onClick={() => setSub('jobs')}
         >
-          <span className="ws-subtab-ord">03</span>
+          <span className="ws-subtab-ord">04</span>
           <span className="ws-subtab-label">Jobs</span>
           {activeCount > 0 && <span className="ws-subtab-count is-active">{activeCount}</span>}
           {hasUnseen && <span className="ws-subtab-unseen" aria-hidden />}
@@ -166,7 +179,7 @@ function ExperimentWorkspace({
           className={`ws-subtab ${sub === 'metrics' ? 'is-active' : ''}`}
           onClick={() => setSub('metrics')}
         >
-          <span className="ws-subtab-ord">04</span>
+          <span className="ws-subtab-ord">05</span>
           <span className="ws-subtab-label">Metrics</span>
         </button>
       </nav>
@@ -178,6 +191,12 @@ function ExperimentWorkspace({
             tests={tests}
             onFetchTests={onFetchTests}
             onQueuedRun={handleQueuedRun}
+          />
+        )}
+        {sub === 'workloads' && (
+          <WorkloadsPanel
+            experimentName={experiment.name}
+            workloads={experiment.workloads}
           />
         )}
         {sub === 'dashboard' && (

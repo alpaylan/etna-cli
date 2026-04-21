@@ -84,7 +84,6 @@ export interface ExperimentInfo {
 
 export interface WorkloadMetadata {
   name: string;
-  language: string;
 }
 
 export interface JobInfo {
@@ -116,7 +115,6 @@ export interface TestInfo {
 }
 
 export interface TestDefinition {
-  language: string;
   workload: string;
   trials: number;
   timeout: number;

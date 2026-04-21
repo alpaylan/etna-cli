@@ -9,13 +9,20 @@ export interface ExperimentInfo {
 
 export interface WorkloadMetadata {
   name: string;
-  language: string;
 }
 
 export interface CreateExperimentRequest {
   name: string;
   path?: string;
   overwrite?: boolean;
+}
+
+// Clone a remote experiment repo. Field names mirror the server payload
+// (`src/server/handlers/experiments.rs::CloneExperimentRequest`).
+export interface CloneExperimentRequest {
+  url: string;
+  ref?: string;
+  path?: string;
 }
 
 export interface RunExperimentRequest {
@@ -91,10 +98,11 @@ export interface MutationOperationResponse {
   message: string;
 }
 
-// Add workload request
+// Add workload request — field names must match the server handler payload
+// (`src/server/handlers/workloads.rs::AddWorkloadRequest`).
 export interface AddWorkloadRequest {
-  language: string;
-  name: string;
+  url: string;
+  ref?: string;
 }
 
 // API error response
@@ -114,7 +122,6 @@ export interface TestInfo {
 
 // Full test definition for editing
 export interface TestDefinition {
-  language: string;
   workload: string;
   trials: number;
   timeout: number;

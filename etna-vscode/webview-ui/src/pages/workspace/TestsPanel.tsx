@@ -35,7 +35,7 @@ function summarize(defs: TestDefinition[] | undefined): TestSummary | null {
   if (!defs) return null;
   if (defs.length === 0) return { short: 'empty — no variants', rich: [] };
   const variants: VariantSummary[] = defs.map(d => ({
-    title: `${d.language?.trim() || '?'}/${d.workload?.trim() || '?'}`,
+    title: d.workload?.trim() || '?',
     trials: d.trials,
     timeout: d.timeout,
     cross: !!d.cross,
@@ -141,7 +141,6 @@ function TestsPanel({ experimentName, tests, onFetchTests, onQueuedRun }: Props)
     setEditingTest({
       testName: name,
       tests: [{
-        language: '',
         workload: '',
         trials: 10,
         timeout: 60,
