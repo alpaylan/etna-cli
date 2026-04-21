@@ -1,12 +1,11 @@
 use std::{collections::HashMap, os::unix::fs::PermissionsExt as _, path::PathBuf};
 
 use crate::{
-    git_driver,
     manager::Manager,
     workload::{Step, Steps},
 };
 
-use minijinja::{path_loader, Environment};
+use minijinja::Environment;
 use regex::Regex;
 use serde::Serialize;
 use serde_json::{self as json, Value as JsonValue};
@@ -172,9 +171,11 @@ struct TemplateCtx<'a> {
     test: Vec<String>,
 }
 
+const STEPS_TEMPLATE: &str = include_str!("../../templates/scripts/steps.sh.j2");
+
 /// The path should point to a valid run configuration
 /// This command produces a bash script `steps.sh` that executes the steps defined in the configuration
-pub fn invoke(mgr: Manager, path: Option<PathBuf>) -> anyhow::Result<()> {
+pub fn invoke(_mgr: Manager, path: Option<PathBuf>) -> anyhow::Result<()> {
     tracing::info!("Generating bash script from configuration...");
     let path = path.unwrap_or_else(|| std::env::current_dir().unwrap().join("steps.json"));
 
@@ -254,16 +255,8 @@ pub fn invoke(mgr: Manager, path: Option<PathBuf>) -> anyhow::Result<()> {
         test: test_lines,
     };
 
-    // 4) minijinja env + render
     let mut env = Environment::empty();
-    // Load templates/… from disk
-    git_driver::pull_via_cli(&mgr.config.repo_dir())?;
-
-    env.set_loader(path_loader(
-        &mgr.config.repo_dir().join("templates").join("scripts"),
-    ));
-    // Disable autoescaping for shell (minijinja auto-escapes only when configured;
-    // with path_loader it defaults to no autoescape, so nothing else needed here.)
+    env.add_template("steps.sh.j2", STEPS_TEMPLATE)?;
     let tmpl = env.get_template("steps.sh.j2")?;
     let script = tmpl.render(ctx)?;
 

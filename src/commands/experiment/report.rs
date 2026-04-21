@@ -3,45 +3,44 @@ use std::path::PathBuf;
 
 use base64::Engine;
 
-use crate::{error_context::Context, experiment::ExperimentMetadata, manager::Manager};
+use crate::{
+    error_context::Context, experiment::ExperimentMetadata, manager::Manager,
+    workload::WorkloadManifest,
+};
 
 const TEMPLATE: &str = include_str!("../../../templates/report.html");
 
-/// Load docs/workloads/*.json from the repo cache.
-/// Returns a map: workload_name -> list of {mutations, tasks: [{property}]}
-fn load_workload_docs(mgr: &Manager) -> serde_json::Map<String, serde_json::Value> {
-    let docs_dir = mgr.config.repo_dir().join("docs").join("workloads");
+/// Build a map `workload_name_lower -> manifest.tasks` by reading each
+/// registered workload's `etna.toml`. Shape matches what the report template
+/// expects: a list of `{mutations, tasks: [{property, …}]}`.
+fn load_workload_docs(
+    experiment: &ExperimentMetadata,
+) -> serde_json::Map<String, serde_json::Value> {
     let mut result = serde_json::Map::new();
-
-    let entries = match std::fs::read_dir(&docs_dir) {
-        Ok(e) => e,
-        Err(_) => {
-            tracing::debug!(
-                "No docs/workloads directory at '{}', skipping",
-                docs_dir.display()
-            );
-            return result;
-        }
-    };
-
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.extension().and_then(|e| e.to_str()) != Some("json") {
+    for wl in experiment.workloads() {
+        let Some(dir) = experiment.workload_path(&wl.name) else {
             continue;
-        }
-        let workload_name = path
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or_default()
-            .to_string();
-
-        if let Ok(content) = std::fs::read_to_string(&path) {
-            if let Ok(val) = serde_json::from_str::<serde_json::Value>(&content) {
-                result.insert(workload_name, val);
+        };
+        let manifest = match WorkloadManifest::read(&dir) {
+            Ok(m) => m,
+            Err(e) => {
+                tracing::debug!("Skipping '{}': {}", dir.display(), e);
+                continue;
+            }
+        };
+        match serde_json::to_value(&manifest.tasks) {
+            Ok(val) => {
+                result.insert(manifest.name.to_lowercase(), val);
+            }
+            Err(e) => {
+                tracing::debug!(
+                    "Failed to serialize manifest tasks for '{}': {}",
+                    manifest.name,
+                    e
+                );
             }
         }
     }
-
     result
 }
 
@@ -83,10 +82,7 @@ fn publish_gist(path: &std::path::Path) -> anyhow::Result<String> {
 
 /// Render the report HTML for an experiment without writing it to disk.
 /// Side effects: loads the experiment store into `mgr`.
-pub fn render_html(
-    mgr: &mut Manager,
-    experiment: &ExperimentMetadata,
-) -> anyhow::Result<String> {
+pub fn render_html(mgr: &mut Manager, experiment: &ExperimentMetadata) -> anyhow::Result<String> {
     // Load metrics
     mgr.set_store_path(experiment.store.clone())?;
     mgr.require_store_mut()?.load_metrics()?;
@@ -106,7 +102,7 @@ pub fn render_html(
         .collect();
 
     // Load workload docs for mutation matrix filtering
-    let workload_docs = load_workload_docs(mgr);
+    let workload_docs = load_workload_docs(experiment);
 
     let metrics_json_raw = serde_json::to_string(&metrics)?;
 

@@ -210,27 +210,6 @@ pub(crate) fn init_repo_via_cli(repo_path: &Path) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub(crate) fn pull_via_cli(repo_path: &Path) -> anyhow::Result<()> {
-    if std::env::var_os("ETNA_OFFLINE").is_some() {
-        tracing::debug!("Skipping git pull at '{}': ETNA_OFFLINE is set", repo_path.display());
-        return Ok(());
-    }
-    tracing::debug!("Pulling path from remote");
-    tracing::debug!("run: 'git -C {} pull'", repo_path.display(),);
-    let status = std::process::Command::new("git")
-        .arg("-C")
-        .arg(repo_path)
-        .arg("pull")
-        .status()
-        .context("Failed to execute git pull")?;
-
-    if !status.success() {
-        anyhow::bail!("git pull failed with status: {}", status);
-    }
-    tracing::debug!("Pulled path from remote");
-    Ok(())
-}
-
 /// `ETNA_OFFLINE=1` means "don't hit the network." Local paths (`file://`,
 /// absolute filesystem paths) don't, so they're allowed through.
 fn is_local_git_url(url: &str) -> bool {

@@ -360,16 +360,16 @@ pub struct WorkloadManifest {
 /// One `[[tasks]]` block: a set of mutations paired with the properties to
 /// evaluate against them. Converted at workload-add time into a `Test` entry
 /// in the experiment's `tests/<name>.json`.
-#[derive(Debug, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 pub struct ManifestTaskGroup {
     pub mutations: Vec<String>,
     pub tasks: Vec<ManifestTask>,
 }
 
-#[derive(Debug, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 pub struct ManifestTask {
     pub property: String,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub witnesses: Vec<Witness>,
 }
 
