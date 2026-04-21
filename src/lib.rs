@@ -13,3 +13,4 @@ pub mod service;
 pub mod store;
 pub mod strategy;
 pub mod workload;
+pub mod workload_index;

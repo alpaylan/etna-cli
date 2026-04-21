@@ -12,6 +12,11 @@ pub(crate) struct EtnaConfig {
     pub configured: bool,
     #[serde(default = "default_version")]
     pub version: usize,
+    /// Override the URL the CLI pulls the workload catalog from. `None` means
+    /// "use the baked-in default". Env var `ETNA_WORKLOAD_INDEX_URL` wins over
+    /// this when both are set.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workload_index_url: Option<String>,
 }
 
 fn default_version() -> usize {
@@ -38,6 +43,7 @@ impl EtnaConfig {
             etna_dir,
             configured,
             version,
+            workload_index_url: None,
         })
     }
 
@@ -91,5 +97,10 @@ impl EtnaConfig {
 
     pub(crate) fn experiments_path(&self) -> PathBuf {
         self.etna_dir.join("experiments.json")
+    }
+
+    /// Cache path for the workload catalog refreshed by `etna workload update`.
+    pub(crate) fn workload_index_path(&self) -> PathBuf {
+        self.etna_dir.join("workloads-index.json")
     }
 }

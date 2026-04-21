@@ -1,66 +1,70 @@
 {
-  "description": "Canonical URLs for Etna workload and shared-library repos. Add via `etna workload add <url>`.",
-  "workloads": {
-    "Haskell": [
-      { "name": "bst-haskell",      "url": "https://github.com/alpaylan/etna-haskell-bst" },
-      { "name": "rbt-haskell",      "url": "https://github.com/alpaylan/etna-haskell-rbt" },
-      { "name": "stlc-haskell",     "url": "https://github.com/alpaylan/etna-haskell-stlc" },
-      { "name": "fsub-haskell",     "url": "https://github.com/alpaylan/etna-haskell-fsub" },
-      { "name": "luparser-haskell", "url": "https://github.com/alpaylan/etna-haskell-luparser" }
-    ],
-    "OCaml": [
-      { "name": "bst-ocaml",  "url": "https://github.com/alpaylan/etna-ocaml-bst" },
-      { "name": "rbt-ocaml",  "url": "https://github.com/alpaylan/etna-ocaml-rbt" },
-      { "name": "stlc-ocaml", "url": "https://github.com/alpaylan/etna-ocaml-stlc" },
-      { "name": "rare-ocaml", "url": "https://github.com/alpaylan/etna-ocaml-rare" }
-    ],
-    "Python": [
-      { "name": "bst-python", "url": "https://github.com/alpaylan/etna-python-bst" }
-    ],
-    "Racket": [
-      { "name": "bst-racket",     "url": "https://github.com/alpaylan/etna-racket-bst" },
-      { "name": "rbt-racket",     "url": "https://github.com/alpaylan/etna-racket-rbt" },
-      { "name": "stlc-racket",    "url": "https://github.com/alpaylan/etna-racket-stlc" },
-      { "name": "systemf-racket", "url": "https://github.com/alpaylan/etna-racket-systemf" }
-    ],
-    "Rocq": [
-      { "name": "bst-rocq",              "url": "https://github.com/alpaylan/etna-rocq-bst" },
-      { "name": "rbt-rocq",              "url": "https://github.com/alpaylan/etna-rocq-rbt" },
-      { "name": "stlc-rocq",             "url": "https://github.com/alpaylan/etna-rocq-stlc" },
-      { "name": "ifc-rocq",              "url": "https://github.com/alpaylan/etna-rocq-ifc" },
-      { "name": "bst-proplang-rocq",     "url": "https://github.com/alpaylan/etna-rocq-bst-proplang" },
-      { "name": "rbt-proplang-rocq",     "url": "https://github.com/alpaylan/etna-rocq-rbt-proplang" },
-      { "name": "stlc-proplang-rocq",    "url": "https://github.com/alpaylan/etna-rocq-stlc-proplang" },
-      { "name": "ifc-proplang-rocq",     "url": "https://github.com/alpaylan/etna-rocq-ifc-proplang" },
-      { "name": "sorting-proplang-rocq", "url": "https://github.com/alpaylan/etna-rocq-sorting-proplang" }
-    ],
-    "Rust": [
-      { "name": "bst-rust",    "url": "https://github.com/alpaylan/etna-rust-bst" },
-      { "name": "rbt-rust",    "url": "https://github.com/alpaylan/etna-rust-rbt" },
-      { "name": "stlc-rust",   "url": "https://github.com/alpaylan/etna-rust-stlc" },
-      { "name": "sudoku-rust", "url": "https://github.com/alpaylan/etna-rust-sudoku", "status": "stub" }
-    ],
-    "RustCrates": [
-      { "name": "time",        "url": "https://github.com/alpaylan/time-etna" },
-      { "name": "rust-csv",    "url": "https://github.com/alpaylan/rust-csv-etna" },
-      { "name": "regex",       "url": "https://github.com/alpaylan/regex-etna" },
-      { "name": "num-bigint",  "url": "https://github.com/alpaylan/num-bigint-etna" },
-      { "name": "nom",         "url": "https://github.com/alpaylan/nom-rs-etna" },
-      { "name": "buf-list",    "url": "https://github.com/alpaylan/buf-list-etna" },
-      { "name": "arroy",       "url": "https://github.com/alpaylan/arroy-etna" },
-      { "name": "roaring-rs",  "url": "https://github.com/alpaylan/roaring-rs-etna" },
-      { "name": "im-rs",       "url": "https://github.com/alpaylan/im-rs-etna" },
-      { "name": "bstr",        "url": "https://github.com/alpaylan/bstr-etna" },
-      { "name": "petgraph",    "url": "https://github.com/alpaylan/petgraph-etna", "status": "wip" }
-    ]
-  },
-  "notes": {
-    "RustCrates": "Forks of real Rust crates with Etna mutation variants declared in `etna.toml` as `[[variant]]` tables. This is a different schema from the standard `name`/`language` manifest used by the other workloads and is not consumed by the current CLI's `WorkloadManifest` parser. `wip` entries do not yet have `etna.toml`/`steps.json`."
-  },
+  "schema_version": 1,
+  "description": "Canonical index of Etna workload repos. Consumed by `etna workload list --kind available` and `etna workload add <name>`. The CLI fetches a fresh copy on demand and falls back to the bundled snapshot when offline.",
+  "entries": [
+    { "name": "bst-haskell",      "url": "https://github.com/alpaylan/etna-haskell-bst",      "language": "Haskell", "description": "Binary search trees.",          "default_ref": null, "status": "stable", "tags": [] },
+    { "name": "rbt-haskell",      "url": "https://github.com/alpaylan/etna-haskell-rbt",      "language": "Haskell", "description": "Red-black trees.",              "default_ref": null, "status": "stable", "tags": [] },
+    { "name": "stlc-haskell",     "url": "https://github.com/alpaylan/etna-haskell-stlc",     "language": "Haskell", "description": "Simply typed lambda calculus.", "default_ref": null, "status": "stable", "tags": [] },
+    { "name": "fsub-haskell",     "url": "https://github.com/alpaylan/etna-haskell-fsub",     "language": "Haskell", "description": "System F-sub type system.",     "default_ref": null, "status": "stable", "tags": [] },
+    { "name": "luparser-haskell", "url": "https://github.com/alpaylan/etna-haskell-luparser", "language": "Haskell", "description": "Lua parser.",                   "default_ref": null, "status": "stable", "tags": [] },
+
+    { "name": "bst-ocaml",  "url": "https://github.com/alpaylan/etna-ocaml-bst",  "language": "OCaml", "description": "Binary search trees.",          "default_ref": null, "status": "stable", "tags": [] },
+    { "name": "rbt-ocaml",  "url": "https://github.com/alpaylan/etna-ocaml-rbt",  "language": "OCaml", "description": "Red-black trees.",              "default_ref": null, "status": "stable", "tags": [] },
+    { "name": "stlc-ocaml", "url": "https://github.com/alpaylan/etna-ocaml-stlc", "language": "OCaml", "description": "Simply typed lambda calculus.", "default_ref": null, "status": "stable", "tags": [] },
+    { "name": "rare-ocaml", "url": "https://github.com/alpaylan/etna-ocaml-rare", "language": "OCaml", "description": "RARE rewrite system.",          "default_ref": null, "status": "stable", "tags": [] },
+
+    { "name": "bst-python", "url": "https://github.com/alpaylan/etna-python-bst", "language": "Python", "description": "Binary search trees.", "default_ref": null, "status": "stable", "tags": [] },
+
+    { "name": "bst-racket",     "url": "https://github.com/alpaylan/etna-racket-bst",     "language": "Racket", "description": "Binary search trees.",          "default_ref": null, "status": "stable", "tags": [] },
+    { "name": "rbt-racket",     "url": "https://github.com/alpaylan/etna-racket-rbt",     "language": "Racket", "description": "Red-black trees.",              "default_ref": null, "status": "stable", "tags": [] },
+    { "name": "stlc-racket",    "url": "https://github.com/alpaylan/etna-racket-stlc",    "language": "Racket", "description": "Simply typed lambda calculus.", "default_ref": null, "status": "stable", "tags": [] },
+    { "name": "systemf-racket", "url": "https://github.com/alpaylan/etna-racket-systemf", "language": "Racket", "description": "System F type system.",         "default_ref": null, "status": "stable", "tags": [] },
+
+    { "name": "bst-rocq",              "url": "https://github.com/alpaylan/etna-rocq-bst",              "language": "Rocq", "description": "Binary search trees.",                      "default_ref": null, "status": "stable", "tags": [] },
+    { "name": "rbt-rocq",              "url": "https://github.com/alpaylan/etna-rocq-rbt",              "language": "Rocq", "description": "Red-black trees.",                          "default_ref": null, "status": "stable", "tags": [] },
+    { "name": "stlc-rocq",             "url": "https://github.com/alpaylan/etna-rocq-stlc",             "language": "Rocq", "description": "Simply typed lambda calculus.",             "default_ref": null, "status": "stable", "tags": [] },
+    { "name": "ifc-rocq",              "url": "https://github.com/alpaylan/etna-rocq-ifc",              "language": "Rocq", "description": "Information-flow control.",                 "default_ref": null, "status": "stable", "tags": [] },
+    { "name": "bst-proplang-rocq",     "url": "https://github.com/alpaylan/etna-rocq-bst-proplang",     "language": "Rocq", "description": "Binary search trees (proplang).",           "default_ref": null, "status": "stable", "tags": ["proplang"] },
+    { "name": "rbt-proplang-rocq",     "url": "https://github.com/alpaylan/etna-rocq-rbt-proplang",     "language": "Rocq", "description": "Red-black trees (proplang).",               "default_ref": null, "status": "stable", "tags": ["proplang"] },
+    { "name": "stlc-proplang-rocq",    "url": "https://github.com/alpaylan/etna-rocq-stlc-proplang",    "language": "Rocq", "description": "Simply typed lambda calculus (proplang).",  "default_ref": null, "status": "stable", "tags": ["proplang"] },
+    { "name": "ifc-proplang-rocq",     "url": "https://github.com/alpaylan/etna-rocq-ifc-proplang",     "language": "Rocq", "description": "Information-flow control (proplang).",      "default_ref": null, "status": "stable", "tags": ["proplang"] },
+    { "name": "sorting-proplang-rocq", "url": "https://github.com/alpaylan/etna-rocq-sorting-proplang", "language": "Rocq", "description": "Sorting (proplang).",                       "default_ref": null, "status": "stable", "tags": ["proplang"] },
+
+    { "name": "bst-rust",    "url": "https://github.com/alpaylan/etna-rust-bst",    "language": "Rust", "description": "Binary search trees.",          "default_ref": null, "status": "stable", "tags": [] },
+    { "name": "rbt-rust",    "url": "https://github.com/alpaylan/etna-rust-rbt",    "language": "Rust", "description": "Red-black trees.",              "default_ref": null, "status": "stable", "tags": [] },
+    { "name": "stlc-rust",   "url": "https://github.com/alpaylan/etna-rust-stlc",   "language": "Rust", "description": "Simply typed lambda calculus.", "default_ref": null, "status": "stable", "tags": [] },
+    { "name": "sudoku-rust", "url": "https://github.com/alpaylan/etna-rust-sudoku", "language": "Rust", "description": "Sudoku solver.",                "default_ref": null, "status": "stub",   "tags": [] },
+
+    { "name": "time",        "url": "https://github.com/alpaylan/time-etna",        "language": "Rust", "description": "time crate fork with Etna variants.",                  "default_ref": null, "status": "stable", "tags": ["crate-fork"] },
+    { "name": "rust-csv",    "url": "https://github.com/alpaylan/rust-csv-etna",    "language": "Rust", "description": "rust-csv fork with Etna variants.",                    "default_ref": null, "status": "stable", "tags": ["crate-fork"] },
+    { "name": "regex",       "url": "https://github.com/alpaylan/regex-etna",       "language": "Rust", "description": "regex crate fork with Etna variants.",                 "default_ref": null, "status": "stable", "tags": ["crate-fork"] },
+    { "name": "num-bigint",  "url": "https://github.com/alpaylan/num-bigint-etna",  "language": "Rust", "description": "num-bigint fork with Etna variants.",                  "default_ref": null, "status": "stable", "tags": ["crate-fork"] },
+    { "name": "nom",         "url": "https://github.com/alpaylan/nom-rs-etna",      "language": "Rust", "description": "nom parser combinator fork with Etna variants.",       "default_ref": null, "status": "stable", "tags": ["crate-fork"] },
+    { "name": "buf-list",    "url": "https://github.com/alpaylan/buf-list-etna",    "language": "Rust", "description": "buf-list fork with Etna variants.",                    "default_ref": null, "status": "stable", "tags": ["crate-fork"] },
+    { "name": "arroy",       "url": "https://github.com/alpaylan/arroy-etna",       "language": "Rust", "description": "arroy fork with Etna variants.",                       "default_ref": null, "status": "stable", "tags": ["crate-fork"] },
+    { "name": "roaring-rs",  "url": "https://github.com/alpaylan/roaring-rs-etna",  "language": "Rust", "description": "roaring-rs fork with Etna variants.",                  "default_ref": null, "status": "stable", "tags": ["crate-fork"] },
+    { "name": "im-rs",       "url": "https://github.com/alpaylan/im-rs-etna",       "language": "Rust", "description": "im-rs persistent data structure fork with Etna variants.", "default_ref": null, "status": "stable", "tags": ["crate-fork"] },
+    { "name": "bstr",        "url": "https://github.com/alpaylan/bstr-etna",        "language": "Rust", "description": "bstr fork with Etna variants.",                        "default_ref": null, "status": "stable", "tags": ["crate-fork"] },
+    { "name": "petgraph",    "url": "https://github.com/alpaylan/petgraph-etna",    "language": "Rust", "description": "petgraph fork with Etna variants.",                    "default_ref": null, "status": "wip",    "tags": ["crate-fork"] },
+
+    { "name": "httparse",             "url": "https://github.com/alpaylan/httparse-etna",             "language": "Rust", "description": "httparse fork with Etna variants (HTTP 1.x push parser).",                     "default_ref": null, "status": "stable", "tags": ["crate-fork"] },
+    { "name": "semver",               "url": "https://github.com/alpaylan/semver-etna",               "language": "Rust", "description": "semver fork with Etna variants (Cargo's SemVer parser).",                      "default_ref": null, "status": "stable", "tags": ["crate-fork"] },
+    { "name": "memchr",               "url": "https://github.com/alpaylan/memchr-etna",               "language": "Rust", "description": "memchr fork with Etna variants (optimized string search).",                    "default_ref": null, "status": "stable", "tags": ["crate-fork"] },
+    { "name": "rust-decimal",         "url": "https://github.com/alpaylan/rust-decimal-etna",         "language": "Rust", "description": "rust-decimal fork with Etna variants (fixed-precision decimal numbers).",      "default_ref": null, "status": "stable", "tags": ["crate-fork"] },
+    { "name": "ropey",                "url": "https://github.com/alpaylan/ropey-etna",                "language": "Rust", "description": "ropey fork with Etna variants (UTF-8 text rope).",                             "default_ref": null, "status": "stable", "tags": ["crate-fork"] },
+    { "name": "unicode-segmentation", "url": "https://github.com/alpaylan/unicode-segmentation-etna", "language": "Rust", "description": "unicode-segmentation fork with Etna variants (UAX#29 grapheme/word boundaries).", "default_ref": null, "status": "stable", "tags": ["crate-fork"] },
+    { "name": "bitvec",               "url": "https://github.com/alpaylan/bitvec-rs-etna",            "language": "Rust", "description": "bitvec fork with Etna variants (bit-granularity memory management).",          "default_ref": null, "status": "stable", "tags": ["crate-fork"] },
+    { "name": "indexmap",             "url": "https://github.com/alpaylan/indexmap-etna",             "language": "Rust", "description": "indexmap fork with Etna variants (hash table with stable iteration order).",    "default_ref": null, "status": "stable", "tags": ["crate-fork"] },
+    { "name": "ordered-float",        "url": "https://github.com/alpaylan/ordered-float-etna",        "language": "Rust", "description": "ordered-float fork with Etna variants.",                                       "default_ref": null, "status": "stable", "tags": ["crate-fork"] }
+  ],
   "shared_libs": [
-    { "name": "etna-haskell-lib", "url": "https://github.com/alpaylan/etna-haskell-lib", "consumed_by": "Haskell workloads", "submodule_path": "./etna-lib" },
+    { "name": "etna-haskell-lib", "url": "https://github.com/alpaylan/etna-haskell-lib", "consumed_by": "Haskell workloads",            "submodule_path": "./etna-lib" },
     { "name": "etna-ocaml-util",  "url": "https://github.com/alpaylan/etna-ocaml-util",  "consumed_by": "OCaml workloads (RBT, STLC, RARE)", "submodule_path": "./util" },
-    { "name": "etna-rocq-lib",    "url": "https://github.com/alpaylan/etna-rocq-lib",    "consumed_by": "Rocq *Proplang workloads", "submodule_path": "./Lib" },
-    { "name": "etna-rs-utils",    "url": "https://github.com/alpaylan/etna-rs-utils",    "consumed_by": "Rust workloads", "submodule_path": null }
-  ]
+    { "name": "etna-rocq-lib",    "url": "https://github.com/alpaylan/etna-rocq-lib",    "consumed_by": "Rocq *Proplang workloads",     "submodule_path": "./Lib" },
+    { "name": "etna-rs-utils",    "url": "https://github.com/alpaylan/etna-rs-utils",    "consumed_by": "Rust workloads",                "submodule_path": null }
+  ],
+  "notes": {
+    "crate-fork": "Entries tagged `crate-fork` are forks of real Rust crates with Etna variants declared in `etna.toml` as `[[variant]]` tables. They resolve by name like any other entry, but the current CLI's `WorkloadManifest` parser does not yet understand variant-style manifests, so `etna workload add` will fail at validation.",
+    "wip": "Entries marked `wip` do not yet have a valid `etna.toml` / `steps.json` and cannot be added."
+  }
 }

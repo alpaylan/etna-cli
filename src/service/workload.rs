@@ -8,9 +8,49 @@ use crate::{
     git_driver,
     manager::Manager,
     workload::{WorkloadManifest, WorkloadMetadata},
+    workload_index::{looks_like_url, WorkloadEntry, WorkloadIndex},
 };
 
 use super::types::ServiceResult;
+
+/// Resolved `add` target: a git URL plus an optional ref. `name` is the
+/// catalog name when the caller passed one, else `None`.
+pub struct ResolvedSpec {
+    pub url: String,
+    pub reference: Option<String>,
+    pub name: Option<String>,
+}
+
+/// Turn a user-supplied spec (either a git URL or a catalog name) into the
+/// URL+ref the rest of `add_workload` expects. When the caller supplied an
+/// explicit `--ref`, it wins over the entry's `default_ref`.
+pub fn resolve_spec(spec: &str, reference: Option<&str>) -> ServiceResult<ResolvedSpec> {
+    if looks_like_url(spec) {
+        return Ok(ResolvedSpec {
+            url: spec.to_string(),
+            reference: reference.map(str::to_string),
+            name: None,
+        });
+    }
+
+    let index = WorkloadIndex::load()?;
+    let entry = index.resolve(spec).ok_or_else(|| {
+        anyhow::anyhow!(
+            "Workload '{}' not found in the catalog. Run `etna workload list --kind available` to see what's there, or pass a full git URL.",
+            spec
+        )
+    })?;
+
+    let reference = reference
+        .map(str::to_string)
+        .or_else(|| entry.default_ref.clone());
+
+    Ok(ResolvedSpec {
+        url: entry.url.clone(),
+        reference,
+        name: Some(entry.name.clone()),
+    })
+}
 
 /// Default trial count seeded into `tests/<name>.json` when adding a workload.
 /// Users can edit the file afterwards; this is just the first-run baseline.
@@ -106,9 +146,12 @@ fn seed_tests_file(
 pub fn add_workload(
     _mgr: &Manager,
     experiment: &ExperimentMetadata,
-    url: &str,
+    spec: &str,
     reference: Option<&str>,
 ) -> ServiceResult<WorkloadMetadata> {
+    let resolved = resolve_spec(spec, reference)?;
+    let url = resolved.url.as_str();
+    let reference = resolved.reference.as_deref();
     tracing::debug!(
         "adding workload from '{}' (ref: {:?}) to '{}'",
         url,
@@ -265,8 +308,15 @@ pub fn list_workloads(experiment: &ExperimentMetadata) -> ServiceResult<Vec<Work
     Ok(experiment.workloads())
 }
 
-/// List workloads available to add. MVP: no catalog — the extension/CLI add by
-/// URL. Kept as a stub so the server route stays stable when a catalog lands.
-pub fn list_available_workloads() -> ServiceResult<Vec<WorkloadMetadata>> {
-    Ok(vec![])
+/// List workloads available to add, sourced from the workload catalog
+/// (`~/.etna/workloads-index.json` when present, otherwise the bundled
+/// snapshot). Never touches the network — call `update_index()` to refresh.
+pub fn list_available_workloads() -> ServiceResult<Vec<WorkloadEntry>> {
+    Ok(WorkloadIndex::load()?.entries)
+}
+
+/// Force-refresh the cached workload index from the canonical URL. Returns
+/// the fresh index so callers can report how many entries it has.
+pub fn update_index() -> ServiceResult<WorkloadIndex> {
+    WorkloadIndex::fetch()
 }

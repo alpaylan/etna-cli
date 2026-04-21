@@ -205,9 +205,9 @@ pub(crate) fn run() -> anyhow::Result<()> {
         Command::Workload(wl) => match wl {
             WorkloadCommand::AddWorkload {
                 experiment: _,
-                url,
+                spec,
                 reference,
-            } => commands::workload::add_workload::invoke(mgr, experiment.unwrap(), url, reference),
+            } => commands::workload::add_workload::invoke(mgr, experiment.unwrap(), spec, reference),
             WorkloadCommand::RemoveWorkload {
                 experiment: _,
                 workload,
@@ -217,6 +217,7 @@ pub(crate) fn run() -> anyhow::Result<()> {
                 experiment: _,
                 kind,
             } => commands::workload::list_workloads::invoke(mgr, experiment.unwrap(), kind),
+            WorkloadCommand::Update {} => commands::workload::update_index::invoke(),
         },
         Command::Config(cl) => match cl {
             ConfigCommand::Show => commands::config::show::invoke(),
@@ -438,16 +439,19 @@ enum ExperimentCommand {
 enum WorkloadCommand {
     #[clap(
         name = "add",
-        about = "Add a remote workload (git URL) to the experiment"
+        about = "Add a workload to the experiment by catalog name or git URL"
     )]
     AddWorkload {
         /// Name of the experiment
         /// [default: current directory]
         #[clap(short, long, default_value = None)]
         experiment: Option<String>,
-        /// Git URL of the workload repo (must contain etna.toml + steps.json)
-        url: String,
-        /// Optional branch/tag/ref to clone
+        /// Catalog name (e.g. `bst-haskell`) or git URL of the workload repo
+        /// (must contain `etna.toml` + `steps.json` at its root).
+        /// Run `etna workload list --kind available` to see catalog names.
+        spec: String,
+        /// Optional branch/tag/ref to clone. Overrides the catalog's
+        /// `default_ref` when both are set.
         #[clap(long = "ref")]
         reference: Option<String>,
     },
@@ -471,6 +475,11 @@ enum WorkloadCommand {
         #[clap(short, long, default_value = "experiment")]
         kind: String,
     },
+    #[clap(
+        name = "update",
+        about = "Refresh the cached workload catalog from its canonical URL"
+    )]
+    Update {},
 }
 
 #[derive(Debug, Subcommand)]
@@ -622,6 +631,7 @@ impl Command {
                 WorkloadCommand::AddWorkload { experiment, .. } => experiment.as_ref(),
                 WorkloadCommand::RemoveWorkload { experiment, .. } => experiment.as_ref(),
                 WorkloadCommand::ListWorkloads { experiment, .. } => experiment.as_ref(),
+                WorkloadCommand::Update {} => None,
             },
             _ => None,
         }
@@ -646,6 +656,7 @@ impl Command {
                 WorkloadCommand::AddWorkload { .. } => true,
                 WorkloadCommand::RemoveWorkload { .. } => true,
                 WorkloadCommand::ListWorkloads { .. } => true,
+                WorkloadCommand::Update {} => false,
             },
             _ => false,
         }

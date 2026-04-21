@@ -178,9 +178,9 @@ export async function handleBrowserMessage(message: Msg): Promise<void> {
       }
       case 'addWorkload': {
         const experimentName = message.experimentName as string;
-        const url = message.url as string;
+        const spec = (message.spec ?? message.url) as string;
         const ref = message.ref as string | undefined;
-        const body: Record<string, string> = { url };
+        const body: Record<string, string> = { spec };
         if (ref) body.ref = ref;
         await req(
           'POST',
@@ -192,6 +192,11 @@ export async function handleBrowserMessage(message: Msg): Promise<void> {
           `/api/v1/experiments/${encodeURIComponent(experimentName)}/workloads`
         );
         dispatch({ type: 'workloads', data: { experimentName, workloads } });
+        break;
+      }
+      case 'refreshWorkloadIndex': {
+        const data = await req('POST', '/api/v1/workloads/index/refresh');
+        dispatch({ type: 'workloadIndexRefreshed', data });
         break;
       }
       case 'removeWorkload': {

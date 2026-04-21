@@ -19,6 +19,8 @@ import {
   TestInfo,
   TestDefinition,
   WorkloadMetadata,
+  WorkloadEntry,
+  RefreshWorkloadIndexResponse,
 } from './types';
 
 export class EtnaApiClient {
@@ -160,9 +162,20 @@ export class EtnaApiClient {
     }
   }
 
-  async listAvailableWorkloads(): Promise<WorkloadMetadata[]> {
+  async listAvailableWorkloads(): Promise<WorkloadEntry[]> {
     try {
-      const response = await this.client.get<WorkloadMetadata[]>('/api/v1/workloads/available');
+      const response = await this.client.get<WorkloadEntry[]>('/api/v1/workloads/available');
+      return response.data;
+    } catch (error) {
+      this.handleError(error);
+    }
+  }
+
+  async refreshWorkloadIndex(): Promise<RefreshWorkloadIndexResponse> {
+    try {
+      const response = await this.client.post<RefreshWorkloadIndexResponse>(
+        '/api/v1/workloads/index/refresh'
+      );
       return response.data;
     } catch (error) {
       this.handleError(error);

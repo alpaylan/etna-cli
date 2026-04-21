@@ -11,6 +11,23 @@ export interface WorkloadMetadata {
   name: string;
 }
 
+// Entry in the workload catalog (`/api/v1/workloads/available`). Matches
+// `src/workload_index.rs::WorkloadEntry` on the Rust side.
+export interface WorkloadEntry {
+  name: string;
+  url: string;
+  language: string;
+  description?: string | null;
+  default_ref?: string | null;
+  status: string;
+  tags: string[];
+}
+
+export interface RefreshWorkloadIndexResponse {
+  refreshed: boolean;
+  entries: number;
+}
+
 export interface CreateExperimentRequest {
   name: string;
   path?: string;
@@ -98,9 +115,11 @@ export interface MutationOperationResponse {
 }
 
 // Add workload request — field names must match the server handler payload
-// (`src/server/handlers/workloads.rs::AddWorkloadRequest`).
+// (`src/server/handlers/workloads.rs::AddWorkloadRequest`). `spec` may be a
+// catalog name or a git URL. `url` is still accepted as an alias server-side
+// for older callers.
 export interface AddWorkloadRequest {
-  url: string;
+  spec: string;
   ref?: string;
 }
 

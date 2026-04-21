@@ -155,11 +155,18 @@ export async function handleWebviewMessage(message: WebviewMessage): Promise<Web
 
       case 'addWorkload': {
         const experimentName = message.experimentName as string;
-        const url = message.url as string;
+        // Accept `spec` (catalog name or URL) with `url` as a legacy alias
+        // from older webview builds.
+        const spec = (message.spec ?? message.url) as string;
         const ref = message.ref as string | undefined;
-        await client.addWorkload(experimentName, { url, ref });
+        await client.addWorkload(experimentName, { spec, ref });
         const workloads = await client.listWorkloads(experimentName);
         return { type: 'workloads', data: { experimentName, workloads } };
+      }
+
+      case 'refreshWorkloadIndex': {
+        const result = await client.refreshWorkloadIndex();
+        return { type: 'workloadIndexRefreshed', data: result };
       }
 
       case 'removeWorkload': {

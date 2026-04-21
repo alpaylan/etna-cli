@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { vscode, WorkloadMetadata, onMessage } from '../../api/vscodeApi';
+import { vscode, WorkloadMetadata, WorkloadEntry, onMessage } from '../../api/vscodeApi';
 
 interface Props {
   experimentName: string;
@@ -8,16 +8,28 @@ interface Props {
 
 type Pending = { kind: 'add' | 'remove'; workload: string };
 
+// Sentinel for the "type a URL" option in the catalog dropdown.
+const URL_MODE = '__url__';
+
 function WorkloadsPanel({ experimentName, workloads: initial }: Props) {
   const [workloads, setWorkloads] = useState<WorkloadMetadata[]>(initial);
+  const [catalog, setCatalog] = useState<WorkloadEntry[]>([]);
+  const [catalogLoaded, setCatalogLoaded] = useState(false);
+  const [selection, setSelection] = useState<string>(URL_MODE);
   const [url, setUrl] = useState<string>('');
   const [ref, setRef] = useState<string>('');
   const [pending, setPending] = useState<Pending | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const [confirmingKey, setConfirmingKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const pendingUrlRef = useRef<string | null>(null);
+  const pendingSpecRef = useRef<string | null>(null);
 
   useEffect(() => setWorkloads(initial), [initial]);
+
+  // One-shot catalog load on mount.
+  useEffect(() => {
+    vscode.postMessage({ type: 'getAvailableWorkloads' });
+  }, []);
 
   useEffect(() => {
     const unsubscribe = onMessage((message) => {
@@ -28,15 +40,24 @@ function WorkloadsPanel({ experimentName, workloads: initial }: Props) {
           if (pending?.kind === 'add') {
             setUrl('');
             setRef('');
+            setSelection(URL_MODE);
           }
           setPending(null);
-          pendingUrlRef.current = null;
+          pendingSpecRef.current = null;
           vscode.postMessage({ type: 'getExperiments' });
         }
+      } else if (message.type === 'availableWorkloads') {
+        const payload = message.data as { workloads: WorkloadEntry[] };
+        setCatalog(payload.workloads ?? []);
+        setCatalogLoaded(true);
+      } else if (message.type === 'workloadIndexRefreshed') {
+        setRefreshing(false);
+        vscode.postMessage({ type: 'getAvailableWorkloads' });
       } else if (message.type === 'error') {
         setError(message.message || 'Unknown error');
         setPending(null);
-        pendingUrlRef.current = null;
+        setRefreshing(false);
+        pendingSpecRef.current = null;
       }
     });
     return unsubscribe;
@@ -48,19 +69,39 @@ function WorkloadsPanel({ experimentName, workloads: initial }: Props) {
     return () => clearTimeout(t);
   }, [error]);
 
+  const handleSelect = (value: string) => {
+    setSelection(value);
+    if (value === URL_MODE) {
+      setUrl('');
+    } else {
+      // Prefill URL so power-users can tweak before submitting.
+      const entry = catalog.find((e) => e.name === value);
+      setUrl(entry?.url ?? '');
+    }
+  };
+
   const handleAdd = () => {
+    // `spec` is what the server gets: either the catalog name (resolved
+    // server-side) or, when the user picked "URL", the URL they typed.
     const trimmedUrl = url.trim();
-    if (!trimmedUrl) return;
+    const spec = selection === URL_MODE ? trimmedUrl : selection;
+    if (!spec) return;
     const trimmedRef = ref.trim() || undefined;
-    pendingUrlRef.current = trimmedUrl;
-    setPending({ kind: 'add', workload: trimmedUrl });
+    pendingSpecRef.current = spec;
+    setPending({ kind: 'add', workload: spec });
     setError(null);
     vscode.postMessage({
       type: 'addWorkload',
       experimentName,
-      url: trimmedUrl,
+      spec,
       ref: trimmedRef,
     });
+  };
+
+  const handleRefreshCatalog = () => {
+    setRefreshing(true);
+    setError(null);
+    vscode.postMessage({ type: 'refreshWorkloadIndex' });
   };
 
   const handleRemove = (w: WorkloadMetadata) => {
@@ -79,7 +120,9 @@ function WorkloadsPanel({ experimentName, workloads: initial }: Props) {
   };
 
   const addBusy = pending?.kind === 'add';
-  const addDisabled = !url.trim() || addBusy;
+  const urlMode = selection === URL_MODE;
+  const addDisabled =
+    (urlMode ? !url.trim() : !selection || selection === URL_MODE) || addBusy;
 
   return (
     <div className="ex-drawer ex-drawer-standalone">
@@ -94,14 +137,30 @@ function WorkloadsPanel({ experimentName, workloads: initial }: Props) {
 
       <section className="ex-newtest" aria-label="Add workload">
         <span className="ex-newtest-tag">ADD</span>
+        <select
+          className="ex-input ex-mono"
+          value={selection}
+          onChange={(e) => handleSelect(e.target.value)}
+          disabled={addBusy}
+          style={{ flex: '0 1 220px', minWidth: 180 }}
+          aria-label="Workload catalog"
+        >
+          <option value={URL_MODE}>— paste a URL —</option>
+          {catalog.map((entry) => (
+            <option key={entry.name} value={entry.name}>
+              {entry.name} · {entry.language}
+              {entry.status !== 'stable' ? ` · ${entry.status}` : ''}
+            </option>
+          ))}
+        </select>
         <input
           className="ex-input ex-mono ex-newtest-input"
           type="url"
-          placeholder="https://github.com/owner/repo"
+          placeholder={urlMode ? 'https://github.com/owner/repo' : 'resolved from catalog'}
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter' && !addDisabled) handleAdd(); }}
-          disabled={addBusy}
+          disabled={addBusy || !urlMode}
           style={{ flex: '1 1 auto' }}
         />
         <input
@@ -122,11 +181,26 @@ function WorkloadsPanel({ experimentName, workloads: initial }: Props) {
         >
           {addBusy ? 'Cloning…' : 'Add'}
         </button>
+        <button
+          className="ex-linkbtn"
+          onClick={handleRefreshCatalog}
+          disabled={refreshing}
+          type="button"
+          title="Refresh the cached workload catalog from its canonical URL"
+        >
+          {refreshing ? 'refreshing…' : 'refresh catalog'}
+        </button>
       </section>
+
+      {catalogLoaded && catalog.length === 0 && (
+        <div className="ex-drawer-empty">
+          <span aria-hidden>⚠</span> Catalog is empty — try `refresh catalog`.
+        </div>
+      )}
 
       {workloads.length === 0 ? (
         <div className="ex-drawer-empty">
-          <span aria-hidden>∅</span> No workloads yet — paste a repo URL above.
+          <span aria-hidden>∅</span> No workloads yet — pick one from the catalog or paste a repo URL.
         </div>
       ) : (
         <ul className="ex-testlist">

@@ -8,15 +8,19 @@ use crate::server::error::ServerError;
 use crate::server::state::AppState;
 use crate::service::workload as wl_service;
 use crate::workload::WorkloadMetadata;
+use crate::workload_index::WorkloadEntry;
 
-/// Request body for adding a remote workload.
+/// Request body for adding a workload.
 #[derive(Debug, Deserialize)]
 pub struct AddWorkloadRequest {
-    /// Git URL of the workload repo. Must contain `etna.toml` + `steps.json`
-    /// at its root.
-    pub url: String,
-    /// Optional branch/tag/ref. When omitted, the repo's default branch is
-    /// used.
+    /// Catalog name or git URL of the workload repo. When a name is supplied,
+    /// the server resolves it against the cached index.
+    /// `url` is accepted as an alias for backwards compatibility with older
+    /// clients that only know how to send URLs.
+    #[serde(alias = "url")]
+    pub spec: String,
+    /// Optional branch/tag/ref. When omitted, the catalog's `default_ref`
+    /// (if any) wins; failing that, the repo's default branch.
     #[serde(default, rename = "ref")]
     pub reference: Option<String>,
 }
@@ -25,6 +29,13 @@ pub struct AddWorkloadRequest {
 #[derive(Debug, Serialize)]
 pub struct AddWorkloadResponse {
     pub workload: WorkloadMetadata,
+}
+
+/// Response for refreshing the workload catalog
+#[derive(Debug, Serialize)]
+pub struct RefreshWorkloadIndexResponse {
+    pub refreshed: bool,
+    pub entries: usize,
 }
 
 /// List workloads in an experiment
@@ -58,18 +69,29 @@ pub async fn add_workload(
     let workload = wl_service::add_workload(
         &manager,
         &experiment,
-        &request.url,
+        &request.spec,
         request.reference.as_deref(),
     )?;
 
     Ok(Json(AddWorkloadResponse { workload }))
 }
 
-/// List workloads available to add. MVP returns an empty list; a catalog can
-/// be wired in later without changing the route.
-pub async fn list_available_workloads() -> Result<Json<Vec<WorkloadMetadata>>, ServerError> {
-    let workloads = wl_service::list_available_workloads()?;
-    Ok(Json(workloads))
+/// List the available workloads in the catalog (cached copy, no network).
+pub async fn list_available_workloads() -> Result<Json<Vec<WorkloadEntry>>, ServerError> {
+    let entries = wl_service::list_available_workloads()?;
+    Ok(Json(entries))
+}
+
+/// Refresh the cached workload catalog from the canonical URL. Runs the
+/// blocking HTTP call on a tokio thread pool.
+pub async fn refresh_workload_index() -> Result<Json<RefreshWorkloadIndexResponse>, ServerError> {
+    let index = tokio::task::spawn_blocking(wl_service::update_index)
+        .await
+        .map_err(|e| ServerError::internal(format!("refresh join failed: {e}")))??;
+    Ok(Json(RefreshWorkloadIndexResponse {
+        refreshed: true,
+        entries: index.entries.len(),
+    }))
 }
 
 /// Remove a workload from an experiment

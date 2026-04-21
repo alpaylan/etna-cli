@@ -86,6 +86,17 @@ export interface WorkloadMetadata {
   name: string;
 }
 
+/** One row from `/api/v1/workloads/available`. */
+export interface WorkloadEntry {
+  name: string;
+  url: string;
+  language: string;
+  description?: string | null;
+  default_ref?: string | null;
+  status: string;
+  tags: string[];
+}
+
 export interface JobInfo {
   id: string;
   job_type: string;

@@ -66,6 +66,10 @@ pub fn api_routes() -> Router<AppState> {
             get(handlers::workloads::list_available_workloads),
         )
         .route(
+            "/api/v1/workloads/index/refresh",
+            post(handlers::workloads::refresh_workload_index),
+        )
+        .route(
             "/api/v1/experiments/{name}/workloads",
             get(handlers::workloads::list_workloads),
         )
