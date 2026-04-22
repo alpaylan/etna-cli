@@ -220,6 +220,7 @@ pub(crate) fn run() -> anyhow::Result<()> {
             WorkloadCommand::Update {} => commands::workload::update_index::invoke(),
             WorkloadCommand::Doc { dir } => commands::workload::doc::invoke(dir),
             WorkloadCommand::Check { dir } => commands::workload::check::invoke(dir),
+            WorkloadCommand::Site { out, catalog } => commands::workload::site::invoke(out, catalog),
         },
         Command::Config(cl) => match cl {
             ConfigCommand::Show => commands::config::show::invoke(),
@@ -507,6 +508,21 @@ enum WorkloadCommand {
         #[clap(default_value = ".")]
         dir: PathBuf,
     },
+    #[clap(
+        name = "site",
+        about = "Publish the workload catalog as a static site (fetches etna.toml + patches per entry)"
+    )]
+    Site {
+        /// Output directory. Will be populated with `data/catalog.json`
+        /// and `data/workloads/<name>.json`. Drop the webview-ui `site.html`
+        /// bundle alongside it to deploy.
+        #[clap(short, long, default_value = "site")]
+        out: PathBuf,
+        /// Optional path to a catalog JSON file. Defaults to the cached
+        /// workload index (bundled snapshot on first run).
+        #[clap(long)]
+        catalog: Option<PathBuf>,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -661,6 +677,7 @@ impl Command {
                 WorkloadCommand::Update {} => None,
                 WorkloadCommand::Doc { .. } => None,
                 WorkloadCommand::Check { .. } => None,
+                WorkloadCommand::Site { .. } => None,
             },
             _ => None,
         }
@@ -688,6 +705,7 @@ impl Command {
                 WorkloadCommand::Update {} => false,
                 WorkloadCommand::Doc { .. } => false,
                 WorkloadCommand::Check { .. } => false,
+                WorkloadCommand::Site { .. } => false,
             },
             _ => false,
         }

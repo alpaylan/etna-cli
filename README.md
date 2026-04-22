@@ -51,6 +51,22 @@ environment variables, which are also useful when experimenting locally:
   `workload add` and `bash`, useful when running against a pre-populated
   cache without network access.
 
+### Catalog static site
+
+`etna workload site --out ./site/` fetches every catalog entry's `etna.toml`
+(plus referenced patch files) and emits a deployable directory. Combined with
+the webview-ui bundle (`cd etna-vscode/webview-ui && npm run build`) it
+produces a standalone browser view of the whole workload catalog.
+
+`.github/workflows/deploy-site.yml` publishes this to Cloudflare Pages on
+every push to `main`. One-time setup:
+
+1. Create a Cloudflare API token scoped to `Cloudflare Pages — Edit` for
+   the target account.
+2. Add two repo secrets: `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`.
+3. First run auto-creates the `etna-workloads` Pages project; subsequent
+   pushes redeploy to the production URL.
+
 ## Research Papers
 
 ICFP'23: Etna: An Evaluation Platform for Property-Based Testing (Experience Report)

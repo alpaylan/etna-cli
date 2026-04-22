@@ -1,4 +1,5 @@
 import { handleBrowserMessage, isBrowserMode } from './browserShim';
+import { handleStaticMessage, isStaticMode } from './staticShim';
 
 // Type declarations for VSCode webview API
 declare function acquireVsCodeApi(): VsCodeApi;
@@ -9,32 +10,46 @@ interface VsCodeApi {
   setState(state: unknown): void;
 }
 
+type Transport = 'vscode' | 'static' | 'browser' | 'none';
+
 // Singleton pattern for VSCode API
 class VSCodeAPIWrapper {
   private readonly vsCodeApi: VsCodeApi | undefined;
-  private readonly browser: boolean;
+  private readonly transport: Transport;
 
   constructor() {
     if (typeof acquireVsCodeApi === 'function') {
       this.vsCodeApi = acquireVsCodeApi();
     }
-    this.browser = !this.vsCodeApi && isBrowserMode();
-    if (this.browser) {
-      console.info('[etna] Running in browser dev mode — talking to server directly.');
+    if (this.vsCodeApi) {
+      this.transport = 'vscode';
+    } else if (isStaticMode()) {
+      this.transport = 'static';
+      console.info('[etna] Static mode — reading catalog JSON from ./data/.');
+    } else if (isBrowserMode()) {
+      this.transport = 'browser';
+      console.info('[etna] Browser dev mode — talking to server directly.');
+    } else {
+      this.transport = 'none';
     }
   }
 
   public postMessage(message: unknown): void {
-    if (this.vsCodeApi) {
-      this.vsCodeApi.postMessage(message);
-      return;
+    const msg = message as { type: string; [k: string]: unknown };
+    switch (this.transport) {
+      case 'vscode':
+        this.vsCodeApi!.postMessage(message);
+        return;
+      case 'static':
+        void handleStaticMessage(msg);
+        return;
+      case 'browser':
+        // Fire-and-forget; the shim dispatches the response back as a window message.
+        void handleBrowserMessage(msg);
+        return;
+      case 'none':
+        console.log('VSCode API not available, message:', message);
     }
-    if (this.browser) {
-      // Fire-and-forget; the shim dispatches the response back as a window message.
-      void handleBrowserMessage(message as { type: string; [k: string]: unknown });
-      return;
-    }
-    console.log('VSCode API not available, message:', message);
   }
 
   public getState<T>(): T | undefined {
