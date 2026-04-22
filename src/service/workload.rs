@@ -438,7 +438,7 @@ fn render_bugs_md(manifest: &WorkloadManifest) -> String {
     writeln!(buf, "# {} — Injected Bugs", manifest.name).unwrap();
     if let Some(desc) = &manifest.description {
         writeln!(buf).unwrap();
-        writeln!(buf, "{}", desc).unwrap();
+        writeln!(buf, "{}", desc.trim()).unwrap();
     }
     writeln!(buf).unwrap();
 
@@ -600,7 +600,7 @@ fn render_bugs_md(manifest: &WorkloadManifest) -> String {
                 (false, false) => "—".to_string(),
             };
             writeln!(buf, "- **Source**: {}", header).unwrap();
-            for line in src.summary.lines() {
+            for line in src.summary.trim().lines() {
                 writeln!(buf, "  > {}", line).unwrap();
             }
             if src.commits.len() == 1 {
@@ -620,8 +620,13 @@ fn render_bugs_md(manifest: &WorkloadManifest) -> String {
             }
         }
         if let Some(b) = &g.bug {
-            writeln!(buf, "- **Invariant violated**: {}", b.invariant).unwrap();
-            writeln!(buf, "- **How the mutation triggers**: {}", b.how_triggered).unwrap();
+            writeln!(buf, "- **Invariant violated**: {}", b.invariant.trim()).unwrap();
+            writeln!(
+                buf,
+                "- **How the mutation triggers**: {}",
+                b.how_triggered.trim()
+            )
+            .unwrap();
         }
     }
 
