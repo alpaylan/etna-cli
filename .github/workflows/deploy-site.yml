@@ -1,0 +1,89 @@
+name: Deploy workload catalog to Cloudflare Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      # Rebuild whenever anything that shapes the site output changes.
+      # `docs/workloads/index.json` is the catalog, so new entries ship as
+      # soon as they land on main.
+      - 'src/**'
+      - 'Cargo.lock'
+      - 'Cargo.toml'
+      - 'docs/workloads/index.json'
+      - 'etna-vscode/webview-ui/**'
+      - '.github/workflows/deploy-site.yml'
+  # Manual trigger so the user can force a rebuild after upstream workload
+  # repos update their etna.toml — those changes aren't observable from this
+  # repo's diff.
+  workflow_dispatch:
+
+# One deploy at a time; cancel a still-running older run if a newer push arrives.
+concurrency:
+  group: deploy-site
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      deployments: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          # Reads channel from rust-toolchain.toml, same as test.yml.
+          toolchain: nightly
+
+      - name: Cache cargo registry + build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-site-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Build etna binary
+        run: cargo build --release --bin etna
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: etna-vscode/webview-ui/package-lock.json
+
+      - name: Build webview-ui (both entries)
+        working-directory: etna-vscode/webview-ui
+        run: |
+          npm ci
+          npm run build
+
+      - name: Fetch manifests and emit site data
+        # No secrets needed — only GETs to raw.githubusercontent.com. Logs
+        # the per-entry outcome (ok / missing / errored) for visibility.
+        run: ./target/release/etna workload site --out ./site
+
+      - name: Assemble static site
+        run: |
+          cp etna-vscode/webview-ui/dist/site.html ./site/index.html
+          cp -r etna-vscode/webview-ui/dist/assets ./site/
+          ls -la ./site
+          du -sh ./site
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # `pages deploy` auto-creates the project on first run if it
+          # doesn't exist. `--branch=main` pins this as the production
+          # deploy (vs. preview deploys from feature branches).
+          command: pages deploy ./site --project-name=etna-workloads --branch=main --commit-dirty=true
