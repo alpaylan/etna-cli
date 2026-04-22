@@ -21,12 +21,25 @@ use crate::service::workload::{generate_docs, WorkloadDetail};
 use crate::workload::WorkloadManifest;
 use crate::workload_index::WorkloadEntry;
 
-/// Default branch used when a catalog entry doesn't pin a `default_ref`.
-const FALLBACK_REF: &str = "main";
+/// Default branches to try, in order, when a catalog entry doesn't pin a
+/// `default_ref`. The crate-fork workloads (bstr-etna, memchr-etna, etc.)
+/// inherit `master` from their upstream; newer workloads use `main`. Try
+/// both rather than requiring every entry to spell out `default_ref`.
+const FALLBACK_REFS: &[&str] = &["main", "master"];
 
-/// Derive the raw-content base URL for a GitHub repo URL. The returned string
-/// always ends with a slash so callers can concatenate a relative path onto
-/// it without juggling separators.
+/// Return the ordered list of refs to try for a catalog entry. When the
+/// entry pins `default_ref`, that's the only candidate. Otherwise the
+/// fallback list wins.
+fn candidate_refs(entry_ref: Option<&str>) -> Vec<&str> {
+    match entry_ref {
+        Some(r) => vec![r],
+        None => FALLBACK_REFS.to_vec(),
+    }
+}
+
+/// Derive the raw-content base URL for a GitHub repo URL + a specific ref.
+/// The returned string always ends with a slash so callers can concatenate
+/// a relative path onto it without juggling separators.
 ///
 /// Supports the two URL forms we see in the wild:
 /// - `https://github.com/<owner>/<repo>` (with or without a `.git` suffix or
@@ -36,8 +49,7 @@ const FALLBACK_REF: &str = "main";
 ///
 /// Returns `Err` for non-GitHub URLs; callers should treat that as a
 /// skip-with-warning, not a fatal error.
-pub fn github_raw_base(url: &str, reference: Option<&str>) -> anyhow::Result<String> {
-    let reference = reference.unwrap_or(FALLBACK_REF);
+pub fn github_raw_base(url: &str, reference: &str) -> anyhow::Result<String> {
     let (owner, repo) = parse_github_slug(url)?;
     Ok(format!(
         "https://raw.githubusercontent.com/{}/{}/{}/",
@@ -152,15 +164,30 @@ pub fn fetch_remote_detail<H: HttpFetcher>(
     entry: &WorkloadEntry,
     http: &H,
 ) -> FetchOutcome {
-    let base = match github_raw_base(&entry.url, entry.default_ref.as_deref()) {
-        Ok(b) => b,
-        Err(e) => return FetchOutcome::Err(e),
-    };
-
-    let manifest_body = match http.fetch_text(&format!("{}etna.toml", base)) {
-        Ok(Some(body)) => body,
-        Ok(None) => return FetchOutcome::MissingManifest,
-        Err(e) => return FetchOutcome::Err(e),
+    // Try each candidate ref until one serves etna.toml. Once we find a
+    // ref that works, all subsequent fetches (patches, README) reuse it
+    // so we stay inside one consistent repo snapshot.
+    let refs = candidate_refs(entry.default_ref.as_deref());
+    let mut base: Option<String> = None;
+    let mut manifest_body: Option<String> = None;
+    for r in &refs {
+        let candidate_base = match github_raw_base(&entry.url, r) {
+            Ok(b) => b,
+            Err(e) => return FetchOutcome::Err(e),
+        };
+        match http.fetch_text(&format!("{}etna.toml", candidate_base)) {
+            Ok(Some(body)) => {
+                base = Some(candidate_base);
+                manifest_body = Some(body);
+                break;
+            }
+            Ok(None) => continue,
+            Err(e) => return FetchOutcome::Err(e),
+        }
+    }
+    let (base, manifest_body) = match (base, manifest_body) {
+        (Some(b), Some(m)) => (b, m),
+        _ => return FetchOutcome::MissingManifest,
     };
 
     let manifest: WorkloadManifest = match toml::from_str(&manifest_body) {
@@ -261,15 +288,19 @@ mod tests {
     }
 
     #[test]
-    fn raw_base_uses_fallback_ref() {
-        let b = github_raw_base("https://github.com/foo/bar", None).unwrap();
-        assert_eq!(b, "https://raw.githubusercontent.com/foo/bar/main/");
+    fn raw_base_with_supplied_ref() {
+        let b = github_raw_base("https://github.com/foo/bar", "v1.2.3").unwrap();
+        assert_eq!(b, "https://raw.githubusercontent.com/foo/bar/v1.2.3/");
     }
 
     #[test]
-    fn raw_base_uses_supplied_ref() {
-        let b = github_raw_base("https://github.com/foo/bar", Some("v1.2.3")).unwrap();
-        assert_eq!(b, "https://raw.githubusercontent.com/foo/bar/v1.2.3/");
+    fn candidate_refs_pinned() {
+        assert_eq!(candidate_refs(Some("v1.2.3")), vec!["v1.2.3"]);
+    }
+
+    #[test]
+    fn candidate_refs_fallback_is_main_then_master() {
+        assert_eq!(candidate_refs(None), vec!["main", "master"]);
     }
 
     /// In-memory [`HttpFetcher`] keyed by URL → `Option<body>`.
@@ -331,6 +362,54 @@ property = "SomeProp"
                 assert!(detail.bugs_md.is_some(), "docs should regenerate");
             }
             other => panic!("expected Ok, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn fetch_remote_detail_falls_back_to_master() {
+        // A repo whose default branch is `master` — main 404s, master 200s.
+        // Both manifest and patch should be pulled from the master ref.
+        let entry = WorkloadEntry {
+            name: "cratefork".into(),
+            url: "https://github.com/foo/bar".into(),
+            language: "Rust".into(),
+            description: None,
+            default_ref: None,
+            status: "stable".into(),
+            tags: vec![],
+        };
+        let manifest = r#"
+name = "cratefork"
+language = "rust"
+
+[[tasks]]
+mutations = ["m_0000000_1"]
+[tasks.injection]
+kind = "patch"
+files = ["src/lib.rs"]
+patch = "patches/fix.patch"
+
+[[tasks.tasks]]
+property = "P"
+"#;
+        let mut map = HashMap::new();
+        // main/ etna.toml is absent — simulate by leaving it out of the map.
+        map.insert(
+            "https://raw.githubusercontent.com/foo/bar/master/etna.toml".to_string(),
+            Some(manifest.to_string()),
+        );
+        map.insert(
+            "https://raw.githubusercontent.com/foo/bar/master/patches/fix.patch".to_string(),
+            Some("diff --git a/x b/x\n".to_string()),
+        );
+        let http = FakeHttp(map);
+
+        match fetch_remote_detail(&entry, &http) {
+            FetchOutcome::Ok { detail } => {
+                assert_eq!(detail.manifest.name, "cratefork");
+                assert_eq!(detail.patches.len(), 1);
+            }
+            other => panic!("expected Ok via master fallback, got {:?}", other),
         }
     }
 
