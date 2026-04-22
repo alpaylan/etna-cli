@@ -66,13 +66,7 @@ fn check_variant_set_matches_marauders(
     dir: &Path,
     out: &mut Vec<String>,
 ) {
-    let has_marauders = manifest.tasks.iter().any(|g| {
-        g.injection
-            .as_ref()
-            .map(|i| matches!(i.kind, InjectionKind::Marauders))
-            .unwrap_or(false)
-    });
-    if !has_marauders {
+    if manifest.tasks.is_empty() {
         return;
     }
 
@@ -90,24 +84,18 @@ fn check_variant_set_matches_marauders(
     let declared: HashSet<String> = manifest
         .tasks
         .iter()
-        .filter(|g| {
-            g.injection
-                .as_ref()
-                .map(|i| matches!(i.kind, InjectionKind::Marauders))
-                .unwrap_or(false)
-        })
         .flat_map(|g| g.mutations.iter().cloned())
         .collect();
 
     for m in declared.difference(&on_disk) {
         out.push(format!(
-            "manifest declares marauder '{}' but it is not present in source tree",
+            "manifest declares mutation '{}' but it is not present in source tree or patches/",
             m
         ));
     }
     for m in on_disk.difference(&declared) {
         out.push(format!(
-            "marauder '{}' exists in source tree but is not declared in any [[tasks]].mutations",
+            "mutation '{}' exists in source tree or patches/ but is not declared in any [[tasks]].mutations",
             m
         ));
     }
