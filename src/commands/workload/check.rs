@@ -48,12 +48,12 @@ pub fn collect_findings(manifest: &WorkloadManifest, dir: &Path) -> Vec<String> 
 }
 
 fn check_variant_names(manifest: &WorkloadManifest, out: &mut Vec<String>) {
-    let re = regex::Regex::new(r"^[a-z][a-z0-9_]*_[0-9a-f]{7}_[0-9]+$").unwrap();
+    let re = regex::Regex::new(r"^[a-z][a-z0-9_]*_[0-9a-f]{7,40}_[0-9]+$").unwrap();
     for g in &manifest.tasks {
         for m in &g.mutations {
             if !re.is_match(m) {
                 out.push(format!(
-                    "variant name '{}' does not match ^[a-z][a-z0-9_]*_[0-9a-f]{{7}}_[0-9]+$",
+                    "variant name '{}' does not match ^[a-z][a-z0-9_]*_[0-9a-f]{{7,40}}_[0-9]+$",
                     m
                 ));
             }
