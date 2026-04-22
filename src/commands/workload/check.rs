@@ -118,7 +118,7 @@ fn check_witnesses_and_properties(
     dir: &Path,
     out: &mut Vec<String>,
 ) {
-    let src_text = concat_text(dir, &["src", "tests"]);
+    let src_text = collect_source_text(dir);
     for g in &manifest.tasks {
         for t in &g.tasks {
             let snake = pascal_to_snake(&t.property);
@@ -263,15 +263,9 @@ fn check_variant_branches_descend(
     }
 }
 
-fn concat_text(dir: &Path, subdirs: &[&str]) -> String {
+fn collect_source_text(dir: &Path) -> String {
     let mut buf = String::new();
-    for sub in subdirs {
-        let root = dir.join(sub);
-        if !root.exists() {
-            continue;
-        }
-        walk_rs(&root, &mut buf);
-    }
+    walk_rs(dir, &mut buf);
     buf
 }
 
@@ -281,7 +275,16 @@ fn walk_rs(root: &Path, buf: &mut String) {
     };
     for entry in entries.flatten() {
         let path = entry.path();
+        let name = match path.file_name().and_then(|n| n.to_str()) {
+            Some(n) => n,
+            None => continue,
+        };
         if path.is_dir() {
+            // Skip build artefacts, dotdirs (.git, .marauders, .hegel, …),
+            // and the workload's own patches directory.
+            if name.starts_with('.') || name == "target" || name == "patches" {
+                continue;
+            }
             walk_rs(&path, buf);
         } else if path.extension().and_then(|s| s.to_str()) == Some("rs") {
             if let Ok(text) = std::fs::read_to_string(&path) {
