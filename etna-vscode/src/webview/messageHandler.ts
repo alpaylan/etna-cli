@@ -169,6 +169,16 @@ export async function handleWebviewMessage(message: WebviewMessage): Promise<Web
         return { type: 'workloadIndexRefreshed', data: result };
       }
 
+      case 'getWorkloadDetail': {
+        const experimentName = message.experimentName as string;
+        const workload = message.workload as string;
+        const detail = await client.getWorkloadDetail(experimentName, workload);
+        return {
+          type: 'workloadDetail',
+          data: { experimentName, workload, detail },
+        };
+      }
+
       case 'removeWorkload': {
         const experimentName = message.experimentName as string;
         const workload = message.workload as string;

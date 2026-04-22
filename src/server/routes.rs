@@ -79,6 +79,10 @@ pub fn api_routes() -> Router<AppState> {
         )
         .route(
             "/api/v1/experiments/{name}/workloads/{workload}",
+            get(handlers::workloads::get_workload_detail),
+        )
+        .route(
+            "/api/v1/experiments/{name}/workloads/{workload}",
             delete(handlers::workloads::remove_workload),
         )
         // Store

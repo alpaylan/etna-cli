@@ -28,6 +28,81 @@ export interface RefreshWorkloadIndexResponse {
   entries: number;
 }
 
+// Parsed `etna.toml`. Matches `src/workload.rs::WorkloadManifest`.
+export interface WorkloadManifest {
+  name: string;
+  description?: string | null;
+  language: string;
+  crate?: string | null;
+  base_commit?: string | null;
+  tasks: ManifestTaskGroup[];
+  dropped?: DroppedCandidate[];
+}
+
+export interface ManifestTaskGroup {
+  mutations: string[];
+  tasks: ManifestTask[];
+  source?: SourceContext | null;
+  injection?: InjectionSpec | null;
+  bug?: BugDetails | null;
+}
+
+export interface ManifestTask {
+  property: string;
+  witnesses?: Witness[];
+}
+
+export type Witness =
+  | { input: string; note?: string | null }
+  | { test_fn: string; note?: string | null };
+
+export interface SourceContext {
+  repo: string;
+  commits: string[];
+  commit_subjects?: string[];
+  prs?: number[];
+  issues?: number[];
+  discussion?: string | null;
+  origin?: string | null;
+  summary: string;
+}
+
+export interface InjectionSpec {
+  kind: 'marauders' | 'patch';
+  files: string[];
+  locations?: FileLoc[];
+  patch?: string | null;
+}
+
+export interface FileLoc {
+  file: string;
+  line?: number | null;
+  symbol?: string | null;
+}
+
+export interface BugDetails {
+  short_name: string;
+  invariant: string;
+  how_triggered: string;
+}
+
+export interface DroppedCandidate {
+  commit: string;
+  reason: string;
+  subject?: string | null;
+}
+
+// Shape returned by `GET /api/v1/experiments/{name}/workloads/{wl}`. Matches
+// `src/server/handlers/workloads.rs::WorkloadDetailResponse`.
+export interface WorkloadDetailResponse {
+  manifest: WorkloadManifest;
+  readme_md?: string | null;
+  bugs_md?: string | null;
+  tasks_md?: string | null;
+  /** Contents of every `.patch` file referenced by `injection.patch`. */
+  patches: Record<string, string>;
+}
+
 export interface CreateExperimentRequest {
   name: string;
   path?: string;

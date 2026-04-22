@@ -86,6 +86,77 @@ export interface WorkloadMetadata {
   name: string;
 }
 
+export interface WorkloadManifest {
+  name: string;
+  description?: string | null;
+  language: string;
+  crate?: string | null;
+  base_commit?: string | null;
+  tasks: ManifestTaskGroup[];
+  dropped?: DroppedCandidate[];
+}
+
+export interface ManifestTaskGroup {
+  mutations: string[];
+  tasks: ManifestTask[];
+  source?: SourceContext | null;
+  injection?: InjectionSpec | null;
+  bug?: BugDetails | null;
+}
+
+export interface ManifestTask {
+  property: string;
+  witnesses?: Witness[];
+}
+
+export type Witness =
+  | { input: string; note?: string | null }
+  | { test_fn: string; note?: string | null };
+
+export interface SourceContext {
+  repo: string;
+  commits: string[];
+  commit_subjects?: string[];
+  prs?: number[];
+  issues?: number[];
+  discussion?: string | null;
+  origin?: string | null;
+  summary: string;
+}
+
+export interface InjectionSpec {
+  kind: 'marauders' | 'patch';
+  files: string[];
+  locations?: FileLoc[];
+  patch?: string | null;
+}
+
+export interface FileLoc {
+  file: string;
+  line?: number | null;
+  symbol?: string | null;
+}
+
+export interface BugDetails {
+  short_name: string;
+  invariant: string;
+  how_triggered: string;
+}
+
+export interface DroppedCandidate {
+  commit: string;
+  reason: string;
+  subject?: string | null;
+}
+
+export interface WorkloadDetail {
+  manifest: WorkloadManifest;
+  readme_md?: string | null;
+  bugs_md?: string | null;
+  tasks_md?: string | null;
+  patches?: Record<string, string>;
+}
+
 /** One row from `/api/v1/workloads/available`. */
 export interface WorkloadEntry {
   name: string;

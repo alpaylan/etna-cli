@@ -1740,10 +1740,14 @@ button.small {
   font-size: 16px;
   line-height: 1;
 }
-.ex-btn-icondanger:hover:not(:disabled) {
+.ex-btn-icondanger:hover:not(:disabled),
+.ex-btn-icondanger.is-armed {
   color: var(--tx-error-fg);
   border-color: var(--tx-error);
   background-color: color-mix(in srgb, var(--tx-error) 14%, transparent);
+}
+.ex-btn-icondanger.is-armed {
+  box-shadow: 0 0 0 1px var(--tx-error) inset;
 }
 
 .ex-linkbtn {
@@ -3821,3 +3825,343 @@ button.small {
   background-color: color-mix(in srgb, var(--tx-accent) 16%, transparent);
   transform: translateX(1px);
 }
+
+/* Workload detail view */
+.ex-drawer-section {
+  padding: 12px 14px;
+  border-top: 1px solid var(--tx-border);
+  background-color: var(--tx-surface);
+}
+.ex-drawer-section:first-of-type { border-top: none; }
+
+.ex-chip {
+  display: inline-block;
+  padding: 1px 7px;
+  font-family: var(--tx-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  border: 1px solid var(--tx-border);
+  border-radius: 3px;
+  color: var(--tx-subtle);
+  background-color: var(--tx-surface-2);
+}
+
+.ex-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.ex-table th, .ex-table td {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--tx-border);
+  vertical-align: top;
+}
+.ex-table th {
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--tx-subtle);
+  font-weight: 500;
+}
+.ex-table tr:last-child td { border-bottom: none; }
+
+/* Rendered markdown body for BUGS.md / TASKS.md / README.md */
+.md-body { font-size: 12.5px; line-height: 1.55; }
+.md-body h1, .md-body h2, .md-body h3, .md-body h4 {
+  margin: 14px 0 6px 0;
+  font-weight: 600;
+}
+.md-body h1 { font-size: 16px; }
+.md-body h2 { font-size: 14px; }
+.md-body h3 { font-size: 13px; }
+.md-body h4 { font-size: 12.5px; }
+.md-body p { margin: 6px 0; }
+.md-body ul, .md-body ol { margin: 6px 0; padding-left: 22px; }
+.md-body code {
+  font-family: var(--tx-mono);
+  font-size: 11.5px;
+  background-color: var(--tx-surface-2);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+.md-body pre {
+  background-color: var(--tx-surface-2);
+  border: 1px solid var(--tx-border);
+  border-radius: 4px;
+  padding: 8px 10px;
+  overflow-x: auto;
+  margin: 8px 0;
+}
+.md-body pre code { background: none; padding: 0; font-size: 11.5px; }
+.md-body table {
+  border-collapse: collapse;
+  margin: 8px 0;
+  font-size: 11.5px;
+  display: block;
+  overflow-x: auto;
+}
+.md-body th, .md-body td {
+  text-align: left;
+  padding: 4px 8px;
+  border: 1px solid var(--tx-border);
+}
+.md-body th { background-color: var(--tx-surface-2); font-weight: 600; }
+.md-body a { color: var(--tx-accent); }
+.md-body blockquote {
+  border-left: 3px solid var(--tx-border);
+  padding-left: 10px;
+  margin: 6px 0;
+  color: var(--tx-subtle);
+}
+.md-body hr { border: none; border-top: 1px solid var(--tx-border); margin: 10px 0; }
+
+/* Task groups in the workload detail view */
+.wl-section-header {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--tx-subtle);
+  margin-bottom: 8px;
+}
+.wl-section-count {
+  font-size: 10.5px;
+  color: var(--tx-subtle);
+  opacity: 0.8;
+}
+
+.wl-group-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.wl-group {
+  border: 1px solid var(--tx-border);
+  border-radius: 4px;
+  background-color: var(--tx-surface);
+  overflow: hidden;
+}
+.wl-group.is-open {
+  border-color: color-mix(in srgb, var(--tx-accent) 40%, var(--tx-border));
+}
+
+.wl-group-head {
+  width: 100%;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 10px;
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
+.wl-group-head:hover { background-color: var(--tx-surface-2); }
+.wl-group-caret {
+  width: 12px;
+  color: var(--tx-subtle);
+  font-size: 10px;
+}
+.wl-group-index {
+  font-family: var(--tx-mono);
+  font-size: 10.5px;
+  color: var(--tx-subtle);
+  min-width: 28px;
+}
+.wl-group-mutations {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.wl-group-meta {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-shrink: 0;
+}
+.wl-group-count {
+  font-size: 10.5px;
+  color: var(--tx-subtle);
+}
+
+.wl-group-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 10px 12px 12px 12px;
+  border-top: 1px solid var(--tx-border);
+}
+
+.wl-subsection {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.wl-subsection-label {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--tx-subtle);
+  font-weight: 600;
+}
+.wl-subsection-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.wl-kicker {
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--tx-subtle);
+  margin-right: 6px;
+}
+
+/* Injection kind badge */
+.wl-kind-badge {
+  display: inline-block;
+  padding: 1px 7px;
+  font-family: var(--tx-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: lowercase;
+  border-radius: 3px;
+  border: 1px solid transparent;
+}
+.wl-kind-patch {
+  color: color-mix(in srgb, var(--tx-accent) 80%, var(--tx-fg));
+  background-color: color-mix(in srgb, var(--tx-accent) 14%, transparent);
+  border-color: color-mix(in srgb, var(--tx-accent) 35%, transparent);
+}
+.wl-kind-marauders {
+  color: var(--tx-subtle);
+  background-color: var(--tx-surface-2);
+  border-color: var(--tx-border);
+}
+
+/* Source / references */
+.wl-ref-link {
+  font-size: 11.5px;
+  color: var(--tx-accent);
+  text-decoration: none;
+  border-bottom: 1px dotted color-mix(in srgb, var(--tx-accent) 40%, transparent);
+}
+.wl-ref-link:hover { border-bottom-style: solid; }
+
+.wl-commits {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11.5px;
+}
+.wl-commits li { display: flex; align-items: baseline; gap: 6px; }
+
+.wl-summary {
+  border-left: 3px solid var(--tx-border);
+  padding: 2px 0 2px 10px;
+  margin: 0;
+  color: var(--tx-fg);
+  opacity: 0.9;
+  font-size: 12px;
+}
+
+.wl-locations {
+  list-style: disc;
+  margin: 0;
+  padding-left: 18px;
+  font-size: 11.5px;
+  color: var(--tx-subtle);
+}
+
+/* Inline patch viewer */
+.wl-patch {
+  border: 1px solid var(--tx-border);
+  border-radius: 4px;
+  overflow: hidden;
+  background-color: var(--tx-surface-2);
+}
+.wl-patch-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 10px;
+  font-size: 11px;
+  color: var(--tx-subtle);
+  border-bottom: 1px solid var(--tx-border);
+  background-color: var(--tx-surface);
+}
+.wl-patch-missing { color: var(--tx-error-fg, #c1502e); }
+.wl-patch-body {
+  margin: 0;
+  padding: 6px 0;
+  font-family: var(--tx-mono);
+  font-size: 11.5px;
+  line-height: 1.5;
+  white-space: pre;
+  overflow-x: auto;
+}
+.wl-diff-line { padding: 0 10px; }
+.wl-diff-add  { background-color: color-mix(in srgb, #3fb950 18%, transparent); color: #7ee787; }
+.wl-diff-del  { background-color: color-mix(in srgb, #f85149 20%, transparent); color: #ffa198; }
+.wl-diff-hunk { color: color-mix(in srgb, var(--tx-accent) 85%, var(--tx-fg)); opacity: 0.9; }
+.wl-diff-file { color: var(--tx-subtle); font-weight: 600; }
+.wl-diff-ctx  { color: var(--tx-fg); opacity: 0.88; }
+
+/* Witness list inside properties table */
+.wl-witness-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.wl-witness-list li { display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; }
+.wl-witness-kind {
+  display: inline-block;
+  padding: 0 5px;
+  font-size: 9.5px;
+  font-family: var(--tx-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--tx-subtle);
+  border: 1px solid var(--tx-border);
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+.wl-witness-input { color: color-mix(in srgb, var(--tx-accent) 80%, var(--tx-fg)); border-color: color-mix(in srgb, var(--tx-accent) 35%, transparent); }
+.wl-witness-val {
+  font-family: var(--tx-mono);
+  font-size: 11.5px;
+  background-color: var(--tx-surface-2);
+  padding: 1px 4px;
+  border-radius: 3px;
+  word-break: break-all;
+}
+.wl-witness-note { color: var(--tx-subtle); font-size: 11px; }
+
+.wl-dropped-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12px;
+}
+

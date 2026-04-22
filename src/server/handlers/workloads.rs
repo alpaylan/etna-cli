@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::server::error::ServerError;
 use crate::server::state::AppState;
-use crate::service::workload as wl_service;
+use crate::service::workload::{self as wl_service, WorkloadDetail};
 use crate::workload::WorkloadMetadata;
 use crate::workload_index::WorkloadEntry;
 
@@ -37,6 +37,7 @@ pub struct RefreshWorkloadIndexResponse {
     pub refreshed: bool,
     pub entries: usize,
 }
+
 
 /// List workloads in an experiment
 pub async fn list_workloads(
@@ -92,6 +93,22 @@ pub async fn refresh_workload_index() -> Result<Json<RefreshWorkloadIndexRespons
         refreshed: true,
         entries: index.entries.len(),
     }))
+}
+
+/// Return the parsed manifest plus any well-known sidecar docs
+/// (`README.md`, `BUGS.md`, `TASKS.md`) for a single workload.
+pub async fn get_workload_detail(
+    State(state): State<AppState>,
+    Path((name, wl)): Path<(String, String)>,
+) -> Result<Json<WorkloadDetail>, ServerError> {
+    let manager = state.manager.read().unwrap();
+
+    let experiment = manager
+        .get_experiment(&name)
+        .ok_or_else(|| ServerError::not_found(format!("Experiment not found: {}", name)))?;
+
+    let detail = wl_service::get_workload_detail(&experiment, &wl)?;
+    Ok(Json(detail))
 }
 
 /// Remove a workload from an experiment

@@ -21,6 +21,7 @@ import {
   WorkloadMetadata,
   WorkloadEntry,
   RefreshWorkloadIndexResponse,
+  WorkloadDetailResponse,
 } from './types';
 
 export class EtnaApiClient {
@@ -188,6 +189,20 @@ export class EtnaApiClient {
         `/api/v1/experiments/${encodeURIComponent(experimentName)}/workloads`,
         request
       );
+    } catch (error) {
+      this.handleError(error);
+    }
+  }
+
+  async getWorkloadDetail(
+    experimentName: string,
+    workloadName: string,
+  ): Promise<WorkloadDetailResponse> {
+    try {
+      const response = await this.client.get<WorkloadDetailResponse>(
+        `/api/v1/experiments/${encodeURIComponent(experimentName)}/workloads/${encodeURIComponent(workloadName)}`,
+      );
+      return response.data;
     } catch (error) {
       this.handleError(error);
     }

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { vscode, WorkloadMetadata, WorkloadEntry, onMessage } from '../../api/vscodeApi';
+import WorkloadDetailView from './WorkloadDetail';
 
 interface Props {
   experimentName: string;
@@ -8,20 +9,19 @@ interface Props {
 
 type Pending = { kind: 'add' | 'remove'; workload: string };
 
-// Sentinel for the "type a URL" option in the catalog dropdown.
-const URL_MODE = '__url__';
+const CATALOG_LIST_ID = 'etna-wl-catalog';
 
 function WorkloadsPanel({ experimentName, workloads: initial }: Props) {
   const [workloads, setWorkloads] = useState<WorkloadMetadata[]>(initial);
   const [catalog, setCatalog] = useState<WorkloadEntry[]>([]);
   const [catalogLoaded, setCatalogLoaded] = useState(false);
-  const [selection, setSelection] = useState<string>(URL_MODE);
-  const [url, setUrl] = useState<string>('');
+  const [spec, setSpec] = useState<string>('');
   const [ref, setRef] = useState<string>('');
   const [pending, setPending] = useState<Pending | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [confirmingKey, setConfirmingKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [detailName, setDetailName] = useState<string | null>(null);
   const pendingSpecRef = useRef<string | null>(null);
 
   useEffect(() => setWorkloads(initial), [initial]);
@@ -38,9 +38,8 @@ function WorkloadsPanel({ experimentName, workloads: initial }: Props) {
         if (payload.experimentName === experimentName) {
           setWorkloads(payload.workloads);
           if (pending?.kind === 'add') {
-            setUrl('');
+            setSpec('');
             setRef('');
-            setSelection(URL_MODE);
           }
           setPending(null);
           pendingSpecRef.current = null;
@@ -69,31 +68,17 @@ function WorkloadsPanel({ experimentName, workloads: initial }: Props) {
     return () => clearTimeout(t);
   }, [error]);
 
-  const handleSelect = (value: string) => {
-    setSelection(value);
-    if (value === URL_MODE) {
-      setUrl('');
-    } else {
-      // Prefill URL so power-users can tweak before submitting.
-      const entry = catalog.find((e) => e.name === value);
-      setUrl(entry?.url ?? '');
-    }
-  };
-
   const handleAdd = () => {
-    // `spec` is what the server gets: either the catalog name (resolved
-    // server-side) or, when the user picked "URL", the URL they typed.
-    const trimmedUrl = url.trim();
-    const spec = selection === URL_MODE ? trimmedUrl : selection;
-    if (!spec) return;
+    const trimmed = spec.trim();
+    if (!trimmed) return;
     const trimmedRef = ref.trim() || undefined;
-    pendingSpecRef.current = spec;
-    setPending({ kind: 'add', workload: spec });
+    pendingSpecRef.current = trimmed;
+    setPending({ kind: 'add', workload: trimmed });
     setError(null);
     vscode.postMessage({
       type: 'addWorkload',
       experimentName,
-      spec,
+      spec: trimmed,
       ref: trimmedRef,
     });
   };
@@ -120,9 +105,25 @@ function WorkloadsPanel({ experimentName, workloads: initial }: Props) {
   };
 
   const addBusy = pending?.kind === 'add';
-  const urlMode = selection === URL_MODE;
-  const addDisabled =
-    (urlMode ? !url.trim() : !selection || selection === URL_MODE) || addBusy;
+  const addDisabled = !spec.trim() || addBusy;
+
+  // When a workload gets removed out from under us (e.g. the user hits remove
+  // while the detail view is open on it), fall back to the list.
+  useEffect(() => {
+    if (detailName && !workloads.some((w) => w.name === detailName)) {
+      setDetailName(null);
+    }
+  }, [detailName, workloads]);
+
+  if (detailName) {
+    return (
+      <WorkloadDetailView
+        experimentName={experimentName}
+        workloadName={detailName}
+        onBack={() => setDetailName(null)}
+      />
+    );
+  }
 
   return (
     <div className="ex-drawer ex-drawer-standalone">
@@ -137,32 +138,29 @@ function WorkloadsPanel({ experimentName, workloads: initial }: Props) {
 
       <section className="ex-newtest" aria-label="Add workload">
         <span className="ex-newtest-tag">ADD</span>
-        <select
-          className="ex-input ex-mono"
-          value={selection}
-          onChange={(e) => handleSelect(e.target.value)}
-          disabled={addBusy}
-          style={{ flex: '0 1 220px', minWidth: 180 }}
-          aria-label="Workload catalog"
-        >
-          <option value={URL_MODE}>— paste a URL —</option>
-          {catalog.map((entry) => (
-            <option key={entry.name} value={entry.name}>
-              {entry.name} · {entry.language}
-              {entry.status !== 'stable' ? ` · ${entry.status}` : ''}
-            </option>
-          ))}
-        </select>
         <input
           className="ex-input ex-mono ex-newtest-input"
-          type="url"
-          placeholder={urlMode ? 'https://github.com/owner/repo' : 'resolved from catalog'}
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
+          type="text"
+          list={CATALOG_LIST_ID}
+          placeholder="catalog name (bst-haskell) or git URL"
+          value={spec}
+          onChange={(e) => setSpec(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter' && !addDisabled) handleAdd(); }}
-          disabled={addBusy || !urlMode}
+          disabled={addBusy}
+          autoComplete="off"
+          spellCheck={false}
           style={{ flex: '1 1 auto' }}
+          aria-label="Workload name or URL"
         />
+        <datalist id={CATALOG_LIST_ID}>
+          {catalog.map((entry) => (
+            <option
+              key={entry.name}
+              value={entry.name}
+              label={`${entry.language}${entry.status !== 'stable' ? ` · ${entry.status}` : ''}`}
+            />
+          ))}
+        </datalist>
         <input
           className="ex-input ex-mono"
           type="text"
@@ -210,9 +208,15 @@ function WorkloadsPanel({ experimentName, workloads: initial }: Props) {
             return (
               <li key={w.name} className="ex-testitem">
                 <div className="ex-testitem-main">
-                  <span className="ex-testitem-name">
+                  <button
+                    className="ex-linkbtn ex-testitem-name"
+                    onClick={() => setDetailName(w.name)}
+                    type="button"
+                    title="View workload details"
+                    style={{ textAlign: 'left', padding: 0 }}
+                  >
                     <span className="ex-mono">{w.name}</span>
-                  </span>
+                  </button>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                     {isConfirming && !isRemoving && (
                       <button

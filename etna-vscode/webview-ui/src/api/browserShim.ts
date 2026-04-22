@@ -199,6 +199,28 @@ export async function handleBrowserMessage(message: Msg): Promise<void> {
         dispatch({ type: 'workloadIndexRefreshed', data });
         break;
       }
+      case 'getWorkloadDetail': {
+        const experimentName = message.experimentName as string;
+        const workload = message.workload as string;
+        try {
+          const detail = await req(
+            'GET',
+            `/api/v1/experiments/${encodeURIComponent(experimentName)}/workloads/${encodeURIComponent(workload)}`,
+          );
+          dispatch({
+            type: 'workloadDetail',
+            data: { experimentName, workload, detail },
+          });
+        } catch (err) {
+          const emsg = err instanceof Error ? err.message : String(err);
+          dispatch({
+            type: 'workloadDetail',
+            data: { experimentName, workload, detail: null, error: emsg },
+          });
+        }
+        break;
+      }
+
       case 'removeWorkload': {
         const experimentName = message.experimentName as string;
         const workload = message.workload as string;

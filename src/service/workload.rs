@@ -312,15 +312,24 @@ pub fn list_workloads(experiment: &ExperimentMetadata) -> ServiceResult<Vec<Work
 
 /// Parsed `etna.toml` plus the raw contents of any sibling doc files
 /// (`README.md`, `BUGS.md`, `TASKS.md`). Missing files are reported as `None`.
+/// `patches` carries the raw text of every `.patch` file referenced by
+/// `injection.patch` across all task groups, keyed by the path string as it
+/// appears in the manifest so the UI can look them up verbatim.
+///
+/// Serialized directly by both the HTTP handler (`GET /experiments/…/workloads/<wl>`)
+/// and the static-site publisher (`etna workload site`). One shape, both sinks.
+#[derive(Debug, serde::Serialize)]
 pub struct WorkloadDetail {
     pub manifest: WorkloadManifest,
     pub readme_md: Option<String>,
     pub bugs_md: Option<String>,
     pub tasks_md: Option<String>,
+    pub patches: HashMap<String, String>,
 }
 
 /// Load everything the dashboard needs to render a single workload's detail
-/// view: the parsed manifest and any well-known sidecar markdown files.
+/// view: the parsed manifest, any well-known sidecar markdown files, and the
+/// contents of every patch file referenced by the manifest.
 pub fn get_workload_detail(
     experiment: &ExperimentMetadata,
     workload: &str,
@@ -338,11 +347,34 @@ pub fn get_workload_detail(
         fs::read_to_string(dir.join(file)).ok()
     };
 
+    let mut patches: HashMap<String, String> = HashMap::new();
+    for group in &manifest.tasks {
+        let Some(injection) = &group.injection else { continue };
+        let Some(rel) = &injection.patch else { continue };
+        if patches.contains_key(rel) {
+            continue;
+        }
+        match fs::read_to_string(dir.join(rel)) {
+            Ok(body) => {
+                patches.insert(rel.clone(), body);
+            }
+            Err(e) => {
+                tracing::warn!(
+                    "Patch '{}' referenced by workload '{}' could not be read: {}",
+                    rel,
+                    manifest.name,
+                    e
+                );
+            }
+        }
+    }
+
     Ok(WorkloadDetail {
         manifest,
         readme_md: read_optional("README.md"),
         bugs_md: read_optional("BUGS.md"),
         tasks_md: read_optional("TASKS.md"),
+        patches,
     })
 }
 
