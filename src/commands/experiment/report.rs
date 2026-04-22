@@ -82,21 +82,29 @@ fn publish_gist(path: &std::path::Path) -> anyhow::Result<String> {
 
 /// Render the report HTML for an experiment without writing it to disk.
 /// Side effects: loads the experiment store into `mgr`.
-pub fn render_html(mgr: &mut Manager, experiment: &ExperimentMetadata) -> anyhow::Result<String> {
+///
+/// When `strip_counterexamples` is true, per-trial `counterexample` fields
+/// are dropped from the embedded payload — useful for keeping the HTML
+/// under the GitHub Gist size ceiling at the cost of losing them in the
+/// interactive report.
+pub fn render_html(
+    mgr: &mut Manager,
+    experiment: &ExperimentMetadata,
+    strip_counterexamples: bool,
+) -> anyhow::Result<String> {
     // Load metrics
     mgr.set_store_path(experiment.store.clone())?;
     mgr.require_store_mut()?.load_metrics()?;
 
-    // Counterexamples can run to thousands of characters per trial; keeping
-    // them blows up the embedded JSON and the webview's parse time, so drop
-    // them from the report payload.
     let metrics: Vec<serde_json::Value> = mgr
         .require_store()?
         .metrics
         .iter()
         .map(|m| {
             let mut obj = m.data.clone();
-            obj.remove("counterexample");
+            if strip_counterexamples {
+                obj.remove("counterexample");
+            }
             obj.insert(
                 "hash".to_string(),
                 serde_json::Value::String(m.hash.clone()),
@@ -149,8 +157,9 @@ pub fn invoke(
     experiment: ExperimentMetadata,
     output: Option<PathBuf>,
     publish: bool,
+    strip_counterexamples: bool,
 ) -> anyhow::Result<()> {
-    let html = render_html(&mut mgr, &experiment)?;
+    let html = render_html(&mut mgr, &experiment, strip_counterexamples)?;
 
     let output_path = output.unwrap_or_else(|| experiment.path.join("report.html"));
     std::fs::write(&output_path, &html).context("Failed to write report HTML")?;

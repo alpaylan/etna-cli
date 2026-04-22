@@ -444,7 +444,7 @@ pub async fn get_report(
     // Build an isolated manager so we don't mutate shared state (report loads a store).
     let html = tokio::task::spawn_blocking(move || -> anyhow::Result<String> {
         let mut manager = crate::manager::Manager::load()?;
-        crate::commands::experiment::report::render_html(&mut manager, &experiment)
+        crate::commands::experiment::report::render_html(&mut manager, &experiment, false)
     })
     .await
     .map_err(|e| ServerError::internal(format!("Report task failed: {e}")))?
