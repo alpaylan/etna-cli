@@ -135,6 +135,14 @@ pub(crate) fn run() -> anyhow::Result<()> {
         );
     }
 
+    // `workload site` only uses the bundled catalog + HTTP; it doesn't touch
+    // any experiment state, so it runs fine without `etna setup`. CI in
+    // particular benefits — the catalog-deploy workflow has no persisted
+    // config on the runner.
+    if let Command::Workload(WorkloadCommand::Site { out, catalog }) = cli.command {
+        return commands::workload::site::invoke(out, catalog);
+    }
+
     let mut mgr = Manager::load().context("All commands other than `etna setup` require a valid configuration, please make sure you ran `etna setup` first")?;
 
     let experiment = if let Some(experiment) = cli.command.experiment_name() {
