@@ -219,6 +219,7 @@ pub(crate) fn run() -> anyhow::Result<()> {
             } => commands::workload::list_workloads::invoke(mgr, experiment.unwrap(), kind),
             WorkloadCommand::Update {} => commands::workload::update_index::invoke(),
             WorkloadCommand::Doc { dir } => commands::workload::doc::invoke(dir),
+            WorkloadCommand::Check { dir } => commands::workload::check::invoke(dir),
         },
         Command::Config(cl) => match cl {
             ConfigCommand::Show => commands::config::show::invoke(),
@@ -496,6 +497,16 @@ enum WorkloadCommand {
         #[clap(default_value = ".")]
         dir: PathBuf,
     },
+    #[clap(
+        name = "check",
+        about = "Verify workload consistency: manifest parses, mutations match disk, witnesses/properties exist, patch files apply, docs are up to date"
+    )]
+    Check {
+        /// Path to the workload directory (contains `etna.toml`).
+        /// Defaults to the current directory.
+        #[clap(default_value = ".")]
+        dir: PathBuf,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -649,6 +660,7 @@ impl Command {
                 WorkloadCommand::ListWorkloads { experiment, .. } => experiment.as_ref(),
                 WorkloadCommand::Update {} => None,
                 WorkloadCommand::Doc { .. } => None,
+                WorkloadCommand::Check { .. } => None,
             },
             _ => None,
         }
@@ -675,6 +687,7 @@ impl Command {
                 WorkloadCommand::ListWorkloads { .. } => true,
                 WorkloadCommand::Update {} => false,
                 WorkloadCommand::Doc { .. } => false,
+                WorkloadCommand::Check { .. } => false,
             },
             _ => false,
         }
