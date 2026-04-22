@@ -407,16 +407,22 @@ pub fn get_experiment(mgr: &Manager, name: &str) -> ServiceResult<ExperimentInfo
     })
 }
 
-/// Delete an experiment
+/// Delete an experiment.
+///
+/// When `delete_files` is set, the experiment directory is *moved into the
+/// trash* at `$ETNA_HOME/trash/` rather than permanently removed — see
+/// [`crate::service::trash`]. The trash is swept on every call, so entries
+/// older than [`crate::service::trash::RETENTION`] are reclaimed at that
+/// point (not sooner).
 pub fn delete_experiment(mgr: &mut Manager, name: &str, delete_files: bool) -> ServiceResult<()> {
     let exp = mgr
         .get_experiment(name)
         .ok_or_else(|| anyhow::anyhow!("Experiment not found: {}", name))?;
 
     if delete_files && exp.path.exists() {
-        fs::remove_dir_all(&exp.path).with_context(|| {
+        super::trash::move_to_trash(&exp.path).with_context(|| {
             format!(
-                "Failed to remove experiment directory at '{}'",
+                "Failed to move experiment directory at '{}' to trash",
                 exp.path.display()
             )
         })?;

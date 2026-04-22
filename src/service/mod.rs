@@ -5,6 +5,7 @@ pub mod job;
 pub mod mutations;
 pub mod store;
 pub mod test_utils;
+pub mod trash;
 pub mod types;
 pub mod workload;
 

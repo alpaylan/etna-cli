@@ -163,8 +163,10 @@ pub async fn delete_experiment(
 ) -> Result<Json<serde_json::Value>, ServerError> {
     let mut manager = state.manager.write().unwrap();
 
-    // By default don't delete files - require explicit parameter
-    exp_service::delete_experiment(&mut manager, &name, false)?;
+    // Move the experiment's files into the recoverable trash under
+    // `$ETNA_HOME/trash/` instead of permanently deleting them. The trash
+    // sweeps entries older than 30 days on each deletion.
+    exp_service::delete_experiment(&mut manager, &name, true)?;
 
     Ok(Json(serde_json::json!({
         "success": true,

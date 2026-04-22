@@ -20,6 +20,8 @@ function ExperimentsPage({ experiments, jobs, loading, onRefresh, onOpenExperime
   const [cloneRef, setCloneRef] = useState('');
   const [cloning, setCloning] = useState(false);
   const cloneInputRef = useRef<HTMLInputElement>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState<string | null>(null);
+  const confirmTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (showCreateForm) requestAnimationFrame(() => createInputRef.current?.focus());
@@ -55,12 +57,31 @@ function ExperimentsPage({ experiments, jobs, loading, onRefresh, onOpenExperime
     vscode.postMessage({ type: 'cloneExperiment', url, ref });
   };
 
+  // VSCode webviews don't support window.confirm(), so we use an inline
+  // two-click arm-then-delete instead: first click arms the button (red tint,
+  // "Click again…" tooltip); a second click within 3 s fires the delete.
   const handleDelete = (e: React.MouseEvent, name: string) => {
     e.stopPropagation();
-    if (confirm(`Delete experiment "${name}"?`)) {
-      vscode.postMessage({ type: 'deleteExperiment', name });
+    if (confirmingDelete !== name) {
+      setConfirmingDelete(name);
+      if (confirmTimerRef.current != null) window.clearTimeout(confirmTimerRef.current);
+      confirmTimerRef.current = window.setTimeout(() => {
+        setConfirmingDelete(null);
+        confirmTimerRef.current = null;
+      }, 3000);
+      return;
     }
+    if (confirmTimerRef.current != null) {
+      window.clearTimeout(confirmTimerRef.current);
+      confirmTimerRef.current = null;
+    }
+    setConfirmingDelete(null);
+    vscode.postMessage({ type: 'deleteExperiment', name });
   };
+
+  useEffect(() => () => {
+    if (confirmTimerRef.current != null) window.clearTimeout(confirmTimerRef.current);
+  }, []);
 
   // Index of running/pending job counts per experiment (from job metadata).
   const activeCounts = useMemo(() => {
@@ -277,10 +298,18 @@ function ExperimentsPage({ experiments, jobs, loading, onRefresh, onOpenExperime
                   <div className="ex-card-actions">
                     <span className="ex-card-open" aria-hidden>Open →</span>
                     <button
-                      className="ex-btn ex-btn-icondanger"
+                      className={`ex-btn ex-btn-icondanger${confirmingDelete === exp.name ? ' is-armed' : ''}`}
                       onClick={(e) => handleDelete(e, exp.name)}
-                      aria-label={`Delete ${exp.name}`}
-                      title={`Delete ${exp.name}`}
+                      aria-label={
+                        confirmingDelete === exp.name
+                          ? `Click again to delete ${exp.name}`
+                          : `Delete ${exp.name}`
+                      }
+                      title={
+                        confirmingDelete === exp.name
+                          ? `Click again to delete ${exp.name}`
+                          : `Delete ${exp.name}`
+                      }
                     >×</button>
                   </div>
                 </div>
