@@ -78,12 +78,23 @@ jobs:
           ls -la ./site
           du -sh ./site
 
+      # Wrangler's `pages deploy` does *not* auto-create the project — it
+      # errors 8000007 if the name is unknown. Create it first and let a
+      # pre-existing name no-op (the CLI returns exit 1 when a project
+      # already exists; swallow that).
+      - name: Ensure Cloudflare Pages project exists
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages project create etna-workloads --production-branch=main
+        continue-on-error: true
+
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          # `pages deploy` auto-creates the project on first run if it
-          # doesn't exist. `--branch=main` pins this as the production
-          # deploy (vs. preview deploys from feature branches).
+          # `--branch=main` pins this as the production deploy (preview
+          # deploys come from feature branches).
           command: pages deploy ./site --project-name=etna-workloads --branch=main --commit-dirty=true
