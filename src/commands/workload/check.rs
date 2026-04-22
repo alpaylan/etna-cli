@@ -70,9 +70,23 @@ fn check_variant_set_matches_marauders(
         return;
     }
 
+    // `list_mutations` walks the whole tree via marauders, which also picks up
+    // `.patch` files and names them after their filename stem (e.g.
+    // `patches/foo.patch` → "foo"). That's misleading here — patch-injected
+    // variants have their own `_<sha>_<n>` suffix in the manifest, and they're
+    // already validated by `check_patch_files_exist`. Scope this check to
+    // marauders-style groups only, and filter out `.patch`-sourced entries
+    // from the on-disk set so they don't show up as phantom extras.
     let on_disk: HashSet<String> = match list_mutations(dir) {
         Ok(files) => files
             .into_iter()
+            .filter(|f| {
+                f.file
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .map(|e| e != "patch")
+                    .unwrap_or(true)
+            })
             .flat_map(|f| f.mutations.into_iter().map(|m| m.name))
             .collect(),
         Err(e) => {
@@ -84,18 +98,25 @@ fn check_variant_set_matches_marauders(
     let declared: HashSet<String> = manifest
         .tasks
         .iter()
+        .filter(|g| {
+            // Missing injection block = legacy marauder workload; assume marauders.
+            g.injection
+                .as_ref()
+                .map(|i| matches!(i.kind, InjectionKind::Marauders))
+                .unwrap_or(true)
+        })
         .flat_map(|g| g.mutations.iter().cloned())
         .collect();
 
     for m in declared.difference(&on_disk) {
         out.push(format!(
-            "manifest declares mutation '{}' but it is not present in source tree or patches/",
+            "manifest declares marauder mutation '{}' but it is not present in the source tree",
             m
         ));
     }
     for m in on_disk.difference(&declared) {
         out.push(format!(
-            "mutation '{}' exists in source tree or patches/ but is not declared in any [[tasks]].mutations",
+            "marauder mutation '{}' exists in the source tree but is not declared in any [[tasks]].mutations",
             m
         ));
     }
