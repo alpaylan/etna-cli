@@ -100,9 +100,12 @@ pub(crate) fn commit(repo_path: &Path, message: &str) -> anyhow::Result<String> 
     let mut index = git_repo
         .index()
         .with_context(|| format!("Failed to get index for repo '{repo_display}'"))?;
-    index
-        .clear()
-        .with_context(|| format!("Failed to clear index for repo '{repo_display}'"))?;
+    // Don't clear the index: existing submodule gitlinks (mode 160000) are
+    // tracked there from the parent commit and have no representation as
+    // ordinary files on disk, so a clear-and-readd loop drops them. Instead
+    // we layer add_all (new + modified files) and update_all (deletions of
+    // previously-tracked files) on top of the existing index, which matches
+    // `git add -A` semantics and preserves gitlinks.
 
     let mut last_seen_path: Option<String> = None;
     let mut last_skipped_nested_repo: Option<String> = None;
@@ -137,6 +140,14 @@ pub(crate) fn commit(repo_path: &Path, message: &str) -> anyhow::Result<String> 
             },
             None => format!("Failed to add files to index for repo '{repo_display}'"),
         })?;
+
+    // Reflect deletions of previously-tracked files (e.g. a manual `rm` or
+    // `git rm`) so the auto-commit doesn't keep stale entries. update_all
+    // only touches paths already in the index, so it can't re-introduce
+    // submodule contents or other files that were intentionally absent.
+    index
+        .update_all(["*"], None)
+        .with_context(|| format!("Failed to update index for repo '{repo_display}'"))?;
 
     index
         .write()
