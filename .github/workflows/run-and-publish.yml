@@ -211,17 +211,25 @@ jobs:
         if: steps.meta.outputs.language == 'rocq' || steps.meta.outputs.language == 'coq'
         shell: bash
         run: |
-          # Two-step install: coq.8.18.0 first so `coqc` lands on PATH
-          # *before* opam tries to build packages that shell out to it at
-          # build time (rocq-hierarchy-builder.1.9.1's Makefile invokes
-          # `rocq makefile` which calls coqc; that package mis-declares its
-          # build deps and fails with `coqc: not found` if coq isn't yet
-          # installed in the same `opam install` call).
+          # Three-step install — opam's solver picks a build order that's
+          # broken on coq-released for our target versions, so force the
+          # ordering by hand:
+          #   1. coq.8.18.0 (puts coqc on PATH)
+          #   2. coq-elpi (puts the elpi loader on the coq loadpath)
+          #   3. coq-quickchick + coq-ext-lib (need both 1 and 2 at build
+          #      time: rocq-hierarchy-builder.1.9.1's Makefile imports
+          #      `elpi` and `elpi.apps.locker` from the loadpath but
+          #      doesn't declare coq-elpi as a build dep, so a single-call
+          #      `opam install` builds HB before elpi and the build fails
+          #      with `library elpi is required from root elpi and has not
+          #      been found in the loadpath`).
           #
           # Coq 8.18 picked over 8.20 because 8.20 + coq-quickchick 2.0.x
           # pulls rocq-elpi.3.2.0 which has a broken dune layout (missing
           # _opam/.opam-switch/build/rocq-elpi.3.2.0/.../elpi_plugin.cmxs).
           opam install -y coq.8.18.0
+          eval $(opam env)
+          opam install -y coq-elpi
           eval $(opam env)
           opam install -y coq-quickchick.2.0.4 coq-ext-lib
           echo "OPAMSWITCH=$(opam switch show --safe)" >> "$GITHUB_ENV"
