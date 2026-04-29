@@ -310,18 +310,20 @@ fn get_agg_metrics(
 
             if let Some(timeout) = timed_out {
                 tracing::warn!("Some metrics in group {:?} timed out", agg);
-                let data = serde_json::json!({
-                    "language": agg[0],
-                    "workload": agg[1],
-                    "strategy": agg[2],
-                    "property": agg[3],
-                    "mutations": agg[4],
-                    "mode": agg[5],
-                    "discards": f64::NAN,
-                    "tests": f64::NAN,
-                    "shrinks": f64::NAN,
-                    "time": format!("{timeout}s"),
-                });
+                let mut data = serde_json::Map::new();
+                for (i, key) in aggby.iter().enumerate() {
+                    if let Some(v) = agg.get(i) {
+                        data.insert(key.clone(), (*v).clone());
+                    }
+                }
+                data.insert("discards".to_string(), serde_json::Value::from(f64::NAN));
+                data.insert("tests".to_string(), serde_json::Value::from(f64::NAN));
+                data.insert("shrinks".to_string(), serde_json::Value::from(f64::NAN));
+                data.insert(
+                    "time".to_string(),
+                    serde_json::Value::from(format!("{timeout}s")),
+                );
+                let data = serde_json::Value::Object(data);
                 tracing::trace!("Returning timeout data: {:#?}", data);
                 let _ = write_row(&mut raw_data_file, &data, aggby);
                 return data.as_object().cloned();
@@ -343,18 +345,17 @@ fn get_agg_metrics(
 
             if let Some(true) = aborted {
                 tracing::error!("Some metrics in group {:?} were aborted", agg);
-                let data = serde_json::json!({
-                    "language": agg[0],
-                    "workload": agg[1],
-                    "strategy": agg[2],
-                    "property": agg[3],
-                    "mutations": agg[4],
-                    "mode": agg[5],
-                    "discards": f64::NAN,
-                    "tests": f64::NAN,
-                    "shrinks": f64::NAN,
-                    "time": f64::NAN,
-                });
+                let mut data = serde_json::Map::new();
+                for (i, key) in aggby.iter().enumerate() {
+                    if let Some(v) = agg.get(i) {
+                        data.insert(key.clone(), (*v).clone());
+                    }
+                }
+                data.insert("discards".to_string(), serde_json::Value::from(f64::NAN));
+                data.insert("tests".to_string(), serde_json::Value::from(f64::NAN));
+                data.insert("shrinks".to_string(), serde_json::Value::from(f64::NAN));
+                data.insert("time".to_string(), serde_json::Value::from(f64::NAN));
+                let data = serde_json::Value::Object(data);
                 tracing::trace!("Returning aborted data: {:#?}", data);
                 let _ = write_row(&mut raw_data_file, &data, aggby);
                 return data.as_object().cloned();
@@ -460,18 +461,24 @@ fn get_agg_metrics(
                 avgs.3
             );
 
-            let data = serde_json::json!({
-                "language": agg[0],
-                "workload": agg[1],
-                "strategy": agg[2],
-                "property": agg[3],
-                "mutations": agg[4],
-                "cross": agg[5],
-                "discards": avgs.0,
-                "tests": avgs.1,
-                "shrinks": avgs.2,
-                "time": avgs.3,
-            });
+            // Build the row dynamically from aggby — its ordering can vary
+            // (default is workload/strategy/property/mutations/mode; not every
+            // call specifies "cross" or "language") so a hard-coded index map
+            // panics for any aggby shorter than 6 entries.
+            let mut data = serde_json::Map::new();
+            for (i, key) in aggby.iter().enumerate() {
+                if let Some(v) = agg.get(i) {
+                    data.insert(key.clone(), (*v).clone());
+                }
+            }
+            data.insert(
+                "discards".to_string(),
+                serde_json::Value::from(avgs.0),
+            );
+            data.insert("tests".to_string(), serde_json::Value::from(avgs.1));
+            data.insert("shrinks".to_string(), serde_json::Value::from(avgs.2));
+            data.insert("time".to_string(), serde_json::Value::from(avgs.3));
+            let data = serde_json::Value::Object(data);
             tracing::debug!("Writing to {}: {:#?}", raw_data_path.display(), data);
             let _ = write_row(&mut raw_data_file, &data, aggby);
 

@@ -327,6 +327,7 @@ mod tests {
         let manifest = r#"
 name = "x"
 language = "rust"
+strategies = ["proptest"]
 
 [[tasks]]
 mutations = ["m_0000000_1"]
@@ -381,6 +382,7 @@ property = "SomeProp"
         let manifest = r#"
 name = "cratefork"
 language = "rust"
+strategies = ["proptest"]
 
 [[tasks]]
 mutations = ["m_0000000_1"]

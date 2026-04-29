@@ -1,6 +1,7 @@
 name = "T2"
 description = "Integration-test fixture workload (consumer side)."
 language = "Test"
+strategies = ["bespoke"]
 
 [[tasks]]
 mutations = []

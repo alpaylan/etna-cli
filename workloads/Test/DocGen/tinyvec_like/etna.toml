@@ -2,6 +2,7 @@ name = "tinyvec_like"
 description = "Test fixture mirroring the tinyvec injection shape: two marauders-based bugs with full source provenance."
 language = "rust"
 crate = "tinyvec"
+strategies = ["proptest"]
 base_commit = "0123456789abcdef0123456789abcdef01234567"
 
 [[tasks]]

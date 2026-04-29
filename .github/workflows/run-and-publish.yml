@@ -13,10 +13,6 @@ name: Run experiment and publish to Cloudflare Pages
 on:
   workflow_call:
     inputs:
-      strategy:
-        description: 'Strategy to amend onto every task (e.g. plausible, etna, proptest)'
-        type: string
-        default: plausible
       trials:
         description: 'Trials per (variant, property)'
         type: number
@@ -57,6 +53,22 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0   # marauders applies patches; full history avoids surprise reset behaviour
+          # Submodules are inited later, after the SSH→HTTPS URL rewrite, so
+          # this step doesn't fail on workloads whose `.gitmodules` uses
+          # `git@github.com:` URLs (which have no key on hosted runners).
+
+      # Workloads with submodules (e.g. etna-haskell-bst → etna-haskell-lib)
+      # ship `.gitmodules` entries with `git@github.com:` URLs. Rewrite to
+      # HTTPS once globally so any subsequent `git submodule …` works without
+      # SSH keys, then init the submodules ourselves.
+      - name: Init submodules over HTTPS
+        shell: bash
+        run: |
+          git config --global url."https://github.com/".insteadOf "git@github.com:"
+          if [ -f .gitmodules ]; then
+            git submodule sync --recursive
+            git submodule update --init --recursive
+          fi
 
       # ---------- Read workload metadata --------------------------------
       - name: Detect language from etna.toml
@@ -83,9 +95,30 @@ jobs:
           echo "Detected workload: name=$name language=$language"
 
       # ---------- Per-language toolchain bootstrap + cache --------------
+      # Rust toolchain channel: read from rust-toolchain.toml or rust-toolchain
+      # if present, otherwise default to stable. Workloads that use unstable
+      # features (e.g. etna-rust-bst's box_patterns mutation) ship a
+      # rust-toolchain.toml pinning nightly.
+      - name: Detect Rust channel
+        if: steps.meta.outputs.language == 'rust'
+        id: rust_channel
+        shell: bash
+        run: |
+          channel="stable"
+          if [ -f rust-toolchain.toml ]; then
+            val=$(grep -E '^channel *= *' rust-toolchain.toml | head -1 | sed -E 's/.*= *"([^"]*)".*/\1/')
+            [ -n "$val" ] && channel="$val"
+          elif [ -f rust-toolchain ]; then
+            val=$(tr -d '[:space:]' < rust-toolchain)
+            [ -n "$val" ] && channel="$val"
+          fi
+          echo "channel=$channel" >> "$GITHUB_OUTPUT"
+          echo "Rust channel: $channel"
       - name: Setup Rust
         if: steps.meta.outputs.language == 'rust'
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ steps.rust_channel.outputs.channel }}
       - name: Cache Rust
         if: steps.meta.outputs.language == 'rust'
         uses: actions/cache@v4
@@ -97,12 +130,29 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ steps.meta.outputs.name }}-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-${{ steps.meta.outputs.name }}-
 
+      # Pre-build manually so the compile diagnostic surfaces here. etna-cli's
+      # `build_steps` driver captures stdout/stderr via `cmd.output()` and on
+      # failure only prints `[✗] cargo build --release failed` — the actual
+      # compile error is dropped on the floor (alpaylan/etna-cli build_steps
+      # output buffering). Running cargo here means a later `etna experiment
+      # run` no-ops the build (already cached).
+      - name: Pre-build Rust workload (visible diagnostics)
+        if: steps.meta.outputs.language == 'rust'
+        shell: bash
+        run: cargo build --release
+
       - name: Setup Haskell + Stack
         if: steps.meta.outputs.language == 'haskell'
         uses: haskell-actions/setup@v2
         with:
           enable-stack: true
-          stack-version: latest
+          # Pin to a stack version known to be pre-cached on
+          # actions/runner-images ubuntu-latest. Defaulting to 'latest'
+          # routes through GHCup which has been flaky resolving the
+          # newest 3.x release on hosted runners.
+          stack-version: '2.15.7'
+          # The build_steps for haskell workloads use `--no-system-ghc`
+          # so stack downloads its own GHC; we don't pin ghc-version here.
       - name: Cache Stack
         if: steps.meta.outputs.language == 'haskell'
         uses: actions/cache@v4
@@ -118,6 +168,23 @@ jobs:
         uses: ocaml/setup-ocaml@v3
         with:
           ocaml-compiler: '5.x'
+      # `ocaml/setup-ocaml@v3` sets up opam + appends opam-env to GITHUB_ENV,
+      # but does NOT install `dune` globally — workload steps.json setup_steps
+      # call `dune --version` directly (no `opam exec --` wrapper) so dune
+      # must be on PATH for plain bash. Install it via opam now.
+      - name: Install dune for OCaml workload
+        if: steps.meta.outputs.language == 'ocaml'
+        shell: bash
+        run: |
+          opam install -y dune
+          # ocaml/setup-ocaml@v3 creates a workspace-local _opam switch but
+          # doesn't export OPAMSWITCH. etna-cli's driver later runs
+          # `opam exec -- dune build` from /tmp/etna-experiment/.../bst-ocaml
+          # which is outside the workspace tree, so opam's cwd-walk can't
+          # find _opam. Pin OPAMSWITCH to the absolute switch path so opam
+          # picks it up no matter where it's invoked.
+          echo "OPAMSWITCH=$(opam switch show --safe)" >> "$GITHUB_ENV"
+          echo "$(opam var prefix)/bin" >> "$GITHUB_PATH"
       - name: Cache OCaml build artefacts
         if: steps.meta.outputs.language == 'ocaml'
         uses: actions/cache@v4
@@ -127,12 +194,54 @@ jobs:
           key: ${{ runner.os }}-ocaml-${{ steps.meta.outputs.name }}-${{ hashFiles('**/dune-project', '**/*.opam') }}
           restore-keys: ${{ runner.os }}-ocaml-${{ steps.meta.outputs.name }}-
 
-      - name: Setup Coq (Rocq)
+      # Coq (Rocq) install on the host. We need coqc + QuickChick + ExtLib on
+      # the host PATH because etna-cli's check/build commands (`coqc
+      # --print-version`, `${workload_path}/build`) run via std::process::Command
+      # outside any container — the previous docker-coq-action only made the
+      # binaries available inside its container.
+      - name: Setup OCaml for Coq via opam
         if: steps.meta.outputs.language == 'rocq' || steps.meta.outputs.language == 'coq'
-        uses: coq-community/docker-coq-action@v1
+        uses: ocaml/setup-ocaml@v3
         with:
-          custom_image: 'coqorg/coq:8.20'
-          custom_script: 'echo "Coq image pre-pulled"'
+          ocaml-compiler: '4.14.x'
+          opam-repositories: |
+            default: https://opam.ocaml.org
+            coq-released: https://coq.inria.fr/opam/released
+      - name: Install Coq + QuickChick + ExtLib
+        if: steps.meta.outputs.language == 'rocq' || steps.meta.outputs.language == 'coq'
+        shell: bash
+        run: |
+          # Three-step install — opam's solver picks a build order that's
+          # broken on coq-released for our target versions, so force the
+          # ordering by hand:
+          #   1. coq.8.18.0 (puts coqc on PATH)
+          #   2. coq-elpi (puts the elpi loader on the coq loadpath)
+          #   3. coq-quickchick + coq-ext-lib (need both 1 and 2 at build
+          #      time: rocq-hierarchy-builder.1.9.1's Makefile imports
+          #      `elpi` and `elpi.apps.locker` from the loadpath but
+          #      doesn't declare coq-elpi as a build dep, so a single-call
+          #      `opam install` builds HB before elpi and the build fails
+          #      with `library elpi is required from root elpi and has not
+          #      been found in the loadpath`).
+          #
+          # Coq 8.18 picked over 8.20 because 8.20 + coq-quickchick 2.0.x
+          # pulls rocq-elpi.3.2.0 which has a broken dune layout (missing
+          # _opam/.opam-switch/build/rocq-elpi.3.2.0/.../elpi_plugin.cmxs).
+          opam install -y coq.8.18.0
+          eval $(opam env)
+          opam install -y coq-elpi
+          eval $(opam env)
+          opam install -y coq-quickchick.2.0.4 coq-ext-lib
+          echo "OPAMSWITCH=$(opam switch show --safe)" >> "$GITHUB_ENV"
+          echo "$(opam var prefix)/bin" >> "$GITHUB_PATH"
+      - name: Cache Coq opam switch
+        if: steps.meta.outputs.language == 'rocq' || steps.meta.outputs.language == 'coq'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.opam
+          key: ${{ runner.os }}-coq-${{ steps.meta.outputs.name }}-820
+          restore-keys: ${{ runner.os }}-coq-${{ steps.meta.outputs.name }}-
 
       - name: Install elan (Lean toolchain)
         if: steps.meta.outputs.language == 'lean'
@@ -179,17 +288,17 @@ jobs:
           cd /tmp/etna-experiment
           etna experiment new ci-run
           cd ci-run
-          etna workload add "https://github.com/${{ github.repository }}.git" --ref "${{ github.sha }}"
+          # Note: --ref ${{ github.sha }} is correct intent but `etna workload add`
+          # passes that to `git clone --branch` which doesn't accept SHAs (alpaylan/etna-cli#28).
+          # Falling back to the default branch — fine for push-to-main triggers
+          # since the default-branch HEAD == github.sha.
+          etna workload add "https://github.com/${{ github.repository }}.git"
           ls tests/
 
-      - name: Amend test with strategy
-        shell: bash
-        run: |
-          cd /tmp/etna-experiment/ci-run
-          test_name="${{ steps.meta.outputs.name }}"
-          etna experiment amend-test --test "$test_name" --strategy "${{ inputs.strategy }}"
-
       # ---------- Run + publish ----------------------------------------
+      # Strategies are seeded into tests/<name>.json from etna.toml's
+      # `strategies = [...]` field at workload-add time — no amend-test step
+      # needed.
       - name: Run experiment
         shell: bash
         run: |
