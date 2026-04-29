@@ -1,0 +1,232 @@
+name: Run experiment and publish to Cloudflare Pages
+# Reusable workflow: every workload's repo calls this with `uses:` to run an
+# `etna experiment run` and publish the results (HTML + JSON + raw store +
+# manifest) to a per-workload Cloudflare Pages project.
+#
+# What the caller does:
+#   1. Adds .github/workflows/publish.yml with `uses:
+#      alpaylan/etna-cli/.github/workflows/run-and-publish.yml@<ref>`
+#   2. Sets the secrets CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID
+#
+# Default cf-pages-project is the workload's `name` from its `etna.toml`.
+
+on:
+  workflow_call:
+    inputs:
+      strategy:
+        description: 'Strategy to amend onto every task (e.g. plausible, etna, proptest)'
+        type: string
+        default: plausible
+      trials:
+        description: 'Trials per (variant, property)'
+        type: number
+        default: 10
+      timeout:
+        description: 'Per-trial timeout in seconds'
+        type: number
+        default: 60
+      cf-pages-project:
+        description: 'Cloudflare Pages project to deploy into. Empty = use the workload name from etna.toml.'
+        type: string
+        default: ''
+      etna-version:
+        description: 'etna-cli release tag to install (e.g. v0.1.10). Empty = latest release.'
+        type: string
+        default: ''
+    secrets:
+      CLOUDFLARE_API_TOKEN:
+        required: true
+      CLOUDFLARE_ACCOUNT_ID:
+        required: true
+
+# One deploy at a time; cancel a still-running older run if a newer push arrives.
+concurrency:
+  group: run-and-publish-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      deployments: write
+    env:
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # marauders applies patches; full history avoids surprise reset behaviour
+
+      # ---------- Read workload metadata --------------------------------
+      - name: Detect language from etna.toml
+        id: meta
+        shell: bash
+        run: |
+          if [ ! -f etna.toml ]; then
+            echo "::error::etna.toml not found at repo root"
+            exit 1
+          fi
+          name=$(grep -E '^name *= *"' etna.toml | head -1 | sed -E 's/^name *= *"([^"]*)".*/\1/')
+          language=$(grep -E '^language *= *"' etna.toml | head -1 | sed -E 's/^language *= *"([^"]*)".*/\1/' | tr '[:upper:]' '[:lower:]')
+          if [ -z "$name" ] || [ -z "$language" ]; then
+            echo "::error::Could not parse name/language from etna.toml"
+            exit 1
+          fi
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "language=$language" >> "$GITHUB_OUTPUT"
+          if [ -n "${{ inputs.cf-pages-project }}" ]; then
+            echo "project=${{ inputs.cf-pages-project }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "project=$name" >> "$GITHUB_OUTPUT"
+          fi
+          echo "Detected workload: name=$name language=$language"
+
+      # ---------- Per-language toolchain bootstrap + cache --------------
+      - name: Setup Rust
+        if: steps.meta.outputs.language == 'rust'
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache Rust
+        if: steps.meta.outputs.language == 'rust'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ steps.meta.outputs.name }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-${{ steps.meta.outputs.name }}-
+
+      - name: Setup Haskell + Stack
+        if: steps.meta.outputs.language == 'haskell'
+        uses: haskell-actions/setup@v2
+        with:
+          enable-stack: true
+          stack-version: latest
+      - name: Cache Stack
+        if: steps.meta.outputs.language == 'haskell'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.stack
+            .stack-work
+          key: ${{ runner.os }}-stack-${{ steps.meta.outputs.name }}-${{ hashFiles('**/stack.yaml*', '**/*.cabal', '**/package.yaml') }}
+          restore-keys: ${{ runner.os }}-stack-${{ steps.meta.outputs.name }}-
+
+      - name: Setup OCaml
+        if: steps.meta.outputs.language == 'ocaml'
+        uses: ocaml/setup-ocaml@v3
+        with:
+          ocaml-compiler: '5.x'
+      - name: Cache OCaml build artefacts
+        if: steps.meta.outputs.language == 'ocaml'
+        uses: actions/cache@v4
+        with:
+          path: |
+            _build
+          key: ${{ runner.os }}-ocaml-${{ steps.meta.outputs.name }}-${{ hashFiles('**/dune-project', '**/*.opam') }}
+          restore-keys: ${{ runner.os }}-ocaml-${{ steps.meta.outputs.name }}-
+
+      - name: Setup Coq (Rocq)
+        if: steps.meta.outputs.language == 'rocq' || steps.meta.outputs.language == 'coq'
+        uses: coq-community/docker-coq-action@v1
+        with:
+          custom_image: 'coqorg/coq:8.20'
+          custom_script: 'echo "Coq image pre-pulled"'
+
+      - name: Install elan (Lean toolchain)
+        if: steps.meta.outputs.language == 'lean'
+        shell: bash
+        run: |
+          curl -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
+            | sh -s -- -y --default-toolchain none
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+      - name: Cache lake build (Lean)
+        if: steps.meta.outputs.language == 'lean'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.elan
+            **/.lake/build
+            **/.lake/packages
+          key: ${{ runner.os }}-lake-${{ steps.meta.outputs.name }}-${{ hashFiles('**/lean-toolchain', '**/lake-manifest.json') }}
+          restore-keys: ${{ runner.os }}-lake-${{ steps.meta.outputs.name }}-
+
+      # ---------- Install etna-cli ------------------------------------
+      - name: Install etna-cli
+        shell: bash
+        run: |
+          if [ -n "${{ inputs.etna-version }}" ]; then
+            url="https://github.com/alpaylan/etna-cli/releases/download/${{ inputs.etna-version }}/etna-installer.sh"
+          else
+            url="https://github.com/alpaylan/etna-cli/releases/latest/download/etna-installer.sh"
+          fi
+          curl -LsSf "$url" | sh
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+          # Verify installed
+          "$HOME/.cargo/bin/etna" --version || true
+
+      # ---------- Set up experiment + workload --------------------------
+      # `etna workload add` clones from a git URL. We pass the current repo's
+      # URL + SHA so the workload mirrors what's in CI exactly.
+      - name: Create experiment + add workload
+        shell: bash
+        run: |
+          mkdir -p /tmp/etna-experiment
+          cd /tmp/etna-experiment
+          etna experiment new ci-run
+          cd ci-run
+          etna workload add "https://github.com/${{ github.repository }}.git" --ref "${{ github.sha }}"
+          ls tests/
+
+      - name: Amend test with strategy
+        shell: bash
+        run: |
+          cd /tmp/etna-experiment/ci-run
+          test_name="${{ steps.meta.outputs.name }}"
+          etna experiment amend-test --test "$test_name" --strategy "${{ inputs.strategy }}"
+
+      # ---------- Run + publish ----------------------------------------
+      - name: Run experiment
+        shell: bash
+        run: |
+          cd /tmp/etna-experiment/ci-run
+          test_name="${{ steps.meta.outputs.name }}"
+          etna experiment run --tests "$test_name" \
+            --params trials=${{ inputs.trials }} \
+            --params timeout=${{ inputs.timeout }}
+
+      - name: Bundle results into dist/
+        shell: bash
+        run: |
+          cd /tmp/etna-experiment/ci-run
+          etna experiment publish-page --output "$GITHUB_WORKSPACE/dist"
+          ls -la "$GITHUB_WORKSPACE/dist"
+          echo "--- size ---"
+          du -sh "$GITHUB_WORKSPACE/dist"
+          du -h "$GITHUB_WORKSPACE/dist"/*
+
+      # ---------- Cloudflare Pages -------------------------------------
+      # Wrangler's `pages deploy` does NOT auto-create the project — it
+      # errors when the name is unknown. Create it first; ignore failures
+      # (CLI returns non-zero when the project already exists).
+      - name: Ensure Cloudflare Pages project exists
+        uses: cloudflare/wrangler-action@v3
+        continue-on-error: true
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages project create ${{ steps.meta.outputs.project }} --production-branch=main
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=${{ steps.meta.outputs.project }} --branch=main --commit-dirty=true
+
+      - name: Print result URL
+        shell: bash
+        run: |
+          echo "Deployed to https://${{ steps.meta.outputs.project }}.pages.dev/"
+          echo "JSON endpoint: https://${{ steps.meta.outputs.project }}.pages.dev/report.json"

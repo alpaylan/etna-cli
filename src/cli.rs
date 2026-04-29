@@ -207,7 +207,8 @@ pub(crate) fn run() -> anyhow::Result<()> {
             }
             ExperimentCommand::Visualize { name: _, figure, tests, groupby, aggby, metric, buckets, max, visualization_type, hatched } => commands::experiment::visualize::invoke(mgr, experiment.unwrap(), figure, tests, groupby, aggby, metric, buckets, max, visualization_type, hatched),
             ExperimentCommand::VisualizeJson { input, output } => commands::experiment::visualize::draw_bucket_chart_from_json(&input, &output),
-            ExperimentCommand::Report { name: _, output, publish, strip_counterexamples } => commands::experiment::report::invoke(mgr, experiment.unwrap(), output, publish, strip_counterexamples),
+            ExperimentCommand::Report { name: _, output, publish, strip_counterexamples, json_output } => commands::experiment::report::invoke(mgr, experiment.unwrap(), output, publish, strip_counterexamples, json_output),
+            ExperimentCommand::PublishPage { name: _, output, strip_counterexamples } => commands::experiment::publish_page::invoke(mgr, experiment.unwrap(), output, strip_counterexamples),
             ExperimentCommand::List {} => commands::experiment::list::invoke(mgr),
         },
         Command::Workload(wl) => match wl {
@@ -447,6 +448,29 @@ enum ExperimentCommand {
         /// at the cost of losing them from the interactive report.
         #[clap(long, default_value = "false")]
         strip_counterexamples: bool,
+        /// Also dump the report's metrics payload as a standalone JSON file
+        /// (the same data the HTML embeds, gzip-decoded and indented). Useful
+        /// for serving a static `/json` endpoint alongside the HTML report.
+        #[clap(long)]
+        json_output: Option<PathBuf>,
+    },
+    #[clap(
+        name = "publish-page",
+        about = "Bundle experiment results into a Cloudflare-Pages-ready directory"
+    )]
+    PublishPage {
+        /// Name of the experiment
+        /// [default: current directory]
+        #[clap(short, long)]
+        name: Option<String>,
+        /// Output directory (created if missing). Receives index.html,
+        /// report.html, report.json, store.jsonl, and etna.toml.
+        #[clap(short, long)]
+        output: PathBuf,
+        /// Drop per-trial `counterexample` fields from the embedded metrics
+        /// payload. Same effect as on `report`.
+        #[clap(long, default_value = "false")]
+        strip_counterexamples: bool,
     },
     #[clap(name = "list", about = "List all experiments")]
     List {},
@@ -676,6 +700,7 @@ impl Command {
                 ExperimentCommand::Visualize { name, .. } => name.as_ref(),
                 ExperimentCommand::VisualizeJson { .. } => None,
                 ExperimentCommand::Report { name, .. } => name.as_ref(),
+                ExperimentCommand::PublishPage { name, .. } => name.as_ref(),
                 ExperimentCommand::List { .. } => None,
             },
             Command::Workload(wl) => match wl {
@@ -704,6 +729,7 @@ impl Command {
                 ExperimentCommand::Visualize { .. } => true,
                 ExperimentCommand::VisualizeJson { .. } => false,
                 ExperimentCommand::Report { .. } => true,
+                ExperimentCommand::PublishPage { .. } => true,
                 ExperimentCommand::List { .. } => false,
             },
             Command::Workload(wl) => match wl {

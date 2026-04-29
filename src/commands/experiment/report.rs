@@ -80,6 +80,68 @@ fn publish_gist(path: &std::path::Path) -> anyhow::Result<String> {
     Ok(format!("Gist: {}\nView: {}", gist_url, view_url))
 }
 
+/// The serialisable payload that backs both `render_html` and any JSON-only
+/// sink (e.g. the `--json-output` flag). Separated so the two outputs share
+/// the exact same underlying data.
+pub struct ReportPayload {
+    pub experiment_name: String,
+    pub generated_at: String,
+    pub metrics: Vec<serde_json::Value>,
+    pub workload_docs: serde_json::Map<String, serde_json::Value>,
+}
+
+impl ReportPayload {
+    /// Read the experiment store and assemble the payload. Side effect:
+    /// loads metrics into `mgr`'s store.
+    pub fn build(
+        mgr: &mut Manager,
+        experiment: &ExperimentMetadata,
+        strip_counterexamples: bool,
+    ) -> anyhow::Result<Self> {
+        mgr.set_store_path(experiment.store.clone())?;
+        mgr.require_store_mut()?.load_metrics()?;
+
+        let metrics: Vec<serde_json::Value> = mgr
+            .require_store()?
+            .metrics
+            .iter()
+            .map(|m| {
+                let mut obj = m.data.clone();
+                if strip_counterexamples {
+                    obj.remove("counterexample");
+                }
+                obj.insert(
+                    "hash".to_string(),
+                    serde_json::Value::String(m.hash.clone()),
+                );
+                serde_json::Value::Object(obj)
+            })
+            .collect();
+
+        let workload_docs = load_workload_docs(experiment);
+        let generated_at = chrono::Utc::now().format("%Y-%m-%d %H:%M UTC").to_string();
+
+        Ok(Self {
+            experiment_name: experiment.name.clone(),
+            generated_at,
+            metrics,
+            workload_docs,
+        })
+    }
+
+    /// Serialise as a single JSON document. Stable shape used by the
+    /// `--json-output` flag and by `experiment publish-page` for `/json`.
+    pub fn to_json_pretty(&self) -> anyhow::Result<String> {
+        let body = serde_json::json!({
+            "experiment": self.experiment_name,
+            "generated_at": self.generated_at,
+            "workload_docs": self.workload_docs,
+            "metrics": self.metrics,
+        });
+        Ok(serde_json::to_string_pretty(&body)?)
+    }
+}
+
 /// Render the report HTML for an experiment without writing it to disk.
 /// Side effects: loads the experiment store into `mgr`.
 ///
@@ -92,31 +154,15 @@ pub fn render_html(
     experiment: &ExperimentMetadata,
     strip_counterexamples: bool,
 ) -> anyhow::Result<String> {
-    // Load metrics
-    mgr.set_store_path(experiment.store.clone())?;
-    mgr.require_store_mut()?.load_metrics()?;
+    let payload = ReportPayload::build(mgr, experiment, strip_counterexamples)?;
+    render_html_from_payload(&payload)
+}
 
-    let metrics: Vec<serde_json::Value> = mgr
-        .require_store()?
-        .metrics
-        .iter()
-        .map(|m| {
-            let mut obj = m.data.clone();
-            if strip_counterexamples {
-                obj.remove("counterexample");
-            }
-            obj.insert(
-                "hash".to_string(),
-                serde_json::Value::String(m.hash.clone()),
-            );
-            serde_json::Value::Object(obj)
-        })
-        .collect();
-
-    // Load workload docs for mutation matrix filtering
-    let workload_docs = load_workload_docs(experiment);
-
-    let metrics_json_raw = serde_json::to_string(&metrics)?;
+/// Same as `render_html` but takes a pre-built payload, so callers (e.g.
+/// `publish-page`) can render HTML and JSON from the same source without
+/// re-reading the store.
+pub fn render_html_from_payload(payload: &ReportPayload) -> anyhow::Result<String> {
+    let metrics_json_raw = serde_json::to_string(&payload.metrics)?;
 
     // Gzip-compress and base64-encode metrics to keep the HTML under GitHub's 1MB API limit
     let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
@@ -130,10 +176,9 @@ pub fn render_html(
         compressed.len(),
         metrics_b64.len()
     );
-    let experiment_name_json = serde_json::to_string(&experiment.name)?;
-    let workload_docs_json = serde_json::to_string(&workload_docs)?;
-    let generated_at = chrono::Utc::now().format("%Y-%m-%d %H:%M UTC").to_string();
-    let generated_at_json = serde_json::to_string(&generated_at)?;
+    let experiment_name_json = serde_json::to_string(&payload.experiment_name)?;
+    let workload_docs_json = serde_json::to_string(&payload.workload_docs)?;
+    let generated_at_json = serde_json::to_string(&payload.generated_at)?;
 
     // Render template with minijinja
     let mut env = minijinja::Environment::new();
@@ -142,7 +187,7 @@ pub fn render_html(
 
     let tmpl = env.get_template("report.html")?;
     let html = tmpl.render(minijinja::context! {
-        experiment_name => &experiment.name,
+        experiment_name => &payload.experiment_name,
         metrics_b64 => &metrics_b64,
         experiment_name_json => &experiment_name_json,
         workload_docs_json => &workload_docs_json,
@@ -158,13 +203,20 @@ pub fn invoke(
     output: Option<PathBuf>,
     publish: bool,
     strip_counterexamples: bool,
+    json_output: Option<PathBuf>,
 ) -> anyhow::Result<()> {
-    let html = render_html(&mut mgr, &experiment, strip_counterexamples)?;
+    let payload = ReportPayload::build(&mut mgr, &experiment, strip_counterexamples)?;
+    let html = render_html_from_payload(&payload)?;
 
     let output_path = output.unwrap_or_else(|| experiment.path.join("report.html"));
     std::fs::write(&output_path, &html).context("Failed to write report HTML")?;
-
     tracing::info!("Report written to {}", output_path.display());
+
+    if let Some(json_path) = json_output {
+        let body = payload.to_json_pretty()?;
+        std::fs::write(&json_path, body).context("Failed to write report JSON")?;
+        tracing::info!("Report JSON written to {}", json_path.display());
+    }
 
     if publish {
         let result = publish_gist(&output_path)?;
