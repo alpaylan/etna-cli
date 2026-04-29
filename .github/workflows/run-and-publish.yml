@@ -207,7 +207,7 @@ jobs:
           opam-repositories: |
             default: https://opam.ocaml.org
             coq-released: https://coq.inria.fr/opam/released
-      - name: Install Coq + QuickChick + ExtLib
+      - name: Install Coq + QuickChick (property-language) + ExtLib
         if: steps.meta.outputs.language == 'rocq' || steps.meta.outputs.language == 'coq'
         shell: bash
         run: |
@@ -216,13 +216,14 @@ jobs:
           # ordering by hand:
           #   1. coq.8.18.0 (puts coqc on PATH)
           #   2. coq-elpi (puts the elpi loader on the coq loadpath)
-          #   3. coq-quickchick + coq-ext-lib (need both 1 and 2 at build
-          #      time: rocq-hierarchy-builder.1.9.1's Makefile imports
-          #      `elpi` and `elpi.apps.locker` from the loadpath but
-          #      doesn't declare coq-elpi as a build dep, so a single-call
-          #      `opam install` builds HB before elpi and the build fails
-          #      with `library elpi is required from root elpi and has not
-          #      been found in the loadpath`).
+          #   3. coq-quickchick (property-language branch) + coq-ext-lib.
+          #
+          # QuickChick is pinned to the `property-language` branch rather
+          # than the released coq-quickchick.2.0.4, because the etna rocq
+          # workloads use the `Fuzzy` typeclass (`Class Fuzzy (A : Type)
+          # := { fuzz : A -> G A }.` defined in src/Classes.v) which only
+          # exists on that branch — upstream's released line never merged
+          # the property-language work.
           #
           # Coq 8.18 picked over 8.20 because 8.20 + coq-quickchick 2.0.x
           # pulls rocq-elpi.3.2.0 which has a broken dune layout (missing
@@ -231,7 +232,9 @@ jobs:
           eval $(opam env)
           opam install -y coq-elpi
           eval $(opam env)
-          opam install -y coq-quickchick.2.0.4 coq-ext-lib
+          opam pin add -y --no-action coq-quickchick \
+            https://github.com/QuickChick/QuickChick.git#property-language
+          opam install -y coq-quickchick coq-ext-lib
           echo "OPAMSWITCH=$(opam switch show --safe)" >> "$GITHUB_ENV"
           echo "$(opam var prefix)/bin" >> "$GITHUB_PATH"
       - name: Cache Coq opam switch
