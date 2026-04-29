@@ -97,6 +97,17 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ steps.meta.outputs.name }}-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-${{ steps.meta.outputs.name }}-
 
+      # Pre-build manually so the compile diagnostic surfaces here. etna-cli's
+      # `build_steps` driver captures stdout/stderr via `cmd.output()` and on
+      # failure only prints `[✗] cargo build --release failed` — the actual
+      # compile error is dropped on the floor (alpaylan/etna-cli build_steps
+      # output buffering). Running cargo here means a later `etna experiment
+      # run` no-ops the build (already cached).
+      - name: Pre-build Rust workload (visible diagnostics)
+        if: steps.meta.outputs.language == 'rust'
+        shell: bash
+        run: cargo build --release
+
       - name: Setup Haskell + Stack
         if: steps.meta.outputs.language == 'haskell'
         uses: haskell-actions/setup@v2
