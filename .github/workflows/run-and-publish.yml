@@ -232,6 +232,15 @@ jobs:
           eval $(opam env)
           opam install -y coq-elpi
           eval $(opam env)
+          # QuickChick property-language branch declares `(lang dune 2.8)`
+          # but the modern dune 3.x emits "Multiple rules generated for
+          # depDriver.ml: plugin/dune:31, file present in source tree"
+          # because dune 3 walks `*.ml.cppo` files as if they alias an
+          # ML source even though our explicit (rule (targets ...)) is
+          # the real producer. Pin dune to 2.9.3 (the highest 2.x line)
+          # so the build follows the older rule-resolution semantics.
+          opam install -y dune.2.9.3
+          eval $(opam env)
           opam pin add -y --no-action coq-quickchick \
             https://github.com/QuickChick/QuickChick.git#property-language
           opam install -y coq-quickchick coq-ext-lib
