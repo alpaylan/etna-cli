@@ -146,6 +146,14 @@ jobs:
         shell: bash
         run: cargo build --release
 
+      # The Rust workloads' `hegel` strategy shells out to a Python
+      # script that uses `uv` for package management. Install uv on the
+      # Rust path so that strategy doesn't error with "uv: command not
+      # found" at run time.
+      - name: Install uv for Rust hegel
+        if: steps.meta.outputs.language == 'rust'
+        uses: astral-sh/setup-uv@v6
+
       - name: Setup Haskell + Stack
         if: steps.meta.outputs.language == 'haskell'
         uses: haskell-actions/setup@v2
