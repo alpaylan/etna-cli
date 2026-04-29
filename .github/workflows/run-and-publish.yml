@@ -347,19 +347,6 @@ jobs:
           du -sh "$GITHUB_WORKSPACE/dist"
           du -h "$GITHUB_WORKSPACE/dist"/*
 
-      # ---------- DIAGNOSTIC (non-credential): verify that gh-set test
-      # secrets round-trip with the expected length. The TEST_LENGTH_VALUE
-      # secret was set locally to a known 32-char ASCII string. If
-      # ${#TEST_LENGTH_VALUE} is anything other than 32 here, gh secret
-      # set is appending bytes to the value it sends GitHub.
-      - name: Debug — round-trip test of gh-set secret
-        if: ${{ secrets.TEST_LENGTH_VALUE != '' }}
-        shell: bash
-        env:
-          T: ${{ secrets.TEST_LENGTH_VALUE }}
-        run: |
-          printf 'TEST_LENGTH_VALUE length: %d (set locally to 32)\n' "${#T}"
-
       # ---------- Cloudflare Pages -------------------------------------
       # Wrangler's `pages deploy` does NOT auto-create the project — it
       # errors when the name is unknown. Create it first; ignore failures
