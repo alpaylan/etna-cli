@@ -172,11 +172,15 @@ jobs:
       # but does NOT install `dune` globally — workload steps.json setup_steps
       # call `dune --version` directly (no `opam exec --` wrapper) so dune
       # must be on PATH for plain bash. Install it via opam now.
-      - name: Install dune for OCaml workload
+      - name: Install OCaml workload deps
         if: steps.meta.outputs.language == 'ocaml'
         shell: bash
         run: |
-          opam install -y dune
+          # ocaml/setup-ocaml@v3 finds BST.opam (or any *.opam at the repo
+          # root) but does NOT auto-install its deps. Run `opam install .
+          # --deps-only` so qcheck / crowbar / cmdliner / dune end up on the
+          # switch before etna-cli's driver tries to build the workload.
+          opam install -y . --deps-only --with-test
           # ocaml/setup-ocaml@v3 creates a workspace-local _opam switch but
           # doesn't export OPAMSWITCH. etna-cli's driver later runs
           # `opam exec -- dune build` from /tmp/etna-experiment/.../bst-ocaml
