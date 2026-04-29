@@ -345,7 +345,7 @@ jobs:
         run: |
           cd /tmp/etna-experiment/ci-run
           test_name="${{ steps.meta.outputs.name }}"
-          etna experiment run --tests "$test_name" \
+          etna experiment run --tests "$test_name" --short-circuit \
             --params trials=${{ inputs.trials }} \
             --params timeout=${{ inputs.timeout }}
 
