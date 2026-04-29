@@ -172,6 +172,16 @@ jobs:
         uses: ocaml/setup-ocaml@v3
         with:
           ocaml-compiler: '5.x'
+      # `ocaml/setup-ocaml@v3` sets up opam + appends opam-env to GITHUB_ENV,
+      # but does NOT install `dune` globally — workload steps.json setup_steps
+      # call `dune --version` directly (no `opam exec --` wrapper) so dune
+      # must be on PATH for plain bash. Install it via opam now.
+      - name: Install dune for OCaml workload
+        if: steps.meta.outputs.language == 'ocaml'
+        shell: bash
+        run: |
+          opam install -y dune
+          echo "$(opam var prefix)/bin" >> "$GITHUB_PATH"
       - name: Cache OCaml build artefacts
         if: steps.meta.outputs.language == 'ocaml'
         uses: actions/cache@v4
@@ -181,12 +191,33 @@ jobs:
           key: ${{ runner.os }}-ocaml-${{ steps.meta.outputs.name }}-${{ hashFiles('**/dune-project', '**/*.opam') }}
           restore-keys: ${{ runner.os }}-ocaml-${{ steps.meta.outputs.name }}-
 
-      - name: Setup Coq (Rocq)
+      # Coq (Rocq) install on the host. We need coqc + QuickChick + ExtLib on
+      # the host PATH because etna-cli's check/build commands (`coqc
+      # --print-version`, `${workload_path}/build`) run via std::process::Command
+      # outside any container — the previous docker-coq-action only made the
+      # binaries available inside its container.
+      - name: Setup OCaml for Coq via opam
         if: steps.meta.outputs.language == 'rocq' || steps.meta.outputs.language == 'coq'
-        uses: coq-community/docker-coq-action@v1
+        uses: ocaml/setup-ocaml@v3
         with:
-          custom_image: 'coqorg/coq:8.20'
-          custom_script: 'echo "Coq image pre-pulled"'
+          ocaml-compiler: '4.14.x'
+          opam-repositories: |
+            default: https://opam.ocaml.org
+            coq-released: https://coq.inria.fr/opam/released
+      - name: Install Coq + QuickChick + ExtLib
+        if: steps.meta.outputs.language == 'rocq' || steps.meta.outputs.language == 'coq'
+        shell: bash
+        run: |
+          opam install -y coq.8.20.0 coq-quickchick coq-ext-lib
+          echo "$(opam var prefix)/bin" >> "$GITHUB_PATH"
+      - name: Cache Coq opam switch
+        if: steps.meta.outputs.language == 'rocq' || steps.meta.outputs.language == 'coq'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.opam
+          key: ${{ runner.os }}-coq-${{ steps.meta.outputs.name }}-820
+          restore-keys: ${{ runner.os }}-coq-${{ steps.meta.outputs.name }}-
 
       - name: Install elan (Lean toolchain)
         if: steps.meta.outputs.language == 'lean'
