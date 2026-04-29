@@ -57,6 +57,22 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0   # marauders applies patches; full history avoids surprise reset behaviour
+          # Submodules are inited later, after the SSH→HTTPS URL rewrite, so
+          # this step doesn't fail on workloads whose `.gitmodules` uses
+          # `git@github.com:` URLs (which have no key on hosted runners).
+
+      # Workloads with submodules (e.g. etna-haskell-bst → etna-haskell-lib)
+      # ship `.gitmodules` entries with `git@github.com:` URLs. Rewrite to
+      # HTTPS once globally so any subsequent `git submodule …` works without
+      # SSH keys, then init the submodules ourselves.
+      - name: Init submodules over HTTPS
+        shell: bash
+        run: |
+          git config --global url."https://github.com/".insteadOf "git@github.com:"
+          if [ -f .gitmodules ]; then
+            git submodule sync --recursive
+            git submodule update --init --recursive
+          fi
 
       # ---------- Read workload metadata --------------------------------
       - name: Detect language from etna.toml
@@ -113,9 +129,13 @@ jobs:
         uses: haskell-actions/setup@v2
         with:
           enable-stack: true
-          # Don't pin stack-version: 'latest' resolves to a non-cached release
-          # on the runner image and forces a download that fails. Default
-          # works.
+          # Pin to a stack version known to be pre-cached on
+          # actions/runner-images ubuntu-latest. Defaulting to 'latest'
+          # routes through GHCup which has been flaky resolving the
+          # newest 3.x release on hosted runners.
+          stack-version: '2.15.7'
+          # The build_steps for haskell workloads use `--no-system-ghc`
+          # so stack downloads its own GHC; we don't pin ghc-version here.
       - name: Cache Stack
         if: steps.meta.outputs.language == 'haskell'
         uses: actions/cache@v4
