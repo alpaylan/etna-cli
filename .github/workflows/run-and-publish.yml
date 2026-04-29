@@ -276,8 +276,13 @@ jobs:
         with:
           path: |
             ~/.opam
-          key: ${{ runner.os }}-coq-${{ steps.meta.outputs.name }}-820
-          restore-keys: ${{ runner.os }}-coq-${{ steps.meta.outputs.name }}-
+          # v2 invalidates poisoned cache: an earlier failed
+          # coq-quickchick build left `_opam/.opam-switch/build/
+          # coq-quickchick.dev/plugin/depDriver.ml` on disk; subsequent
+          # runs restored that file alongside the cppo rule, dune saw
+          # "Multiple rules generated for ..._build/.../depDriver.ml".
+          key: ${{ runner.os }}-coq-${{ steps.meta.outputs.name }}-820-v2
+          restore-keys: ${{ runner.os }}-coq-${{ steps.meta.outputs.name }}-820-v2
 
       - name: Install elan (Lean toolchain)
         if: steps.meta.outputs.language == 'lean'
