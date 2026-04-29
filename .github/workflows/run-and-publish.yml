@@ -102,7 +102,9 @@ jobs:
         uses: haskell-actions/setup@v2
         with:
           enable-stack: true
-          stack-version: latest
+          # Don't pin stack-version: 'latest' resolves to a non-cached release
+          # on the runner image and forces a download that fails. Default
+          # works.
       - name: Cache Stack
         if: steps.meta.outputs.language == 'haskell'
         uses: actions/cache@v4
@@ -179,7 +181,11 @@ jobs:
           cd /tmp/etna-experiment
           etna experiment new ci-run
           cd ci-run
-          etna workload add "https://github.com/${{ github.repository }}.git" --ref "${{ github.sha }}"
+          # Note: --ref ${{ github.sha }} is correct intent but `etna workload add`
+          # passes that to `git clone --branch` which doesn't accept SHAs (alpaylan/etna-cli#28).
+          # Falling back to the default branch — fine for push-to-main triggers
+          # since the default-branch HEAD == github.sha.
+          etna workload add "https://github.com/${{ github.repository }}.git"
           ls tests/
 
       - name: Amend test with strategy
