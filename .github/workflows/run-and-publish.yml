@@ -250,8 +250,16 @@ jobs:
           # so the build follows the older rule-resolution semantics.
           opam install -y dune.2.9.3
           eval $(opam env)
-          opam pin add -y --no-action coq-quickchick \
-            https://github.com/QuickChick/QuickChick.git#property-language
+          # Clone QuickChick property-language and strip the stale Emacs
+          # lock file (`examples/.#Fuzz.v` is a broken symlink that
+          # accidentally got committed; opam pin add via URL fetches the
+          # tarball which includes the symlink and `tar -x` fails on it
+          # later in the build with `No such file or directory`).
+          rm -rf "$RUNNER_TEMP/quickchick-pl"
+          git clone --depth 1 --branch property-language \
+            https://github.com/QuickChick/QuickChick.git "$RUNNER_TEMP/quickchick-pl"
+          find "$RUNNER_TEMP/quickchick-pl" -name '.#*' -delete
+          opam pin add -y --no-action coq-quickchick "$RUNNER_TEMP/quickchick-pl"
           opam install -y coq-quickchick coq-ext-lib
           echo "OPAMSWITCH=$(opam switch show --safe)" >> "$GITHUB_ENV"
           echo "$(opam var prefix)/bin" >> "$GITHUB_PATH"
