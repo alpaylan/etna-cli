@@ -3,7 +3,7 @@ members = ["workloads/Test/harness"]
 
 [package]
 name = "etna"
-version = "0.1.8"
+version = "0.1.9"
 edition = "2021"
 default-run = "etna"
 repository = "https://github.com/alpaylan/etna-cli"
