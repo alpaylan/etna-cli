@@ -253,14 +253,19 @@ jobs:
           # Clone QuickChick property-language and nuke the entire
           # `examples/` dir. It contains a broken Emacs lock symlink
           # (`examples/.#Fuzz.v` → an unresolvable user@host:pid string)
-          # that survives `find -delete` when targeted by name (find
-          # fails to stat the dangling link), and we don't need
-          # examples for an opam-pin install anyway. `rm -rf` is the
-          # robust answer since rm doesn't dereference the link.
+          # that breaks every later step that walks the tree. Then
+          # commit the deletion so opam pin sees it — `opam pin add`
+          # against a git working dir IGNORES uncommitted changes
+          # ("Ignoring uncommitted changes" note in opam logs); it
+          # pins to HEAD only. Without a commit, the broken symlink
+          # stays in the pinned snapshot.
           rm -rf "$RUNNER_TEMP/quickchick-pl"
           git clone --depth 1 --branch property-language \
             https://github.com/QuickChick/QuickChick.git "$RUNNER_TEMP/quickchick-pl"
-          rm -rf "$RUNNER_TEMP/quickchick-pl/examples"
+          ( cd "$RUNNER_TEMP/quickchick-pl" \
+            && rm -rf examples \
+            && git -c user.email=ci@etna -c user.name=ci-bot \
+                  commit -am 'CI: strip examples/ (broken Emacs lock symlink)' )
           opam pin add -y --no-action coq-quickchick "$RUNNER_TEMP/quickchick-pl"
           opam install -y coq-quickchick coq-ext-lib
           echo "OPAMSWITCH=$(opam switch show --safe)" >> "$GITHUB_ENV"
