@@ -55,7 +55,9 @@
     { "name": "unicode-segmentation", "url": "https://github.com/alpaylan/unicode-segmentation-etna", "language": "Rust", "description": "unicode-segmentation fork with Etna variants (UAX#29 grapheme/word boundaries).", "default_ref": null, "status": "stable", "tags": ["crate-fork"] },
     { "name": "bitvec",               "url": "https://github.com/alpaylan/bitvec-rs-etna",            "language": "Rust", "description": "bitvec fork with Etna variants (bit-granularity memory management).",          "default_ref": null, "status": "stable", "tags": ["crate-fork"] },
     { "name": "indexmap",             "url": "https://github.com/alpaylan/indexmap-etna",             "language": "Rust", "description": "indexmap fork with Etna variants (hash table with stable iteration order).",    "default_ref": null, "status": "stable", "tags": ["crate-fork"] },
-    { "name": "ordered-float",        "url": "https://github.com/alpaylan/ordered-float-etna",        "language": "Rust", "description": "ordered-float fork with Etna variants.",                                       "default_ref": null, "status": "stable", "tags": ["crate-fork"] }
+    { "name": "ordered-float",        "url": "https://github.com/alpaylan/ordered-float-etna",        "language": "Rust", "description": "ordered-float fork with Etna variants.",                                       "default_ref": null, "status": "stable", "tags": ["crate-fork"] },
+
+    { "name": "cedar-lean", "url": "https://github.com/alpaylan/cedar-etna", "language": "Lean", "description": "Cedar (cedar-policy/cedar-spec) Lean 4 formalization with 9 patch-injected variants spanning typechecker / validator / SymCC encoder / level checker.", "default_ref": null, "status": "stable", "tags": ["spec-fork"] }
   ],
   "shared_libs": [
     { "name": "etna-haskell-lib", "url": "https://github.com/alpaylan/etna-haskell-lib", "consumed_by": "Haskell workloads",            "submodule_path": "./etna-lib" },
