@@ -90,7 +90,12 @@ jobs:
           if [ -n "${{ inputs.cf-pages-project }}" ]; then
             echo "project=${{ inputs.cf-pages-project }}" >> "$GITHUB_OUTPUT"
           else
-            echo "project=$name" >> "$GITHUB_OUTPUT"
+            # Prefix the workload name with `etna-` because CF Pages
+            # project names share a single global pages.dev namespace —
+            # short workload names like `half`, `bst-rust`, `bst-haskell`
+            # collide with other accounts' projects and the deploy 4xx's
+            # silently. Callers can still override with `cf-pages-project`.
+            echo "project=etna-$name" >> "$GITHUB_OUTPUT"
           fi
           echo "Detected workload: name=$name language=$language"
 
