@@ -99,9 +99,30 @@ jobs:
           echo "Detected workload: name=$name language=$language"
 
       # ---------- Per-language toolchain bootstrap + cache --------------
+      # Rust toolchain channel: read from rust-toolchain.toml or rust-toolchain
+      # if present, otherwise default to stable. Workloads that use unstable
+      # features (e.g. etna-rust-bst's box_patterns mutation) ship a
+      # rust-toolchain.toml pinning nightly.
+      - name: Detect Rust channel
+        if: steps.meta.outputs.language == 'rust'
+        id: rust_channel
+        shell: bash
+        run: |
+          channel="stable"
+          if [ -f rust-toolchain.toml ]; then
+            val=$(grep -E '^channel *= *' rust-toolchain.toml | head -1 | sed -E 's/.*= *"([^"]*)".*/\1/')
+            [ -n "$val" ] && channel="$val"
+          elif [ -f rust-toolchain ]; then
+            val=$(tr -d '[:space:]' < rust-toolchain)
+            [ -n "$val" ] && channel="$val"
+          fi
+          echo "channel=$channel" >> "$GITHUB_OUTPUT"
+          echo "Rust channel: $channel"
       - name: Setup Rust
         if: steps.meta.outputs.language == 'rust'
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ steps.rust_channel.outputs.channel }}
       - name: Cache Rust
         if: steps.meta.outputs.language == 'rust'
         uses: actions/cache@v4
