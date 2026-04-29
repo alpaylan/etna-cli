@@ -167,11 +167,14 @@ jobs:
           "$HOME/.cargo/bin/etna" --version || true
 
       # ---------- Set up experiment + workload --------------------------
+      # `etna setup` initialises ~/.etna/config.json (non-interactive) so
+      # subsequent commands have a valid config to read.
       # `etna workload add` clones from a git URL. We pass the current repo's
       # URL + SHA so the workload mirrors what's in CI exactly.
       - name: Create experiment + add workload
         shell: bash
         run: |
+          etna setup --overwrite || true
           mkdir -p /tmp/etna-experiment
           cd /tmp/etna-experiment
           etna experiment new ci-run
