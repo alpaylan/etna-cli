@@ -1,5 +1,6 @@
 name = "patch_injection"
 language = "rust"
+strategies = ["proptest"]
 base_commit = "1111111111111111111111111111111111111111"
 
 [[tasks]]

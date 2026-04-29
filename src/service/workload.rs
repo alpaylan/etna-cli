@@ -61,10 +61,19 @@ const DEFAULT_TRIALS: usize = 10;
 const DEFAULT_TIMEOUT: f64 = 60.0;
 
 /// Build `Test` entries from a workload's `etna.toml` manifest. Each
-/// `[[tasks]]` block becomes one `Test` keyed by its mutation subset. Returns
-/// an empty vec when the manifest has no `[[tasks]]` blocks.
-pub(crate) fn tests_from_manifest(manifest: &WorkloadManifest) -> Vec<Test> {
-    manifest
+/// `[[tasks]]` block becomes one `Test` keyed by its mutation subset; each
+/// (property × strategy) pair inside the block becomes one task in the
+/// emitted `Test`. Errors when `manifest.strategies` is empty — every
+/// runnable workload must declare at least one strategy name.
+pub(crate) fn tests_from_manifest(manifest: &WorkloadManifest) -> anyhow::Result<Vec<Test>> {
+    if manifest.strategies.is_empty() {
+        bail!(
+            "Workload '{}' has no strategies declared in etna.toml. Add a top-level `strategies = [...]` listing the strategy names the workload's runner dispatches on.",
+            manifest.name
+        );
+    }
+
+    Ok(manifest
         .tasks
         .iter()
         .map(|group| Test {
@@ -77,31 +86,37 @@ pub(crate) fn tests_from_manifest(manifest: &WorkloadManifest) -> Vec<Test> {
             tasks: group
                 .tasks
                 .iter()
-                .map(|task| {
-                    let mut map = HashMap::new();
-                    map.insert(
-                        "property".to_string(),
-                        serde_json::Value::String(task.property.clone()),
-                    );
-                    if !task.witnesses.is_empty() {
+                .flat_map(|task| {
+                    manifest.strategies.iter().map(move |strat| {
+                        let mut map = HashMap::new();
                         map.insert(
-                            "witnesses".to_string(),
-                            serde_json::to_value(&task.witnesses)
-                                .unwrap_or(serde_json::Value::Null),
+                            "property".to_string(),
+                            serde_json::Value::String(task.property.clone()),
                         );
-                    }
-                    map
+                        map.insert(
+                            "strategy".to_string(),
+                            serde_json::Value::String(strat.clone()),
+                        );
+                        if !task.witnesses.is_empty() {
+                            map.insert(
+                                "witnesses".to_string(),
+                                serde_json::to_value(&task.witnesses)
+                                    .unwrap_or(serde_json::Value::Null),
+                            );
+                        }
+                        map
+                    })
                 })
                 .collect(),
         })
-        .collect()
+        .collect())
 }
 
 fn seed_tests_file(
     experiment: &ExperimentMetadata,
     manifest: &WorkloadManifest,
 ) -> anyhow::Result<()> {
-    let generated = tests_from_manifest(manifest);
+    let generated = tests_from_manifest(manifest)?;
     if generated.is_empty() {
         return Ok(());
     }

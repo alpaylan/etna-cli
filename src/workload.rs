@@ -364,6 +364,13 @@ pub struct WorkloadManifest {
     pub base_commit: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tasks: Vec<ManifestTaskGroup>,
+    /// PBT strategy names this workload's runner accepts. Required —
+    /// `etna workload add` seeds one task per (property × strategy) pair, so
+    /// a missing or empty list produces no runnable tests. Each name must
+    /// match an exact identifier the workload binary's dispatcher expects
+    /// (e.g. cedar-lean: "plausible"/"etna"; haskell-bst: "Quick"/"Hedgehog";
+    /// rocq-bst: "BespokeGenerator"/"TypeBasedGenerator").
+    pub strategies: Vec<String>,
     /// Upstream fix commits that were considered for injection but rejected.
     /// Rendered in `BUGS.md` under "Dropped Candidates" for audit trail.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -514,18 +521,36 @@ mod manifest_tests {
 
     #[test]
     fn legacy_minimal_manifest_still_parses() {
-        // Fields added in the v2 extension must all be optional.
+        // Fields added in the v2 extension must all be optional except
+        // `strategies`, which became required in 0.1.12.
         let toml = r#"
             name = "example"
             language = "rust"
+            strategies = ["s1"]
         "#;
         let m: WorkloadManifest = toml::from_str(toml).expect("minimal parse");
         assert_eq!(m.name, "example");
         assert_eq!(m.language, "rust");
+        assert_eq!(m.strategies, vec!["s1"]);
         assert!(m.tasks.is_empty());
         assert!(m.dropped.is_empty());
         assert!(m.crate_name.is_none());
         assert!(m.base_commit.is_none());
+    }
+
+    #[test]
+    fn manifest_missing_strategies_is_rejected() {
+        // `strategies` is required as of 0.1.12 — surface a clear error so
+        // stale manifests fail loudly at `etna workload add` time.
+        let toml = r#"
+            name = "example"
+            language = "rust"
+        "#;
+        let err = toml::from_str::<WorkloadManifest>(toml).expect_err("must reject");
+        assert!(
+            format!("{err}").contains("missing field `strategies`"),
+            "expected missing-strategies error, got: {err}"
+        );
     }
 
     #[test]
@@ -535,6 +560,7 @@ mod manifest_tests {
         let toml = r#"
             name = "example"
             language = "rust"
+            strategies = ["s1"]
 
             [[tasks]]
             mutations = ["foo_1234567_1"]
@@ -564,6 +590,7 @@ mod manifest_tests {
             language = "rust"
             crate = "tinyvec"
             base_commit = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+            strategies = ["proptest"]
 
             [[tasks]]
             mutations = ["debug_alternate_empty_a711c72_1"]
@@ -651,6 +678,7 @@ mod manifest_tests {
         let toml = r#"
             name = "aho-corasick"
             language = "rust"
+            strategies = ["proptest"]
 
             [[tasks]]
             mutations = ["ac_patched_0000000_1"]

@@ -28,6 +28,7 @@ fn load(dir: &Path) -> WorkloadManifest {
 const BASE_MANIFEST: &str = r#"
 name = "demo"
 language = "rust"
+strategies = ["demo_strategy"]
 
 [[tasks]]
 mutations = ["demo_mutation_abcdef0_1"]
@@ -112,6 +113,7 @@ fn flags_bad_variant_name() {
     let manifest_text = r#"
 name = "demo"
 language = "rust"
+strategies = ["demo_strategy"]
 
 [[tasks]]
 mutations = ["NotAVariantName"]
@@ -187,6 +189,7 @@ fn flags_missing_patch_file() {
     let manifest_text = r#"
 name = "demo"
 language = "rust"
+strategies = ["demo_strategy"]
 
 [[tasks]]
 mutations = ["demo_patch_abcdef0_1"]

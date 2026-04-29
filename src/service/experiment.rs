@@ -648,7 +648,7 @@ pub fn create_test(
     })?;
 
     let manifest = crate::workload::WorkloadManifest::read(&workload_path)?;
-    let mut tests = super::workload::tests_from_manifest(&manifest);
+    let mut tests = super::workload::tests_from_manifest(&manifest)?;
 
     // Override the manifest-seeded defaults with caller-supplied trial/timeout/mode.
     for test in tests.iter_mut() {

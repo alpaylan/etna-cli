@@ -13,10 +13,6 @@ name: Run experiment and publish to Cloudflare Pages
 on:
   workflow_call:
     inputs:
-      strategy:
-        description: 'Strategy to amend onto every task (e.g. plausible, etna, proptest)'
-        type: string
-        default: plausible
       trials:
         description: 'Trials per (variant, property)'
         type: number
@@ -271,14 +267,10 @@ jobs:
           etna workload add "https://github.com/${{ github.repository }}.git"
           ls tests/
 
-      - name: Amend test with strategy
-        shell: bash
-        run: |
-          cd /tmp/etna-experiment/ci-run
-          test_name="${{ steps.meta.outputs.name }}"
-          etna experiment amend-test --test "$test_name" --strategy "${{ inputs.strategy }}"
-
       # ---------- Run + publish ----------------------------------------
+      # Strategies are seeded into tests/<name>.json from etna.toml's
+      # `strategies = [...]` field at workload-add time — no amend-test step
+      # needed.
       - name: Run experiment
         shell: bash
         run: |
