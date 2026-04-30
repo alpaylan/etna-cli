@@ -45,10 +45,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     permissions:
-      # contents: write is needed by the homepage-update step below
-      # (gh repo edit issues PATCH /repos/{owner}/{repo}).
-      contents: write
+      contents: read
       deployments: write
+      # NOTE: the homepage-update step further down does
+      # `gh repo edit --homepage`, which needs `contents: write`. We
+      # don't request that here because the existing canary callers
+      # all declare `contents: read`, and GitHub refuses to start a
+      # reusable workflow whose permissions exceed the caller's.
+      # The homepage step is `continue-on-error: true`, so it logs a
+      # 403 and moves on. To enable it, bump each caller's
+      # `etna-publish.yml` to `contents: write`.
     env:
       CARGO_TERM_COLOR: always
     steps:
