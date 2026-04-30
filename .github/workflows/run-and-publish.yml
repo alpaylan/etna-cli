@@ -278,6 +278,16 @@ jobs:
           eval $(opam env)
           opam install -y coq-elpi
           eval $(opam env)
+          # Pin coq-simple-io to 1.10.0. The newer 1.11.0 release fails
+          # to build under our coq.8.18 + dune 3.x combo with
+          # "Can't find file coqsimpleio_plugin.cmxs on loadpath" — the
+          # plugin produced by simple-io's own dune isn't visible on
+          # the coqc loadpath when SimpleIO_Plugin.v compiles. 1.10.0
+          # ships the same plugin via the older layout and installs
+          # cleanly. coq-quickchick depends on coq-simple-io, so we
+          # pre-install it before pulling quickchick.
+          opam install -y coq-simple-io.1.10.0
+          eval $(opam env)
           # cppo is needed at clone-time to pre-generate plugin sources
           # (see explanation below).
           opam install -y cppo
