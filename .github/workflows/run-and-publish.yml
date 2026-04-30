@@ -278,14 +278,9 @@ jobs:
           eval $(opam env)
           opam install -y coq-elpi
           eval $(opam env)
-          # QuickChick property-language branch declares `(lang dune 2.8)`
-          # but the modern dune 3.x emits "Multiple rules generated for
-          # depDriver.ml: plugin/dune:31, file present in source tree"
-          # because dune 3 walks `*.ml.cppo` files as if they alias an
-          # ML source even though our explicit (rule (targets ...)) is
-          # the real producer. Pin dune to 2.9.3 (the highest 2.x line)
-          # so the build follows the older rule-resolution semantics.
-          opam install -y dune.2.9.3
+          # cppo is needed at clone-time to pre-generate plugin sources
+          # (see explanation below).
+          opam install -y cppo
           eval $(opam env)
           # Clone QuickChick property-language and nuke the entire
           # `examples/` dir. It contains a broken Emacs lock symlink
@@ -299,18 +294,54 @@ jobs:
           rm -rf "$RUNNER_TEMP/quickchick-pl"
           git clone --depth 1 --branch property-language \
             https://github.com/QuickChick/QuickChick.git "$RUNNER_TEMP/quickchick-pl"
+          # plugin/dune declares `(rule (targets X.ml) (deps X.ml.cppo))`
+          # for several modules. With `(modules :standard)` in the same
+          # stanza, dune (2.x and 3.x both) considers both the .ml.cppo
+          # source AND the rule output as candidates for X.ml, then
+          # bails: "Multiple rules generated for ..._build/.../X.ml:
+          # file present in source tree, plugin/dune:31".
+          #
+          # Pre-run cppo on the .cppo files ourselves and rewrite
+          # plugin/dune to drop the cppo rules — dune then sees only
+          # static .ml/.mlg files and the coqpp pipeline.
+          OCAML_VER="$(ocamlc -version)"
+          pushd "$RUNNER_TEMP/quickchick-pl/plugin"
+          for src in *.cppo; do
+            out="${src%.cppo}"
+            cppo -V "OCAML:$OCAML_VER" -V COQ:8.15.2 -n -o "$out" "$src"
+            rm "$src"
+          done
+          # Rewrite plugin/dune from scratch — same library stanza as the
+          # branch HEAD, plus the four coqpp .mlg→.ml rules and the
+          # void_for_linking write-file rule. The cppo-driven rules are
+          # gone; their outputs are now static files in the source tree
+          # (committed below).
+          cat > dune <<'DUNE'
+          (library
+           (name quickchick_plugin)
+           (public_name coq-quickchick.plugin)
+           (flags :standard -rectypes -warn-error -3 -w -8-9-27-40)
+           (modules :standard \ genSTCorrect genSizedSTMonotonic genSizedSTSizeMonotonic)
+           (libraries unix str
+            (select void_for_linking-plugin-extraction from
+             (coq-core.plugins.extraction -> void_for_linking-plugin-extraction.empty)
+             (coq.plugins.extraction -> void_for_linking-plugin-extraction.empty))))
+
+          (rule (targets driver.ml) (deps (:pp-file driver.mlg)) (action (run coqpp %{pp-file})))
+          (rule (targets quickChick.ml) (deps (:pp-file quickChick.mlg)) (action (run coqpp %{pp-file})))
+          (rule (targets tactic_quickchick.ml) (deps (:pp-file tactic_quickchick.mlg)) (action (run coqpp %{pp-file})))
+          (rule (targets weightmap.ml) (deps (:pp-file weightmap.mlg)) (action (run coqpp %{pp-file})))
+
+          (rule (action (write-file void_for_linking-plugin-extraction.empty "")))
+          DUNE
+          popd
           ( cd "$RUNNER_TEMP/quickchick-pl" \
             && rm -rf examples \
+            && git -c user.email=ci@etna -c user.name=ci-bot add -A \
             && git -c user.email=ci@etna -c user.name=ci-bot \
-                  commit -am 'CI: strip examples/ (broken Emacs lock symlink)' )
+                  commit -m 'CI: pre-cppo plugin sources + strip cppo rules + remove examples' )
           opam pin add -y --no-action coq-quickchick "$RUNNER_TEMP/quickchick-pl"
-          # Defensive: purge any prior coq-quickchick build dir before
-          # the opam install. opam stages source into
-          # ~/.opam/<switch>/.opam-switch/build/coq-quickchick.dev for
-          # each install; if a previous attempt failed mid-build it
-          # leaves a `plugin/depDriver.ml` (cppo output) that dune then
-          # sees as "file present in source tree" + the cppo rule →
-          # "Multiple rules generated".
+          # Belt-and-suspenders: nuke any stale build dir before install.
           rm -rf $(opam var prefix)/.opam-switch/build/coq-quickchick.dev
           opam install -y coq-quickchick coq-ext-lib
           echo "OPAMSWITCH=$(opam switch show --safe)" >> "$GITHUB_ENV"
@@ -326,8 +357,8 @@ jobs:
           # coq-quickchick.dev/plugin/depDriver.ml` on disk; subsequent
           # runs restored that file alongside the cppo rule, dune saw
           # "Multiple rules generated for ..._build/.../depDriver.ml".
-          key: ${{ runner.os }}-coq-${{ steps.meta.outputs.name }}-820-v3
-          restore-keys: ${{ runner.os }}-coq-${{ steps.meta.outputs.name }}-820-v3
+          key: ${{ runner.os }}-coq-${{ steps.meta.outputs.name }}-820-v4
+          restore-keys: ${{ runner.os }}-coq-${{ steps.meta.outputs.name }}-820-v4
 
       - name: Install elan (Lean toolchain)
         if: steps.meta.outputs.language == 'lean'
