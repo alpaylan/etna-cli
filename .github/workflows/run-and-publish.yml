@@ -47,14 +47,6 @@ jobs:
     permissions:
       contents: read
       deployments: write
-      # NOTE: the homepage-update step further down does
-      # `gh repo edit --homepage`, which needs `contents: write`. We
-      # don't request that here because the existing canary callers
-      # all declare `contents: read`, and GitHub refuses to start a
-      # reusable workflow whose permissions exceed the caller's.
-      # The homepage step is `continue-on-error: true`, so it logs a
-      # 403 and moves on. To enable it, bump each caller's
-      # `etna-publish.yml` to `contents: write`.
     env:
       CARGO_TERM_COLOR: always
     steps:
@@ -399,17 +391,3 @@ jobs:
         run: |
           echo "Deployed to https://${{ steps.meta.outputs.project }}.pages.dev/"
           echo "JSON endpoint: https://${{ steps.meta.outputs.project }}.pages.dev/report.json"
-
-      # Auto-set the GitHub repo "Website" field so the published URL
-      # surfaces in the repo header next to the description. Idempotent
-      # — if the homepage already matches, the API call is a no-op.
-      # `continue-on-error` because losing this isn't worth failing
-      # the canary over.
-      - name: Set GitHub repo homepage to deployed URL
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          url="https://${{ steps.meta.outputs.project }}.pages.dev/"
-          gh repo edit "${{ github.repository }}" --homepage "$url"
