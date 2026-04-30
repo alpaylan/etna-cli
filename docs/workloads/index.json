@@ -87,7 +87,13 @@
     { "name": "ryu", "url": "https://github.com/alpaylan/ryu-etna", "language": "Rust", "description": "ryu crate fork with Etna variants.", "default_ref": null, "status": "stable", "tags": ["crate-fork"] },
     { "name": "simdutf8", "url": "https://github.com/alpaylan/simdutf8-etna", "language": "Rust", "description": "simdutf8 crate fork with Etna variants.", "default_ref": null, "status": "stable", "tags": ["crate-fork"] },
     { "name": "strsim", "url": "https://github.com/alpaylan/strsim-etna", "language": "Rust", "description": "strsim crate fork with Etna variants.", "default_ref": null, "status": "stable", "tags": ["crate-fork"] },
-    { "name": "winnow", "url": "https://github.com/alpaylan/winnow-etna", "language": "Rust", "description": "winnow crate fork with Etna variants.", "default_ref": null, "status": "stable", "tags": ["crate-fork"] }
+    { "name": "winnow", "url": "https://github.com/alpaylan/winnow-etna", "language": "Rust", "description": "winnow crate fork with Etna variants.", "default_ref": null, "status": "stable", "tags": ["crate-fork"] },
+    { "name": "compact_str", "url": "https://github.com/alpaylan/compact_str-etna", "language": "Rust", "description": "compact_str crate fork with Etna variants.", "default_ref": null, "status": "stable", "tags": ["crate-fork"] },
+    { "name": "postcard", "url": "https://github.com/alpaylan/postcard-etna", "language": "Rust", "description": "postcard crate fork with Etna variants.", "default_ref": null, "status": "stable", "tags": ["crate-fork"] },
+    { "name": "regex-syntax", "url": "https://github.com/alpaylan/regex-syntax-etna", "language": "Rust", "description": "regex-syntax crate fork with Etna variants.", "default_ref": null, "status": "stable", "tags": ["crate-fork"] },
+    { "name": "rstar", "url": "https://github.com/alpaylan/rstar-etna", "language": "Rust", "description": "rstar crate fork with Etna variants.", "default_ref": null, "status": "stable", "tags": ["crate-fork"] },
+    { "name": "toml_edit", "url": "https://github.com/alpaylan/toml_edit-etna", "language": "Rust", "description": "toml_edit crate fork with Etna variants.", "default_ref": null, "status": "stable", "tags": ["crate-fork"] },
+    { "name": "url", "url": "https://github.com/alpaylan/url-etna", "language": "Rust", "description": "url crate fork with Etna variants.", "default_ref": null, "status": "stable", "tags": ["crate-fork"] }
   ],
   "shared_libs": [
     { "name": "etna-haskell-lib", "url": "https://github.com/alpaylan/etna-haskell-lib", "consumed_by": "Haskell workloads",            "submodule_path": "./etna-lib" },
