@@ -275,6 +275,14 @@ jobs:
             && git -c user.email=ci@etna -c user.name=ci-bot \
                   commit -am 'CI: strip examples/ (broken Emacs lock symlink)' )
           opam pin add -y --no-action coq-quickchick "$RUNNER_TEMP/quickchick-pl"
+          # Defensive: purge any prior coq-quickchick build dir before
+          # the opam install. opam stages source into
+          # ~/.opam/<switch>/.opam-switch/build/coq-quickchick.dev for
+          # each install; if a previous attempt failed mid-build it
+          # leaves a `plugin/depDriver.ml` (cppo output) that dune then
+          # sees as "file present in source tree" + the cppo rule →
+          # "Multiple rules generated".
+          rm -rf $(opam var prefix)/.opam-switch/build/coq-quickchick.dev
           opam install -y coq-quickchick coq-ext-lib
           echo "OPAMSWITCH=$(opam switch show --safe)" >> "$GITHUB_ENV"
           echo "$(opam var prefix)/bin" >> "$GITHUB_PATH"
@@ -289,8 +297,8 @@ jobs:
           # coq-quickchick.dev/plugin/depDriver.ml` on disk; subsequent
           # runs restored that file alongside the cppo rule, dune saw
           # "Multiple rules generated for ..._build/.../depDriver.ml".
-          key: ${{ runner.os }}-coq-${{ steps.meta.outputs.name }}-820-v2
-          restore-keys: ${{ runner.os }}-coq-${{ steps.meta.outputs.name }}-820-v2
+          key: ${{ runner.os }}-coq-${{ steps.meta.outputs.name }}-820-v3
+          restore-keys: ${{ runner.os }}-coq-${{ steps.meta.outputs.name }}-820-v3
 
       - name: Install elan (Lean toolchain)
         if: steps.meta.outputs.language == 'lean'
