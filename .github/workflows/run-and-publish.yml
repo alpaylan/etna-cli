@@ -319,7 +319,12 @@ jobs:
           for src in *.cppo; do
             out="${src%.cppo}"
             cppo -V "OCAML:$OCAML_VER" -V COQ:8.15.2 -n -o "$out" "$src"
-            rm "$src"
+            # Keep the .cppo file alongside the generated .ml — QuickChick's
+            # top-level Makefile has a `compat` target that lists
+            # plugin/depDriver.ml etc. as deps, with a pattern rule
+            # `%: %.cppo` that needs the .cppo to exist for `make` to be
+            # happy. Removing .cppo here makes opam's `make compat` step
+            # bail with "No rule to make target 'plugin/depDriver.ml'".
           done
           # Rewrite plugin/dune from scratch — same library stanza as the
           # branch HEAD, plus the four coqpp .mlg→.ml rules and the
