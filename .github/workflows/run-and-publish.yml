@@ -45,11 +45,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     permissions:
-      contents: read
+      # contents: write is needed by the homepage-update step below
+      # (gh repo edit issues PATCH /repos/{owner}/{repo}).
+      contents: write
       deployments: write
-      # `Set GitHub repo homepage` step below uses gh API
-      # PATCH /repos/{owner}/{repo} which requires administration write.
-      administration: write
     env:
       CARGO_TERM_COLOR: always
     steps:
