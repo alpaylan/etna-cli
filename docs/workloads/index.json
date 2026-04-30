@@ -57,7 +57,18 @@
     { "name": "indexmap",             "url": "https://github.com/alpaylan/indexmap-etna",             "language": "Rust", "description": "indexmap fork with Etna variants (hash table with stable iteration order).",    "default_ref": null, "status": "stable", "tags": ["crate-fork"] },
     { "name": "ordered-float",        "url": "https://github.com/alpaylan/ordered-float-etna",        "language": "Rust", "description": "ordered-float fork with Etna variants.",                                       "default_ref": null, "status": "stable", "tags": ["crate-fork"] },
 
-    { "name": "cedar-lean", "url": "https://github.com/alpaylan/cedar-etna", "language": "Lean", "description": "Cedar (cedar-policy/cedar-spec) Lean 4 formalization with 9 patch-injected variants spanning typechecker / validator / SymCC encoder / level checker.", "default_ref": null, "status": "stable", "tags": ["spec-fork"] }
+    { "name": "cedar-lean", "url": "https://github.com/alpaylan/cedar-etna", "language": "Lean", "description": "Cedar (cedar-policy/cedar-spec) Lean 4 formalization with 9 patch-injected variants spanning typechecker / validator / SymCC encoder / level checker.", "default_ref": null, "status": "stable", "tags": ["spec-fork"] },
+    { "name": "bytes", "url": "https://github.com/alpaylan/bytes-etna", "language": "Rust", "description": "bytes crate fork with Etna variants.", "default_ref": null, "status": "stable", "tags": ["crate-fork"] },
+    { "name": "encoding_rs", "url": "https://github.com/alpaylan/encoding_rs-etna", "language": "Rust", "description": "encoding_rs crate fork with Etna variants.", "default_ref": null, "status": "stable", "tags": ["crate-fork"] },
+    { "name": "itertools", "url": "https://github.com/alpaylan/itertools-etna", "language": "Rust", "description": "itertools crate fork with Etna variants.", "default_ref": null, "status": "stable", "tags": ["crate-fork"] },
+    { "name": "mime", "url": "https://github.com/alpaylan/mime-etna", "language": "Rust", "description": "mime crate fork with Etna variants.", "default_ref": null, "status": "stable", "tags": ["crate-fork"] },
+    { "name": "rangemap", "url": "https://github.com/alpaylan/rangemap-etna", "language": "Rust", "description": "rangemap crate fork with Etna variants.", "default_ref": null, "status": "stable", "tags": ["crate-fork"] },
+    { "name": "rust-base64", "url": "https://github.com/alpaylan/rust-base64-etna", "language": "Rust", "description": "rust-base64 crate fork with Etna variants.", "default_ref": null, "status": "stable", "tags": ["crate-fork"] },
+    { "name": "slotmap", "url": "https://github.com/alpaylan/slotmap-etna", "language": "Rust", "description": "slotmap crate fork with Etna variants.", "default_ref": null, "status": "stable", "tags": ["crate-fork"] },
+    { "name": "smallvec", "url": "https://github.com/alpaylan/smallvec-etna", "language": "Rust", "description": "smallvec crate fork with Etna variants.", "default_ref": null, "status": "stable", "tags": ["crate-fork"] },
+    { "name": "tinyvec", "url": "https://github.com/alpaylan/tinyvec-etna", "language": "Rust", "description": "tinyvec crate fork with Etna variants.", "default_ref": null, "status": "stable", "tags": ["crate-fork"] },
+    { "name": "unicode-normalization", "url": "https://github.com/alpaylan/unicode-normalization-etna", "language": "Rust", "description": "unicode-normalization crate fork with Etna variants.", "default_ref": null, "status": "stable", "tags": ["crate-fork"] },
+    { "name": "uuid", "url": "https://github.com/alpaylan/uuid-etna", "language": "Rust", "description": "uuid crate fork with Etna variants.", "default_ref": null, "status": "stable", "tags": ["crate-fork"] }
   ],
   "shared_libs": [
     { "name": "etna-haskell-lib", "url": "https://github.com/alpaylan/etna-haskell-lib", "consumed_by": "Haskell workloads",            "submodule_path": "./etna-lib" },
