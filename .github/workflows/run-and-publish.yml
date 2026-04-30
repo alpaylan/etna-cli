@@ -286,7 +286,7 @@ jobs:
           # ships the same plugin via the older layout and installs
           # cleanly. coq-quickchick depends on coq-simple-io, so we
           # pre-install it before pulling quickchick.
-          opam install -y coq-simple-io.1.10.0
+          opam install -y coq-simple-io.1.9.0
           eval $(opam env)
           # cppo is needed at clone-time to pre-generate plugin sources
           # (see explanation below).
