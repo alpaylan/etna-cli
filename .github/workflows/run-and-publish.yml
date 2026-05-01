@@ -160,6 +160,29 @@ jobs:
         if: steps.meta.outputs.language == 'rust'
         uses: astral-sh/setup-uv@v6
 
+      # Python workloads ship an `etna/` uv project that pins hypothesis
+      # + hypothesis-crosshair. steps.json's setup_steps run
+      # `bash -c "cd etna && uv sync"`, so uv must be on PATH before
+      # `etna experiment run` invokes the workload. Set up Python first
+      # (uv resolves against whatever python it finds), then install uv.
+      - name: Setup Python
+        if: steps.meta.outputs.language == 'python'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install uv (Python workloads)
+        if: steps.meta.outputs.language == 'python'
+        uses: astral-sh/setup-uv@v6
+      - name: Cache uv (Python workloads)
+        if: steps.meta.outputs.language == 'python'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/uv
+            etna/.venv
+          key: ${{ runner.os }}-uv-${{ steps.meta.outputs.name }}-${{ hashFiles('etna/uv.lock') }}
+          restore-keys: ${{ runner.os }}-uv-${{ steps.meta.outputs.name }}-
+
       - name: Setup Haskell + Stack
         if: steps.meta.outputs.language == 'haskell'
         uses: haskell-actions/setup@v2
