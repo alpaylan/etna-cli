@@ -400,6 +400,15 @@ pub struct ManifestTask {
     pub property: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub witnesses: Vec<Witness>,
+    /// When true, this (mutation × property) entry is excluded from the test
+    /// JSON emitted by `etna workload add`. The block stays in the manifest
+    /// so docs and the dashboard still surface the property + witnesses;
+    /// only the experiment runner skips it. Pair with `reason` to document
+    /// why (e.g. a buggy variant that hangs the runner).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub inactive: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
 }
 
 /// A known failing input. `Input` is a literal serialised value in the

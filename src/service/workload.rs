@@ -86,6 +86,7 @@ pub(crate) fn tests_from_manifest(manifest: &WorkloadManifest) -> anyhow::Result
             tasks: group
                 .tasks
                 .iter()
+                .filter(|task| !task.inactive)
                 .flat_map(|task| {
                     manifest.strategies.iter().map(move |strat| {
                         let mut map = HashMap::new();
@@ -792,4 +793,85 @@ fn render_tasks_md(manifest: &WorkloadManifest) -> String {
     }
 
     buf
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::workload::{ManifestTask, ManifestTaskGroup, WorkloadManifest};
+
+    fn manifest_with_two_tasks(t1_inactive: bool, t2_inactive: bool) -> WorkloadManifest {
+        WorkloadManifest {
+            name: "demo".to_string(),
+            description: None,
+            language: "rust".to_string(),
+            crate_name: None,
+            base_commit: None,
+            strategies: vec!["proptest".to_string(), "quickcheck".to_string()],
+            tasks: vec![ManifestTaskGroup {
+                mutations: vec!["m1".to_string()],
+                tasks: vec![
+                    ManifestTask {
+                        property: "PropA".to_string(),
+                        witnesses: vec![],
+                        inactive: t1_inactive,
+                        reason: if t1_inactive {
+                            Some("hangs runner".to_string())
+                        } else {
+                            None
+                        },
+                    },
+                    ManifestTask {
+                        property: "PropB".to_string(),
+                        witnesses: vec![],
+                        inactive: t2_inactive,
+                        reason: None,
+                    },
+                ],
+                source: None,
+                injection: None,
+                bug: None,
+            }],
+            dropped: vec![],
+        }
+    }
+
+    #[test]
+    fn tests_from_manifest_includes_active_tasks() {
+        let manifest = manifest_with_two_tasks(false, false);
+        let out = tests_from_manifest(&manifest).unwrap();
+        // 1 group × 2 tasks × 2 strategies = 4 entries
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].tasks.len(), 4);
+        let props: Vec<&str> = out[0]
+            .tasks
+            .iter()
+            .filter_map(|m| m.get("property")?.as_str())
+            .collect();
+        assert!(props.contains(&"PropA"));
+        assert!(props.contains(&"PropB"));
+    }
+
+    #[test]
+    fn tests_from_manifest_skips_inactive_tasks() {
+        let manifest = manifest_with_two_tasks(true, false);
+        let out = tests_from_manifest(&manifest).unwrap();
+        // PropA inactive → only PropB × 2 strategies = 2 entries
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].tasks.len(), 2);
+        for entry in &out[0].tasks {
+            assert_eq!(entry.get("property").and_then(|v| v.as_str()), Some("PropB"));
+        }
+    }
+
+    #[test]
+    fn tests_from_manifest_skips_all_inactive_tasks() {
+        let manifest = manifest_with_two_tasks(true, true);
+        let out = tests_from_manifest(&manifest).unwrap();
+        // Both inactive → group still emitted (its mutations may matter to
+        // downstream tooling) but with zero tasks. The runner will simply
+        // have nothing to run for this group.
+        assert_eq!(out.len(), 1);
+        assert!(out[0].tasks.is_empty());
+    }
 }
