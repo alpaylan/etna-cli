@@ -183,27 +183,34 @@ jobs:
           key: ${{ runner.os }}-uv-${{ steps.meta.outputs.name }}-${{ hashFiles('etna/uv.lock') }}
           restore-keys: ${{ runner.os }}-uv-${{ steps.meta.outputs.name }}-
 
-      - name: Setup Haskell + Stack
+      - name: Setup Haskell (Stack + GHC + Cabal)
         if: steps.meta.outputs.language == 'haskell'
         uses: haskell-actions/setup@v2
         with:
+          # Stack — used by the legacy etna-haskell-{bst,rbt,stlc,fsub,luparser}
+          # workloads (their build_steps run `stack build --no-system-ghc`,
+          # so stack downloads its own GHC and we don't pin ghc-version for
+          # them).
           enable-stack: true
-          # Pin to a stack version known to be pre-cached on
-          # actions/runner-images ubuntu-latest. Defaulting to 'latest'
-          # routes through GHCup which has been flaky resolving the
-          # newest 3.x release on hosted runners.
           stack-version: '2.15.7'
-          # The build_steps for haskell workloads use `--no-system-ghc`
-          # so stack downloads its own GHC; we don't pin ghc-version here.
-      - name: Cache Stack
+          # GHC + Cabal — used by the etna-ify Haskell workloads that drive
+          # `cabal run --with-compiler=ghc-9.6.6 etna-runner`. Falsify >=
+          # 0.2 requires base >= 4.18 = GHC >= 9.6, so the floor is fixed;
+          # bump in lockstep with the workloads' steps.json `--with-compiler`
+          # arg.
+          ghc-version: '9.6.6'
+          cabal-version: 'latest'
+      - name: Cache Stack + Cabal
         if: steps.meta.outputs.language == 'haskell'
         uses: actions/cache@v4
         with:
           path: |
             ~/.stack
             .stack-work
-          key: ${{ runner.os }}-stack-${{ steps.meta.outputs.name }}-${{ hashFiles('**/stack.yaml*', '**/*.cabal', '**/package.yaml') }}
-          restore-keys: ${{ runner.os }}-stack-${{ steps.meta.outputs.name }}-
+            ~/.cabal/store
+            dist-newstyle
+          key: ${{ runner.os }}-haskell-${{ steps.meta.outputs.name }}-${{ hashFiles('**/stack.yaml*', '**/*.cabal', '**/package.yaml', '**/cabal.project*') }}
+          restore-keys: ${{ runner.os }}-haskell-${{ steps.meta.outputs.name }}-
 
       - name: Setup OCaml
         if: steps.meta.outputs.language == 'ocaml'
