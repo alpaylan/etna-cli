@@ -100,7 +100,11 @@ jobs:
             # names can be 1-58 lowercase characters with dashes" per
             # the API), so slugify `_` → `-`. compact_str → etna-compact-str
             # rather than etna-compact_str (invalid).
-            slug=$(echo "$name" | tr '_' '-')
+            # CF Pages requires lowercase only ("Project names can be 1-58
+            # lowercase characters with dashes"). Without `tr A-Z a-z`,
+            # mixed-case workload names like MemoTrie produce
+            # `etna-MemoTrie` which fails the wrangler deploy.
+            slug=$(echo "$name" | tr '_' '-' | tr 'A-Z' 'a-z')
             echo "project=etna-$slug" >> "$GITHUB_OUTPUT"
           fi
           echo "Detected workload: name=$name language=$language"
