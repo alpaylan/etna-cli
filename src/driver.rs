@@ -946,10 +946,18 @@ pub(crate) fn build(
         let output = cmd.output().context("Failed to execute check command")?;
 
         if !output.status.success() {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let stderr = String::from_utf8_lossy(&output.stderr);
             tracing::info!(
                 "[✗] '{}' failed",
                 step.command.clone() + " " + &step.args.join(" ")
             );
+            if !stdout.trim().is_empty() {
+                tracing::info!("--- check stdout ---\n{}", stdout.trim_end());
+            }
+            if !stderr.trim().is_empty() {
+                tracing::info!("--- check stderr ---\n{}", stderr.trim_end());
+            }
             anyhow::bail!("check command failed with status: {}", output.status);
         } else {
             tracing::info!(
