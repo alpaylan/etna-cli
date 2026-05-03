@@ -200,6 +200,11 @@ jobs:
           # arg.
           ghc-version: '9.6.6'
           cabal-version: 'latest'
+          # Fetch Hackage index after install so subsequent `cabal build`
+          # can resolve dependencies. Without this, the etna-ify Haskell
+          # workloads fail with "unknown package: <dep>" during the
+          # check step.
+          cabal-update: true
       - name: Cache Stack + Cabal
         if: steps.meta.outputs.language == 'haskell'
         uses: actions/cache@v4
