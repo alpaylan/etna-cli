@@ -179,7 +179,13 @@ pub(crate) fn run() -> anyhow::Result<()> {
             ExperimentCommand::Clone { url, path, reference } => {
                 commands::experiment::clone::invoke(mgr, url, path, reference)
             }
-            ExperimentCommand::Run { name: _, tests, short_circuit, parallel, params } => commands::experiment::run::invoke(mgr, experiment.unwrap(), tests, short_circuit, parallel, params),
+            ExperimentCommand::Run { name: _, tests, short_circuit, parallel, params, store } => {
+                let mut experiment = experiment.unwrap();
+                if let Some(path) = store {
+                    experiment.store = path;
+                }
+                commands::experiment::run::invoke(mgr, experiment, tests, short_circuit, parallel, params)
+            },
             ExperimentCommand::Show {
                         name,
                     } => commands::experiment::show::invoke(mgr, name),
@@ -205,9 +211,21 @@ pub(crate) fn run() -> anyhow::Result<()> {
                     property,
                 )
             }
-            ExperimentCommand::Visualize { name: _, figure, tests, groupby, aggby, metric, buckets, max, visualization_type, hatched } => commands::experiment::visualize::invoke(mgr, experiment.unwrap(), figure, tests, groupby, aggby, metric, buckets, max, visualization_type, hatched),
+            ExperimentCommand::Visualize { name: _, figure, tests, groupby, aggby, metric, buckets, max, visualization_type, hatched, store } => {
+                let mut experiment = experiment.unwrap();
+                if let Some(path) = store {
+                    experiment.store = path;
+                }
+                commands::experiment::visualize::invoke(mgr, experiment, figure, tests, groupby, aggby, metric, buckets, max, visualization_type, hatched)
+            },
             ExperimentCommand::VisualizeJson { input, output } => commands::experiment::visualize::draw_bucket_chart_from_json(&input, &output),
-            ExperimentCommand::Report { name: _, output, publish, strip_counterexamples, json_output } => commands::experiment::report::invoke(mgr, experiment.unwrap(), output, publish, strip_counterexamples, json_output),
+            ExperimentCommand::Report { name: _, output, publish, strip_counterexamples, json_output, store } => {
+                let mut experiment = experiment.unwrap();
+                if let Some(path) = store {
+                    experiment.store = path;
+                }
+                commands::experiment::report::invoke(mgr, experiment, output, publish, strip_counterexamples, json_output)
+            },
             ExperimentCommand::PublishPage { name: _, output, strip_counterexamples } => commands::experiment::publish_page::invoke(mgr, experiment.unwrap(), output, strip_counterexamples),
             ExperimentCommand::List {} => commands::experiment::list::invoke(mgr),
         },
@@ -317,6 +335,9 @@ enum ExperimentCommand {
         /// These override parameters defined in test JSON files
         #[clap(long, value_parser = parse_key_value)]
         params: Vec<(String, String)>,
+        /// Override the path to the metric store (default: <experiment>/store.jsonl)
+        #[clap(long)]
+        store: Option<PathBuf>,
     },
     #[clap(name = "show", about = "Show the details of an experiment")]
     Show {
@@ -413,6 +434,9 @@ enum ExperimentCommand {
         /// e.g., --hatched 1,3 for every other group starting from index 1
         #[clap(long, value_parser, num_args = 0.., value_delimiter = ',')]
         hatched: Vec<usize>,
+        /// Override the path to the metric store (default: <experiment>/store.jsonl)
+        #[clap(long)]
+        store: Option<PathBuf>,
     },
     #[clap(
         name = "visualize-json",
@@ -453,6 +477,9 @@ enum ExperimentCommand {
         /// for serving a static `/json` endpoint alongside the HTML report.
         #[clap(long)]
         json_output: Option<PathBuf>,
+        /// Override the path to the metric store (default: <experiment>/store.jsonl)
+        #[clap(long)]
+        store: Option<PathBuf>,
     },
     #[clap(
         name = "publish-page",
