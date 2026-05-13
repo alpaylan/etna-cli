@@ -298,7 +298,18 @@ pub(crate) fn run(
     {
         let mgr = mgr.lock().unwrap();
         let store = mgr.require_store()?;
+        // Walk trials in order. With --short-circuit, a stored timeout
+        // means every subsequent trial is treated as completed (because
+        // the previous run skipped them after the first timeout). This
+        // mirrors the short-circuit logic in `task_completed` so the
+        // per-trial dedup doesn't re-queue trials that were
+        // intentionally skipped.
+        let mut prior_timeout = false;
         for i in 0..run_config.trials {
+            if run_config.short_circuit && prior_timeout {
+                // Every subsequent trial counts as already completed.
+                continue;
+            }
             let previous_metric = store.metrics.iter().find(|m| {
                 metric_matches(
                     m,
@@ -314,8 +325,18 @@ pub(crate) fn run(
                 .is_some()
             });
 
-            if previous_metric.is_none() {
-                remaining_trials.push(i);
+            match previous_metric {
+                None => remaining_trials.push(i),
+                Some(m) => {
+                    if run_config.short_circuit
+                        && m.data
+                            .get("status")
+                            .and_then(|v| v.as_str())
+                            == Some(Status::TimedOut.to_string().as_str())
+                    {
+                        prior_timeout = true;
+                    }
+                }
             }
         }
     }
