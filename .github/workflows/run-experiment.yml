@@ -9,7 +9,10 @@ name: Run experiment
 #      alpaylan/etna-cli/.github/workflows/run-experiment.yml@<ref>`.
 #   2. (Optional) Passes `tests:` to restrict to a subset; default = all tests
 #      under `tests/*.json`.
-#   3. (Optional) Sets `commit-results: false` if it only wants artifacts.
+#   3. (Optional) Sets `commit-results: true` to push the produced store
+#      file back to the repo. Default is false — the store is only uploaded
+#      as a workflow artifact so existing local results aren't overwritten
+#      by a partial CI run.
 #
 # The caller's checkout must include the experiment's workloads — they are
 # resolved by `etna experiment register` from the local `workloads/` tree.
@@ -21,6 +24,10 @@ on:
         description: 'Comma-separated test stems to run. Empty = all `tests/*.json`.'
         type: string
         default: ''
+      store:
+        description: 'Path (relative to the experiment root) to write store entries to. Default keeps CI output separate from a developer-owned `store.jsonl`.'
+        type: string
+        default: 'store-ci.jsonl'
       params:
         description: 'Extra params forwarded to `etna experiment run --params` (newline-separated key=value).'
         type: string
@@ -30,9 +37,9 @@ on:
         type: boolean
         default: false
       commit-results:
-        description: 'Commit + push the updated store.jsonl back to the experiment repo on success.'
+        description: 'Commit + push the produced store file back to the experiment repo on success. Off by default to avoid overwriting accumulated local results.'
         type: boolean
-        default: true
+        default: false
       etna-version:
         description: 'etna-cli release tag to install (e.g. v0.1.15). Empty = latest.'
         type: string
@@ -271,10 +278,14 @@ jobs:
           if [ "${{ inputs.short-circuit }}" = "true" ]; then
             sc_arg+=(--short-circuit)
           fi
+          store_path="${{ inputs.store }}"
+          # Ensure the store file's parent directory exists (the user may have
+          # asked for e.g. ci/results.jsonl).
+          mkdir -p "$(dirname "$store_path")"
           for t in "${TESTS[@]}"; do
-            echo "::group::etna experiment run --tests $t"
+            echo "::group::etna experiment run --tests $t --store $store_path"
             etna experiment run --name "${{ steps.exp.outputs.name }}" \
-              --tests "$t" --store store.jsonl \
+              --tests "$t" --store "$store_path" \
               "${sc_arg[@]}" "${params_args[@]}"
             echo "::endgroup::"
           done
@@ -285,21 +296,27 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: experiment-store-${{ github.run_id }}
-          path: |
-            store.jsonl
+          path: ${{ inputs.store }}
           if-no-files-found: ignore
 
       # ---------- Optionally commit results back -------------------------
+      # Off by default. Opt in via `commit-results: true` on the caller —
+      # the dispatcher should only enable it when they're sure the CI run
+      # produced the canonical results for that store path (i.e. it isn't
+      # a partial subset that would clobber accumulated local entries).
       - name: Commit + push updated store
         if: ${{ inputs.commit-results && success() }}
         shell: bash
         run: |
+          store_path="${{ inputs.store }}"
           git config user.name 'etna-cli[bot]'
           git config user.email 'etna-cli@users.noreply.github.com'
-          if git diff --quiet -- store.jsonl; then
-            echo "store.jsonl unchanged — skipping commit."
+          # Stage the file (it may be untracked if the caller routed output
+          # to a new path); skip the commit if nothing actually changed.
+          git add -- "$store_path"
+          if git diff --cached --quiet -- "$store_path"; then
+            echo "$store_path unchanged — skipping commit."
             exit 0
           fi
-          git add store.jsonl
-          git commit -m "ci: refresh store.jsonl from etna experiment run ($GITHUB_RUN_NUMBER)"
+          git commit -m "ci: refresh $store_path from etna experiment run ($GITHUB_RUN_NUMBER)"
           git push origin HEAD:"${GITHUB_REF#refs/heads/}"
