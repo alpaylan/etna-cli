@@ -1,0 +1,305 @@
+name: Run experiment
+# Reusable workflow: an experiment repo's `.github/workflows/etna-experiment.yml`
+# calls this with `uses:` to run one or more `etna experiment run --tests <t>`
+# invocations, then (by default) commits the updated store back to the repo
+# so the visualize/report commands see fresh results next time.
+#
+# What the caller does:
+#   1. Adds `.github/workflows/etna-experiment.yml` with `uses:
+#      alpaylan/etna-cli/.github/workflows/run-experiment.yml@<ref>`.
+#   2. (Optional) Passes `tests:` to restrict to a subset; default = all tests
+#      under `tests/*.json`.
+#   3. (Optional) Sets `commit-results: false` if it only wants artifacts.
+#
+# The caller's checkout must include the experiment's workloads — they are
+# resolved by `etna experiment register` from the local `workloads/` tree.
+
+on:
+  workflow_call:
+    inputs:
+      tests:
+        description: 'Comma-separated test stems to run. Empty = all `tests/*.json`.'
+        type: string
+        default: ''
+      params:
+        description: 'Extra params forwarded to `etna experiment run --params` (newline-separated key=value).'
+        type: string
+        default: ''
+      short-circuit:
+        description: 'Pass --short-circuit to stop a test on the first failing trial.'
+        type: boolean
+        default: false
+      commit-results:
+        description: 'Commit + push the updated store.jsonl back to the experiment repo on success.'
+        type: boolean
+        default: true
+      etna-version:
+        description: 'etna-cli release tag to install (e.g. v0.1.15). Empty = latest.'
+        type: string
+        default: ''
+
+concurrency:
+  group: run-experiment-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    permissions:
+      contents: write
+    env:
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      # Some experiments ship workloads as `git@github.com:` submodules; rewrite
+      # to HTTPS so hosted runners (no SSH key) can re-init if checkout missed
+      # any.
+      - name: Re-init submodules over HTTPS
+        shell: bash
+        run: |
+          git config --global url."https://github.com/".insteadOf "git@github.com:"
+          if [ -f .gitmodules ]; then
+            git submodule sync --recursive
+            git submodule update --init --recursive
+          fi
+
+      # ---------- Detect languages present in this experiment ----------------
+      # An experiment can contain workloads in multiple languages (e.g.
+      # workloads/Haskell/BST + workloads/Rust/BST). We bootstrap each
+      # toolchain we find under `workloads/` so `etna experiment run` can
+      # build whichever variant a test references.
+      - name: Detect workload languages
+        id: langs
+        shell: bash
+        run: |
+          if [ ! -f etna.toml ]; then
+            echo "::error::etna.toml not found at experiment root"
+            exit 1
+          fi
+          declare -A seen
+          if [ -d workloads ]; then
+            for dir in workloads/*/; do
+              [ -d "$dir" ] || continue
+              # Two layouts:
+              #   workloads/<Lang>/<workload>/etna.toml     (multi-lang)
+              #   workloads/<workload>/etna.toml            (single-lang)
+              if [ -f "$dir/etna.toml" ]; then
+                lang=$(grep -E '^language *= *"' "$dir/etna.toml" | head -1 \
+                  | sed -E 's/^language *= *"([^"]*)".*/\1/' | tr '[:upper:]' '[:lower:]')
+                [ -n "$lang" ] && seen[$lang]=1
+              else
+                for sub in "$dir"*/; do
+                  [ -f "$sub/etna.toml" ] || continue
+                  lang=$(grep -E '^language *= *"' "$sub/etna.toml" | head -1 \
+                    | sed -E 's/^language *= *"([^"]*)".*/\1/' | tr '[:upper:]' '[:lower:]')
+                  [ -n "$lang" ] && seen[$lang]=1
+                done
+              fi
+            done
+          fi
+          {
+            echo "rust=${seen[rust]:-0}"
+            echo "haskell=${seen[haskell]:-0}"
+            echo "ocaml=${seen[ocaml]:-0}"
+            echo "rocq=$(( ${seen[rocq]:-0} | ${seen[coq]:-0} ))"
+            echo "lean=${seen[lean]:-0}"
+          } >> "$GITHUB_OUTPUT"
+          echo "Detected languages:"
+          for k in "${!seen[@]}"; do echo "  - $k"; done
+
+      # ---------- Per-language toolchain bootstrap + cache ------------------
+      # (Mirrors run-and-publish.yml. Each block is gated on the detector.)
+      - name: Setup Rust
+        if: steps.langs.outputs.rust == '1'
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+      - name: Cache Rust
+        if: steps.langs.outputs.rust == '1'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-exp-${{ hashFiles('workloads/**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-exp-
+      - name: Install uv (Rust hegel shell-out)
+        if: steps.langs.outputs.rust == '1'
+        uses: astral-sh/setup-uv@v6
+
+      - name: Setup Haskell + Stack
+        if: steps.langs.outputs.haskell == '1'
+        uses: haskell-actions/setup@v2
+        with:
+          enable-stack: true
+          stack-version: '2.15.7'
+      - name: Cache Stack
+        if: steps.langs.outputs.haskell == '1'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.stack
+            workloads/**/.stack-work
+          key: ${{ runner.os }}-stack-exp-${{ hashFiles('workloads/**/stack.yaml*', 'workloads/**/*.cabal', 'workloads/**/package.yaml') }}
+          restore-keys: ${{ runner.os }}-stack-exp-
+
+      - name: Setup OCaml
+        if: steps.langs.outputs.ocaml == '1'
+        uses: ocaml/setup-ocaml@v3
+        with:
+          ocaml-compiler: '5.x'
+
+      - name: Setup OCaml for Coq via opam
+        if: steps.langs.outputs.rocq == '1'
+        uses: ocaml/setup-ocaml@v3
+        with:
+          ocaml-compiler: '4.14.x'
+          opam-repositories: |
+            default: https://opam.ocaml.org
+            coq-released: https://coq.inria.fr/opam/released
+      - name: Install Coq + QuickChick + ExtLib
+        if: steps.langs.outputs.rocq == '1'
+        shell: bash
+        run: |
+          opam install -y coq.8.18.0
+          eval $(opam env)
+          opam install -y coq-elpi
+          eval $(opam env)
+          opam install -y dune.2.9.3
+          eval $(opam env)
+          rm -rf "$RUNNER_TEMP/quickchick-pl"
+          git clone --depth 1 --branch property-language \
+            https://github.com/QuickChick/QuickChick.git "$RUNNER_TEMP/quickchick-pl"
+          ( cd "$RUNNER_TEMP/quickchick-pl" \
+            && rm -rf examples \
+            && git -c user.email=ci@etna -c user.name=ci-bot \
+                  commit -am 'CI: strip examples/ (broken Emacs lock symlink)' )
+          opam pin add -y --no-action coq-quickchick "$RUNNER_TEMP/quickchick-pl"
+          rm -rf $(opam var prefix)/.opam-switch/build/coq-quickchick.dev
+          opam install -y coq-quickchick coq-ext-lib
+          echo "OPAMSWITCH=$(opam switch show --safe)" >> "$GITHUB_ENV"
+          echo "$(opam var prefix)/bin" >> "$GITHUB_PATH"
+
+      - name: Install elan (Lean toolchain)
+        if: steps.langs.outputs.lean == '1'
+        shell: bash
+        run: |
+          curl -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
+            | sh -s -- -y --default-toolchain none
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+      - name: Cache lake build (Lean)
+        if: steps.langs.outputs.lean == '1'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.elan
+            workloads/**/.lake/build
+            workloads/**/.lake/packages
+          key: ${{ runner.os }}-lake-exp-${{ hashFiles('workloads/**/lean-toolchain', 'workloads/**/lake-manifest.json') }}
+          restore-keys: ${{ runner.os }}-lake-exp-
+
+      # ---------- Install etna-cli ----------------------------------------
+      - name: Install etna-cli
+        shell: bash
+        run: |
+          if [ -n "${{ inputs.etna-version }}" ]; then
+            url="https://github.com/alpaylan/etna-cli/releases/download/${{ inputs.etna-version }}/etna-installer.sh"
+          else
+            url="https://github.com/alpaylan/etna-cli/releases/latest/download/etna-installer.sh"
+          fi
+          curl -LsSf "$url" | sh
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+          "$HOME/.cargo/bin/etna" --version || true
+
+      # ---------- Register the checked-out experiment ---------------------
+      - name: Register experiment
+        id: exp
+        shell: bash
+        run: |
+          etna setup --overwrite || true
+          # `experiment register` uses the directory basename as the
+          # experiment name by default; pin to etna.toml's `name` instead so
+          # `etna experiment run` can find it via `--name`.
+          name=$(grep -E '^name *= *"' etna.toml | head -1 \
+            | sed -E 's/^name *= *"([^"]*)".*/\1/')
+          if [ -z "$name" ]; then
+            echo "::error::etna.toml is missing a top-level name = \"...\" field"
+            exit 1
+          fi
+          etna experiment register "$name"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+
+      # ---------- Run requested tests -------------------------------------
+      - name: Resolve test list
+        id: tests
+        shell: bash
+        run: |
+          requested="${{ inputs.tests }}"
+          if [ -z "$requested" ]; then
+            # Default: every `tests/*.json` stem.
+            list=$(find tests -maxdepth 1 -name '*.json' -type f \
+              -exec basename {} .json \; | sort | paste -sd ',' -)
+          else
+            list=$(echo "$requested" | tr ' ' ',' )
+          fi
+          if [ -z "$list" ]; then
+            echo "::error::No tests to run — set inputs.tests or add JSON files under tests/."
+            exit 1
+          fi
+          echo "list=$list" >> "$GITHUB_OUTPUT"
+          echo "Tests to run: $list"
+
+      - name: Run experiment
+        shell: bash
+        run: |
+          IFS=',' read -ra TESTS <<< "${{ steps.tests.outputs.list }}"
+          # Build `--params k=v` flags from the multiline input.
+          params_args=()
+          if [ -n "${{ inputs.params }}" ]; then
+            while IFS= read -r kv; do
+              [ -z "$kv" ] && continue
+              params_args+=(--params "$kv")
+            done <<< "${{ inputs.params }}"
+          fi
+          sc_arg=()
+          if [ "${{ inputs.short-circuit }}" = "true" ]; then
+            sc_arg+=(--short-circuit)
+          fi
+          for t in "${TESTS[@]}"; do
+            echo "::group::etna experiment run --tests $t"
+            etna experiment run --name "${{ steps.exp.outputs.name }}" \
+              --tests "$t" --store store.jsonl \
+              "${sc_arg[@]}" "${params_args[@]}"
+            echo "::endgroup::"
+          done
+
+      # ---------- Always upload the store as an artifact -----------------
+      - name: Upload store artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: experiment-store-${{ github.run_id }}
+          path: |
+            store.jsonl
+          if-no-files-found: ignore
+
+      # ---------- Optionally commit results back -------------------------
+      - name: Commit + push updated store
+        if: ${{ inputs.commit-results && success() }}
+        shell: bash
+        run: |
+          git config user.name 'etna-cli[bot]'
+          git config user.email 'etna-cli@users.noreply.github.com'
+          if git diff --quiet -- store.jsonl; then
+            echo "store.jsonl unchanged — skipping commit."
+            exit 0
+          fi
+          git add store.jsonl
+          git commit -m "ci: refresh store.jsonl from etna experiment run ($GITHUB_RUN_NUMBER)"
+          git push origin HEAD:"${GITHUB_REF#refs/heads/}"

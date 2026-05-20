@@ -1,0 +1,35 @@
+name: Run experiment
+
+on:
+  workflow_dispatch:
+    inputs:
+      tests:
+        description: 'Comma-separated test stems to run (empty = all under tests/).'
+        type: string
+        default: ''
+      params:
+        description: 'Extra params for `etna experiment run --params` (one key=value per line).'
+        type: string
+        default: ''
+      short-circuit:
+        description: 'Pass --short-circuit to stop a test on the first failing trial.'
+        type: boolean
+        default: false
+  push:
+    branches: [main, master]
+    paths:
+      - 'tests/**'
+      - 'workloads/**'
+      - 'etna.toml'
+
+permissions:
+  contents: write
+
+jobs:
+  run:
+    uses: alpaylan/etna-cli/.github/workflows/run-experiment.yml@main
+    with:
+      tests: ${{ github.event.inputs.tests || '' }}
+      params: ${{ github.event.inputs.params || '' }}
+      short-circuit: ${{ github.event.inputs['short-circuit'] == 'true' }}
+      commit-results: true
