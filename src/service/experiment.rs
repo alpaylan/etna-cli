@@ -182,6 +182,10 @@ pub fn create_experiment(
         ),
         (".gitignore", include_str!("../../templates/.gitignoret")),
         ("etna.toml", manifest_body.as_str()),
+        (
+            ".github/workflows/etna-experiment.yml",
+            include_str!("../../templates/experiment/etna-experiment.ymlt"),
+        ),
     ];
 
     tracing::trace!("creating template files in the experiment directory");

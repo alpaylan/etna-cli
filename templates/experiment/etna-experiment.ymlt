@@ -1,0 +1,43 @@
+name: Run experiment
+
+# Manually-dispatched CI: open the Actions tab and click "Run workflow" to
+# pick which tests to run and where their results should land. Nothing
+# runs on push by default — that prevents a CI run from silently
+# overwriting results you've accumulated locally in store.jsonl.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tests:
+        description: 'Comma-separated test stems to run (empty = all under tests/).'
+        type: string
+        default: ''
+      store:
+        description: 'Output store path (relative to repo root). Keeps CI results separate from your local store.jsonl by default.'
+        type: string
+        default: 'store-ci.jsonl'
+      params:
+        description: 'Extra params for `etna experiment run --params` (one key=value per line).'
+        type: string
+        default: ''
+      short-circuit:
+        description: 'Pass --short-circuit to stop a test on the first failing trial.'
+        type: boolean
+        default: false
+      commit-results:
+        description: 'Commit + push the produced store file back. Off by default — review the artifact first.'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  run:
+    uses: alpaylan/etna-cli/.github/workflows/run-experiment.yml@main
+    with:
+      tests: ${{ inputs.tests }}
+      store: ${{ inputs.store }}
+      params: ${{ inputs.params }}
+      short-circuit: ${{ inputs.short-circuit }}
+      commit-results: ${{ inputs.commit-results }}
