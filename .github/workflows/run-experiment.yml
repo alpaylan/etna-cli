@@ -166,7 +166,13 @@ jobs:
         if: steps.langs.outputs.rocq == '1'
         uses: ocaml/setup-ocaml@v3
         with:
-          ocaml-compiler: '4.14.x'
+          # AFL-instrumented compiler built in one shot: the +options variant plus
+          # the afl option as the switch invariant (the fuzzing workloads read AFL
+          # coverage via shared memory at runtime). Equivalent to
+          #   opam switch create _ ocaml-variants.5.2.1+options ocaml-option-afl
+          # but routed through setup-ocaml so we also get opam, the coq-released repo,
+          # and switch caching.
+          ocaml-compiler: ocaml-variants.5.2.1+options,ocaml-option-afl
           opam-repositories: |
             default: https://opam.ocaml.org
             coq-released: https://coq.inria.fr/opam/released
@@ -174,22 +180,14 @@ jobs:
         if: steps.langs.outputs.rocq == '1'
         shell: bash
         run: |
-          opam install -y coq.8.18.0
-          eval $(opam env)
-          opam install -y coq-elpi
-          eval $(opam env)
-          opam install -y dune.2.9.3
-          eval $(opam env)
           rm -rf "$RUNNER_TEMP/quickchick-pl"
-          git clone --depth 1 --branch property-language \
-            https://github.com/QuickChick/QuickChick.git "$RUNNER_TEMP/quickchick-pl"
-          ( cd "$RUNNER_TEMP/quickchick-pl" \
-            && rm -rf examples \
-            && git -c user.email=ci@etna -c user.name=ci-bot \
-                  commit -am 'CI: strip examples/ (broken Emacs lock symlink)' )
-          opam pin add -y --no-action coq-quickchick "$RUNNER_TEMP/quickchick-pl"
-          rm -rf $(opam var prefix)/.opam-switch/build/coq-quickchick.dev
-          opam install -y coq-quickchick coq-ext-lib
+          git clone --depth 1 --branch programmable-pbt \
+            https://github.com/alpaylan/QuickChick.git "$RUNNER_TEMP/quickchick-pl"
+          # Install QuickChick straight from the clone: opam reads its opam file,
+          # pulls the deps it declares (Coq, dune, mathcomp-ssreflect, simple-io,
+          # ext-lib, ...), then builds and installs it into the switch. No pin dance,
+          # no hard-coded versions.
+          opam install -y "$RUNNER_TEMP/quickchick-pl"
           echo "OPAMSWITCH=$(opam switch show --safe)" >> "$GITHUB_ENV"
           echo "$(opam var prefix)/bin" >> "$GITHUB_PATH"
 
