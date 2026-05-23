@@ -6,7 +6,6 @@ use axum::{
 use crate::server::error::ServerError;
 use crate::server::state::AppState;
 use crate::service::job::JobInfo;
-use crate::service::store as store_service;
 use crate::service::types::QueryResult;
 
 /// List all jobs
@@ -62,18 +61,27 @@ pub async fn get_job_metrics(
             crate::server::error::ServerError::not_found("Job has no experiment_name in metadata")
         })?;
 
-    // Build a JQ filter to get metrics for this experiment
-    // Filter by experiment name
-    let filter = format!(r#".[] | select(.experiment == "{}")"#, experiment_name);
-
     let manager = state.manager.read().unwrap();
     let experiment = manager.get_experiment(experiment_name).ok_or_else(|| {
         ServerError::not_found(format!("Experiment not found: {experiment_name}"))
     })?;
 
     let mut store = crate::store::Store::new(experiment.store)?;
-    store_service::load_metrics(&mut store)?;
-    let result = store_service::query_metrics(&store, &filter)?;
+    store.load_metrics()?;
+    let result = QueryResult {
+        metrics: store
+            .metrics
+            .iter()
+            .filter(|m| {
+                m.data
+                    .get("experiment")
+                    .and_then(|v| v.as_str())
+                    .map(|v| v == experiment_name)
+                    .unwrap_or(false)
+            })
+            .map(|m| serde_json::Value::Object(m.data.clone()))
+            .collect(),
+    };
 
     Ok(Json(result))
 }

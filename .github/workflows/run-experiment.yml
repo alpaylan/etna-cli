@@ -21,29 +21,29 @@ on:
   workflow_call:
     inputs:
       tests:
-        description: 'Comma-separated test stems to run. Empty = all `tests/*.json`.'
+        description: "Comma-separated test stems to run. Empty = all `tests/*.json`."
         type: string
-        default: ''
+        default: ""
       store:
-        description: 'Path (relative to the experiment root) to write store entries to. Default keeps CI output separate from a developer-owned `store.jsonl`.'
+        description: "Path (relative to the experiment root) to write store entries to. Default keeps CI output separate from a developer-owned `store.jsonl`."
         type: string
-        default: 'store-ci.jsonl'
+        default: "store-ci.jsonl"
       params:
-        description: 'Extra params forwarded to `etna experiment run --params` (newline-separated key=value).'
+        description: "Extra params forwarded to `etna experiment run --params` (newline-separated key=value)."
         type: string
-        default: ''
+        default: ""
       short-circuit:
-        description: 'Pass --short-circuit to stop a test on the first failing trial.'
+        description: "Pass --short-circuit to stop a test on the first failing trial."
         type: boolean
         default: false
       commit-results:
-        description: 'Commit + push the produced store file back to the experiment repo on success. Off by default to avoid overwriting accumulated local results.'
+        description: "Commit + push the produced store file back to the experiment repo on success. Off by default to avoid overwriting accumulated local results."
         type: boolean
         default: false
       etna-version:
-        description: 'etna-cli release tag to install (e.g. v0.1.15). Empty = latest.'
+        description: "etna-cli release tag to install (e.g. v0.1.15). Empty = latest."
         type: string
-        default: ''
+        default: ""
 
 concurrency:
   group: run-experiment-${{ github.ref }}
@@ -145,7 +145,7 @@ jobs:
         uses: haskell-actions/setup@v2
         with:
           enable-stack: true
-          stack-version: '2.15.7'
+          stack-version: "2.15.7"
       - name: Cache Stack
         if: steps.langs.outputs.haskell == '1'
         uses: actions/cache@v4
@@ -160,7 +160,7 @@ jobs:
         if: steps.langs.outputs.ocaml == '1'
         uses: ocaml/setup-ocaml@v3
         with:
-          ocaml-compiler: '5.x'
+          ocaml-compiler: "5.x"
 
       - name: Setup OCaml for Coq via opam
         if: steps.langs.outputs.rocq == '1'
@@ -282,7 +282,7 @@ jobs:
           mkdir -p "$(dirname "$store_path")"
           for t in "${TESTS[@]}"; do
             echo "::group::etna experiment run --tests $t --store $store_path"
-            etna experiment run --name "${{ steps.exp.outputs.name }}" \
+            ETNA_LOG=debug etna experiment run --name "${{ steps.exp.outputs.name }}" \
               --tests "$t" --store "$store_path" \
               "${sc_arg[@]}" "${params_args[@]}"
             echo "::endgroup::"
