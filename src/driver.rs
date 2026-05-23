@@ -267,7 +267,10 @@ pub(crate) fn run(
     params.insert("hash".to_string(), run_config.experiment_hash.clone());
     if let Some(prod) = &run_config.producer {
         params.insert("producer_language".to_string(), prod.language.clone());
-        params.insert("producer_workload".to_string(), prod.target.workload.clone());
+        params.insert(
+            "producer_workload".to_string(),
+            prod.target.workload.clone(),
+        );
         params.insert(
             "producer_workload_path".to_string(),
             prod.dir.display().to_string(),
@@ -329,9 +332,7 @@ pub(crate) fn run(
                 None => remaining_trials.push(i),
                 Some(m) => {
                     if run_config.short_circuit
-                        && m.data
-                            .get("status")
-                            .and_then(|v| v.as_str())
+                        && m.data.get("status").and_then(|v| v.as_str())
                             == Some(Status::TimedOut.to_string().as_str())
                     {
                         prior_timeout = true;
@@ -655,10 +656,7 @@ fn run_cross(
 
                 // Realize consumer's test steps with ${inputs} pointing at the tempfile.
                 let mut cparams = params.clone();
-                cparams.insert(
-                    "inputs".to_string(),
-                    temp_file.path().display().to_string(),
-                );
+                cparams.insert("inputs".to_string(), temp_file.path().display().to_string());
 
                 tracing::debug!(
                     "Running consumer test for workload '{}/{}' with inputs at {}",
@@ -848,8 +846,8 @@ fn run_consumer_test(
         last_stdout = Some(String::from_utf8_lossy(&output.stdout).into_owned());
     }
 
-    let stdout = last_stdout
-        .ok_or_else(|| anyhow::anyhow!("consumer test capability has no steps"))?;
+    let stdout =
+        last_stdout.ok_or_else(|| anyhow::anyhow!("consumer test capability has no steps"))?;
     serde_json::from_str::<Object>(stdout.trim())
         .with_context(|| format!("Failed to parse consumer output as JSON: '{}'", stdout))
 }
@@ -937,34 +935,38 @@ fn run_subprocess(
 
 pub(crate) fn build(
     build_dir: &Path,
-    check_steps: &[Step],
+    setup_steps: &[Step],
     build_steps: &[Step],
     params: &HashMap<String, String>,
     tags: &HashMap<String, Vec<String>>,
 ) -> anyhow::Result<()> {
     tracing::info!("running check commands...");
-    let check_steps = check_steps
+    let setup_steps = setup_steps
         .iter()
         .map(|step| step.realize(params, tags))
         .collect::<Vec<_>>();
 
-    anyhow::ensure!(check_steps.iter().all(anyhow::Result::is_ok));
+    anyhow::ensure!(setup_steps.iter().all(anyhow::Result::is_ok));
 
-    let check_steps = check_steps
+    let setup_steps = setup_steps
         .into_iter()
         .flat_map(anyhow::Result::unwrap)
         .collect::<Vec<_>>();
 
-    for step in check_steps.iter() {
-        tracing::debug!("running check step: {}", step);
+    for step in setup_steps.iter() {
+        tracing::debug!("running setup step: {}", step);
         // Run the check command
         let step = step.decide(params, tags);
         tracing::debug!("step is evaluated to '{step}'");
 
         let mut cmd = std::process::Command::from(&step);
-        cmd.current_dir(build_dir);
+        if let Some(dir) = step.run_at {
+            cmd.current_dir(dir);
+        } else {
+            cmd.current_dir(build_dir);
+        }
 
-        let output = cmd.output().context("Failed to execute check command")?;
+        let output = cmd.output().context("Failed to execute setup command")?;
 
         if !output.status.success() {
             let stdout = String::from_utf8_lossy(&output.stdout);
@@ -1009,7 +1011,11 @@ pub(crate) fn build(
         tracing::debug!("step is evaluated to '{step}'");
 
         let mut cmd = std::process::Command::from(&step);
-        cmd.current_dir(build_dir);
+        if let Some(dir) = &step.run_at {
+            cmd.current_dir(dir);
+        } else {
+            cmd.current_dir(build_dir);
+        }
 
         let output = cmd
             .output()
@@ -1101,13 +1107,13 @@ pub(crate) fn run_experiment(
             Some(t) => Some(load_workload(experiment, &t.workload)?),
             None => None,
         };
-        let producer_path: Option<TargetPath> = producer_workload
-            .as_ref()
-            .and_then(|pw| producer_target.as_ref().map(|t| TargetPath {
+        let producer_path: Option<TargetPath> = producer_workload.as_ref().and_then(|pw| {
+            producer_target.as_ref().map(|t| TargetPath {
                 target: t.clone(),
                 language: pw.language.clone(),
                 dir: pw.dir.clone(),
-            }));
+            })
+        });
 
         // Apply marauders mutations to the primary target only.
         let lang = marauders::Language::name_to_language(&primary_lang, &custom_languages)
@@ -1203,8 +1209,7 @@ pub(crate) fn run_experiment(
                         .context("Failed to serialize inline inputs")?;
                     tf.write_all(body.as_bytes())
                         .context("Failed to write inputs tempfile")?;
-                    base_params
-                        .insert("inputs".to_string(), tf.path().display().to_string());
+                    base_params.insert("inputs".to_string(), tf.path().display().to_string());
                     Some(tf)
                 }
             },
@@ -1219,8 +1224,9 @@ pub(crate) fn run_experiment(
                     None
                 }
                 CexSource::File(p) => {
-                    let s = std::fs::read_to_string(p)
-                        .with_context(|| format!("Failed to read counterexample file '{}'", p.display()))?;
+                    let s = std::fs::read_to_string(p).with_context(|| {
+                        format!("Failed to read counterexample file '{}'", p.display())
+                    })?;
                     base_params.insert("counterexample".to_string(), s.trim().to_string());
                     None
                 }

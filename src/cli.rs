@@ -32,12 +32,8 @@ pub fn init_tracing() -> anyhow::Result<WorkerGuard> {
     // Base filter:
     // - If ETNA_LOG exists, use it.
     // - Else default to `info` and clamp some noisy modules.
-    let mut base_filter = if env::var_os("ETNA_LOG").is_some() {
-        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"))
-    } else {
-        // You can add more directives here if you like.
-        EnvFilter::new("info,marauders=error,ignore=error")
-    };
+    let mut base_filter =
+        EnvFilter::try_from_env("ETNA_LOG").unwrap_or_else(|_| EnvFilter::new("info"));
 
     base_filter = base_filter.add_directive("marauders=error".parse()?);
     base_filter = base_filter.add_directive("ignore=error".parse()?);
