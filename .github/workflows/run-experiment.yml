@@ -44,6 +44,10 @@ on:
         description: "etna-cli release tag to install (e.g. v0.1.15). Empty = latest."
         type: string
         default: ""
+      rocq-image:
+        description: "Prebuilt Rocq toolchain image (e.g. ghcr.io/alpaylan/etna-quickchick:programmable-pbt). When set, the job runs in this container and the Coq/QuickChick build steps are skipped. Rocq-only experiments."
+        type: string
+        default: ""
 
 concurrency:
   group: run-experiment-${{ github.ref }}
@@ -52,6 +56,9 @@ concurrency:
 jobs:
   run:
     runs-on: ubuntu-latest
+    # When rocq-image is set, the whole job runs inside that prebuilt toolchain
+    # container (skipping the ~30-min Coq/QuickChick build). Empty = run on host.
+    container: ${{ inputs.rocq-image }}
     timeout-minutes: 360
     permissions:
       contents: write
@@ -188,6 +195,7 @@ jobs:
           # ext-lib, ...), then builds and installs it into the switch. No pin dance,
           # no hard-coded versions.
           opam install -y "$RUNNER_TEMP/quickchick-pl"
+          cd "$RUNNER_TEMP/quickchick-pl" && make install-fuzz
           echo "OPAMSWITCH=$(opam switch show --safe)" >> "$GITHUB_ENV"
           echo "$(opam var prefix)/bin" >> "$GITHUB_PATH"
 
