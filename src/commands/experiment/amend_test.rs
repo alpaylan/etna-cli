@@ -491,7 +491,7 @@ mod tests {
             prop_strategy("p1", "s1"),
             prop_strategy("p1", "s2"),
         ])];
-        let stats = apply(&mut tests, "-s1", "");
+        let stats = apply(&mut tests, "!s1", "");
 
         assert_eq!(
             stats,
@@ -506,7 +506,7 @@ mod tests {
     #[test]
     fn remove_missing_strategy_selects_no_tasks() {
         let mut tests = vec![test_with_tasks(vec![prop_strategy("p1", "s1")])];
-        let stats = apply(&mut tests, "-missing", "");
+        let stats = apply(&mut tests, "!missing", "");
 
         assert_eq!(
             stats,
@@ -616,7 +616,7 @@ mod tests {
             prop_strategy("p2", "s1"),
             prop_strategy("p1", "s2"),
         ])];
-        apply(&mut tests, "-s1", "property=p1");
+        apply(&mut tests, "!s1", "property=p1");
 
         assert_eq!(
             tests[0].tasks,
@@ -632,7 +632,7 @@ mod tests {
             prop_strategy("p2", "s1"),
             missing_property,
         ])];
-        apply(&mut tests, "-s1", "property!=p1");
+        apply(&mut tests, "!s1", "property!=p1");
 
         assert_eq!(tests[0].tasks, vec![prop_strategy("p1", "s1")]);
     }
@@ -643,7 +643,7 @@ mod tests {
             prop_strategy("p1", "s1"),
             prop_strategy("p1", "s2"),
         ])];
-        apply(&mut tests, "-s1", "property=p1");
+        apply(&mut tests, "!s1", "property=p1");
 
         assert_eq!(tests[0].tasks, vec![prop_strategy("p1", "s2")]);
     }
@@ -655,7 +655,7 @@ mod tests {
             prop_strategy("p1", "s1"),
             missing_property.clone(),
         ])];
-        apply(&mut tests, "-s1", "property=p1");
+        apply(&mut tests, "!s1", "property=p1");
 
         assert_eq!(tests[0].tasks, vec![missing_property]);
     }
@@ -663,7 +663,7 @@ mod tests {
     #[test]
     fn add_then_remove_applies_in_order() {
         let mut tests = vec![test_with_tasks(vec![prop_strategy("p1", "s1")])];
-        apply(&mut tests, "+s2;-s1", "");
+        apply(&mut tests, "+s2;!s1", "");
 
         assert_eq!(tests[0].tasks, vec![prop_strategy("p1", "s2")]);
     }
@@ -673,8 +673,8 @@ mod tests {
         let mut add_then_remove = vec![test_with_tasks(vec![prop_strategy("p1", "s1")])];
         let mut remove_then_add = add_then_remove.clone();
 
-        apply(&mut add_then_remove, "+s2;-s1", "");
-        apply(&mut remove_then_add, "-s1;+s2", "");
+        apply(&mut add_then_remove, "+s2;!s1", "");
+        apply(&mut remove_then_add, "!s1;+s2", "");
 
         assert_eq!(add_then_remove[0].tasks, vec![prop_strategy("p1", "s2")]);
         assert!(remove_then_add[0].tasks.is_empty());
@@ -683,7 +683,7 @@ mod tests {
     #[test]
     fn replace_then_remove_can_remove_replaced_tasks() {
         let mut tests = vec![test_with_tasks(vec![prop_strategy("p1", "s1")])];
-        apply(&mut tests, "=s1=s2;-s2", "");
+        apply(&mut tests, "=s1=s2;!s2", "");
 
         assert!(tests[0].tasks.is_empty());
     }
@@ -698,7 +698,7 @@ mod tests {
 
     #[test]
     fn empty_strategy_chunks_are_ignored() {
-        let strategies = parse_strategies("+s1;;-s2").unwrap();
+        let strategies = parse_strategies("+s1;;!s2").unwrap();
 
         assert_eq!(
             strategies,
