@@ -169,7 +169,9 @@ fn flags_stale_bugs_md() {
     let manifest = load(dir);
     let findings = collect_findings(&manifest, dir);
     assert!(
-        findings.iter().any(|f| f.contains("BUGS.md is out of sync")),
+        findings
+            .iter()
+            .any(|f| f.contains("BUGS.md is out of sync")),
         "expected stale-BUGS finding, got: {:#?}",
         findings
     );

@@ -296,9 +296,8 @@ pub fn clone_experiment(
 ) -> ServiceResult<ExperimentInfo> {
     let parent_dir = match parent {
         Some(p) => {
-            fs::create_dir_all(&p).with_context(|| {
-                format!("Failed to create parent directory '{}'", p.display())
-            })?;
+            fs::create_dir_all(&p)
+                .with_context(|| format!("Failed to create parent directory '{}'", p.display()))?;
             p
         }
         None => std::env::current_dir().context("Failed to get current directory")?,
@@ -640,7 +639,11 @@ pub fn create_test(
         .with_extension("json");
 
     if test_path.exists() {
-        bail!("Test '{}' already exists at '{}'", test_name, test_path.display());
+        bail!(
+            "Test '{}' already exists at '{}'",
+            test_name,
+            test_path.display()
+        );
     }
 
     let workload_path = experiment.workload_path(workload).ok_or_else(|| {

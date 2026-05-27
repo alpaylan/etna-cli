@@ -79,11 +79,7 @@ fn run(exp_name: &str, test_name: &str) -> anyhow::Result<()> {
 }
 
 fn exp_name(exp_path: &Path) -> String {
-    exp_path
-        .file_name()
-        .unwrap()
-        .to_string_lossy()
-        .into_owned()
+    exp_path.file_name().unwrap().to_string_lossy().into_owned()
 }
 
 fn read_metrics(exp_path: &Path) -> Vec<serde_json::Value> {
@@ -241,8 +237,12 @@ fn cross_mode_producer_feeds_consumer() {
         "t",
         "T2",
         Mode::Cross {
-            producer: Target { workload: "T1".into() },
-            consumer: Target { workload: "T2".into() },
+            producer: Target {
+                workload: "T1".into(),
+            },
+            consumer: Target {
+                workload: "T2".into(),
+            },
         },
     );
 

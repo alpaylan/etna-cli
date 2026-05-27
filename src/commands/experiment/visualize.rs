@@ -471,10 +471,7 @@ fn get_agg_metrics(
                     data.insert(key.clone(), (*v).clone());
                 }
             }
-            data.insert(
-                "discards".to_string(),
-                serde_json::Value::from(avgs.0),
-            );
+            data.insert("discards".to_string(), serde_json::Value::from(avgs.0));
             data.insert("tests".to_string(), serde_json::Value::from(avgs.1));
             data.insert("shrinks".to_string(), serde_json::Value::from(avgs.2));
             data.insert("time".to_string(), serde_json::Value::from(avgs.3));

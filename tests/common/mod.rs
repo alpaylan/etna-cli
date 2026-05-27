@@ -84,7 +84,10 @@ impl TestEtna {
         // Embed the shared harness inside the planted repo so steps.json's
         // `${workload_path}/harness/...` resolves once the workload is
         // submodule-cloned into an experiment.
-        copy_tree(&repo_root().join("workloads/Test/harness"), &dst.join("harness"));
+        copy_tree(
+            &repo_root().join("workloads/Test/harness"),
+            &dst.join("harness"),
+        );
         git_init_commit(&dst);
         dst
     }
@@ -122,7 +125,12 @@ fn copy_tree(src: &Path, dst: &Path) {
         .arg(dst)
         .status()
         .expect("failed to run cp");
-    assert!(status.success(), "cp -r {} {} failed", src.display(), dst.display());
+    assert!(
+        status.success(),
+        "cp -r {} {} failed",
+        src.display(),
+        dst.display()
+    );
 }
 
 fn git_init_commit(dir: &Path) {

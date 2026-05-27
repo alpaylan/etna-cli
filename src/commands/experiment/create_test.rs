@@ -32,11 +32,8 @@ pub fn invoke(
         mutations,
     )?;
 
-    git_driver::commit(
-        &experiment.path,
-        &format!("create test '{}'", test_name),
-    )
-    .with_context(|| format!("Failed to commit new test '{}'", test_name))?;
+    git_driver::commit(&experiment.path, &format!("create test '{}'", test_name))
+        .with_context(|| format!("Failed to commit new test '{}'", test_name))?;
 
     tracing::info!(
         "Created test '{}' for workload '{}' in experiment '{}'",

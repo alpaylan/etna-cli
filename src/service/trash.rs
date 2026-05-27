@@ -38,9 +38,9 @@ pub fn move_to_trash(src: &Path) -> anyhow::Result<PathBuf> {
         tracing::warn!("trash sweep failed (continuing): {e:#}");
     }
 
-    let basename = src
-        .file_name()
-        .ok_or_else(|| anyhow::anyhow!("Cannot trash a path without a file name: {}", src.display()))?;
+    let basename = src.file_name().ok_or_else(|| {
+        anyhow::anyhow!("Cannot trash a path without a file name: {}", src.display())
+    })?;
     let ts = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs())
@@ -58,10 +58,17 @@ pub fn move_to_trash(src: &Path) -> anyhow::Result<PathBuf> {
         Err(_) => {
             // Likely cross-device. Fall back to recursive copy + remove.
             copy_dir_recursive(src, &dest).with_context(|| {
-                format!("Failed to copy '{}' into trash at '{}'", src.display(), dest.display())
+                format!(
+                    "Failed to copy '{}' into trash at '{}'",
+                    src.display(),
+                    dest.display()
+                )
             })?;
             fs::remove_dir_all(src).with_context(|| {
-                format!("Failed to remove '{}' after copying into trash", src.display())
+                format!(
+                    "Failed to remove '{}' after copying into trash",
+                    src.display()
+                )
             })?;
         }
     }
@@ -84,7 +91,12 @@ pub fn sweep(max_age: Duration) -> anyhow::Result<()> {
     let entries = match fs::read_dir(&trash) {
         Ok(e) => e,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
-        Err(e) => return Err(anyhow::anyhow!("Failed to read trash at '{}': {e}", trash.display())),
+        Err(e) => {
+            return Err(anyhow::anyhow!(
+                "Failed to read trash at '{}': {e}",
+                trash.display()
+            ))
+        }
     };
 
     let now = SystemTime::now();
@@ -119,7 +131,10 @@ pub fn sweep(max_age: Duration) -> anyhow::Result<()> {
     }
 
     if removed > 0 {
-        tracing::info!("trash sweep: removed {removed} expired entr{}", if removed == 1 { "y" } else { "ies" });
+        tracing::info!(
+            "trash sweep: removed {removed} expired entr{}",
+            if removed == 1 { "y" } else { "ies" }
+        );
     }
 
     Ok(())

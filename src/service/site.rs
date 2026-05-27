@@ -160,10 +160,7 @@ pub enum FetchOutcome {
 /// 4. Best-effort fetch `README.md` — optional.
 /// 5. Regenerate `BUGS.md` / `TASKS.md` locally from the parsed manifest via
 ///    `generate_docs`. No second round-trip needed.
-pub fn fetch_remote_detail<H: HttpFetcher>(
-    entry: &WorkloadEntry,
-    http: &H,
-) -> FetchOutcome {
+pub fn fetch_remote_detail<H: HttpFetcher>(entry: &WorkloadEntry, http: &H) -> FetchOutcome {
     // Try each candidate ref until one serves etna.toml. Once we find a
     // ref that works, all subsequent fetches (patches, README) reuse it
     // so we stay inside one consistent repo snapshot.
@@ -203,8 +200,12 @@ pub fn fetch_remote_detail<H: HttpFetcher>(
 
     let mut patches: HashMap<String, String> = HashMap::new();
     for group in &manifest.tasks {
-        let Some(injection) = &group.injection else { continue };
-        let Some(rel) = &injection.patch else { continue };
+        let Some(injection) = &group.injection else {
+            continue;
+        };
+        let Some(rel) = &injection.patch else {
+            continue;
+        };
         if patches.contains_key(rel) {
             continue;
         }
@@ -222,12 +223,7 @@ pub fn fetch_remote_detail<H: HttpFetcher>(
                 );
             }
             Err(e) => {
-                tracing::warn!(
-                    "Workload '{}' patch '{}' failed: {:#}",
-                    entry.name,
-                    rel,
-                    e
-                );
+                tracing::warn!("Workload '{}' patch '{}' failed: {:#}", entry.name, rel, e);
             }
         }
     }

@@ -7,9 +7,7 @@ use crate::{
     experiment::{ExperimentMetadata, Test},
     git_driver,
     manager::Manager,
-    workload::{
-        InjectionKind, ManifestTaskGroup, Witness, WorkloadManifest, WorkloadMetadata,
-    },
+    workload::{InjectionKind, ManifestTaskGroup, Witness, WorkloadManifest, WorkloadMetadata},
     workload_index::{looks_like_url, WorkloadEntry, WorkloadIndex},
 };
 
@@ -228,22 +226,19 @@ pub fn add_workload(
 
     // Phase 2: real add as a submodule, pinned to whatever ref we were given.
     let submodule_path = Path::new("workloads").join(&manifest.name);
-    git_driver::git_submodule_add(&experiment.path, url, reference, &submodule_path)
-        .with_context(|| {
+    git_driver::git_submodule_add(&experiment.path, url, reference, &submodule_path).with_context(
+        || {
             format!(
                 "Failed to add workload '{}' as submodule in experiment '{}'",
                 manifest.name, experiment.name
             )
-        })?;
+        },
+    )?;
 
     // Seed tests from the manifest's `[[tasks]]` blocks (no-op if absent).
     // Failure is logged but non-fatal — the workload is still registered.
     if let Err(e) = seed_tests_file(experiment, &manifest) {
-        tracing::warn!(
-            "Failed to seed test file for '{}': {:#}",
-            manifest.name,
-            e
-        );
+        tracing::warn!("Failed to seed test file for '{}': {:#}", manifest.name, e);
     }
 
     let wl_meta = WorkloadMetadata {
@@ -270,10 +265,7 @@ pub fn add_workload(
 /// Workloads are tracked as git submodules, so a clean removal has to
 /// `git submodule deinit` and `git rm` the submodule — a plain `rm -rf`
 /// would leave `.gitmodules` and the gitlink in a dirty state.
-pub fn remove_workload(
-    experiment: &ExperimentMetadata,
-    workload: &str,
-) -> ServiceResult<()> {
+pub fn remove_workload(experiment: &ExperimentMetadata, workload: &str) -> ServiceResult<()> {
     let dest = experiment.workload_path(workload).ok_or_else(|| {
         anyhow::anyhow!(
             "Workload '{}' not found in experiment '{}'",
@@ -293,10 +285,8 @@ pub fn remove_workload(
     // workload was added before submodule support — legacy layouts). Git also
     // leaves `<repo>/.git/modules/<path>` behind on deinit+rm; clean that too.
     if submodule_result.is_err() && dest.exists() {
-        fs::remove_dir_all(&dest).context(format!(
-            "Failed to remove workload at '{}'",
-            dest.display()
-        ))?;
+        fs::remove_dir_all(&dest)
+            .context(format!("Failed to remove workload at '{}'", dest.display()))?;
     }
     let modules_leftover = experiment
         .path
@@ -307,10 +297,7 @@ pub fn remove_workload(
         let _ = fs::remove_dir_all(&modules_leftover);
     }
 
-    git_driver::commit(
-        &experiment.path,
-        &format!("remove workload '{}'", workload),
-    )?;
+    git_driver::commit(&experiment.path, &format!("remove workload '{}'", workload))?;
 
     tracing::info!(
         "Workload '{}' removed from experiment '{}'",
@@ -359,14 +346,16 @@ pub fn get_workload_detail(
     })?;
 
     let manifest = WorkloadManifest::read(&dir)?;
-    let read_optional = |file: &str| -> Option<String> {
-        fs::read_to_string(dir.join(file)).ok()
-    };
+    let read_optional = |file: &str| -> Option<String> { fs::read_to_string(dir.join(file)).ok() };
 
     let mut patches: HashMap<String, String> = HashMap::new();
     for group in &manifest.tasks {
-        let Some(injection) = &group.injection else { continue };
-        let Some(rel) = &injection.patch else { continue };
+        let Some(injection) = &group.injection else {
+            continue;
+        };
+        let Some(rel) = &injection.patch else {
+            continue;
+        };
         if patches.contains_key(rel) {
             continue;
         }
@@ -497,15 +486,19 @@ fn render_bugs_md(manifest: &WorkloadManifest) -> String {
     // Bug Index
     writeln!(buf, "## Bug Index").unwrap();
     writeln!(buf).unwrap();
-    writeln!(buf, "| # | Variant | Name | Location | Injection | Fix Commit |").unwrap();
-    writeln!(buf, "|---|---------|------|----------|-----------|------------|").unwrap();
+    writeln!(
+        buf,
+        "| # | Variant | Name | Location | Injection | Fix Commit |"
+    )
+    .unwrap();
+    writeln!(
+        buf,
+        "|---|---------|------|----------|-----------|------------|"
+    )
+    .unwrap();
     let mut idx = 1;
     for g in &groups {
-        let short = g
-            .bug
-            .as_ref()
-            .map(|b| b.short_name.as_str())
-            .unwrap_or("—");
+        let short = g.bug.as_ref().map(|b| b.short_name.as_str()).unwrap_or("—");
         let location = bug_location_cell(g);
         let inj_kind = g
             .injection
@@ -612,8 +605,7 @@ fn render_bugs_md(manifest: &WorkloadManifest) -> String {
             writeln!(buf, "- **Property**: {}", props_str).unwrap();
         }
 
-        let all_wits: Vec<&Witness> =
-            g.tasks.iter().flat_map(|t| t.witnesses.iter()).collect();
+        let all_wits: Vec<&Witness> = g.tasks.iter().flat_map(|t| t.witnesses.iter()).collect();
         if !all_wits.is_empty() {
             writeln!(buf, "- **Witness(es)**:").unwrap();
             for w in all_wits {
@@ -640,7 +632,11 @@ fn render_bugs_md(manifest: &WorkloadManifest) -> String {
                 refs.push(o.clone());
             }
             let refs_str = refs.join(", ");
-            let subject = src.commit_subjects.first().map(String::as_str).unwrap_or("");
+            let subject = src
+                .commit_subjects
+                .first()
+                .map(String::as_str)
+                .unwrap_or("");
             let header = match (!refs_str.is_empty(), !subject.is_empty()) {
                 (true, true) => format!("{} — {}", refs_str, subject),
                 (true, false) => refs_str,
@@ -860,7 +856,10 @@ mod tests {
         assert_eq!(out.len(), 1);
         assert_eq!(out[0].tasks.len(), 2);
         for entry in &out[0].tasks {
-            assert_eq!(entry.get("property").and_then(|v| v.as_str()), Some("PropB"));
+            assert_eq!(
+                entry.get("property").and_then(|v| v.as_str()),
+                Some("PropB")
+            );
         }
     }
 

@@ -2,11 +2,7 @@ use tabled::settings::{Extract, Style};
 
 use crate::{experiment::ExperimentMetadata, manager::Manager, service::workload as wl_service};
 
-pub fn invoke(
-    _mgr: Manager,
-    experiment: ExperimentMetadata,
-    kind: String,
-) -> anyhow::Result<()> {
+pub fn invoke(_mgr: Manager, experiment: ExperimentMetadata, kind: String) -> anyhow::Result<()> {
     match kind.as_str() {
         "experiment" => {
             let workloads = experiment.workloads();

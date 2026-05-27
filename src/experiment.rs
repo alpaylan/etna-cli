@@ -230,7 +230,12 @@ impl Display for Test {
         write!(
             f,
             "(workload: {}, trials: {}, timeout: {}, mode: {}, mutations: {:?}, tasks: {:?})",
-            self.workload, self.trials, self.timeout, self.mode.name(), self.mutations, self.tasks
+            self.workload,
+            self.trials,
+            self.timeout,
+            self.mode.name(),
+            self.mutations,
+            self.tasks
         )
     }
 }

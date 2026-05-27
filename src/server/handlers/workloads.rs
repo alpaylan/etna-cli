@@ -38,7 +38,6 @@ pub struct RefreshWorkloadIndexResponse {
     pub entries: usize,
 }
 
-
 /// List workloads in an experiment
 pub async fn list_workloads(
     State(state): State<AppState>,

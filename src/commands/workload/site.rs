@@ -65,9 +65,8 @@ pub fn invoke(out: PathBuf, catalog: Option<PathBuf>) -> anyhow::Result<()> {
         match fetch_remote_detail(entry, &http) {
             FetchOutcome::Ok { detail } => {
                 let path = workloads_dir.join(format!("{}.json", entry.name));
-                let body = serde_json::to_string_pretty(&detail).with_context(|| {
-                    format!("Failed to serialize detail for '{}'", entry.name)
-                })?;
+                let body = serde_json::to_string_pretty(&detail)
+                    .with_context(|| format!("Failed to serialize detail for '{}'", entry.name))?;
                 fs::write(&path, body)
                     .with_context(|| format!("Failed to write '{}'", path.display()))?;
                 has_manifest.insert(entry.name.clone(), true);
@@ -134,7 +133,6 @@ fn write_catalog_json(
 
     let path = out.join("data").join("catalog.json");
     let body = serde_json::to_string_pretty(&file).context("Failed to serialize catalog.json")?;
-    fs::write(&path, body)
-        .with_context(|| format!("Failed to write '{}'", path.display()))?;
+    fs::write(&path, body).with_context(|| format!("Failed to write '{}'", path.display()))?;
     Ok(())
 }

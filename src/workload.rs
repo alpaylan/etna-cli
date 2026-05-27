@@ -284,9 +284,7 @@ impl Steps {
         None
     }
 
-    fn get_capabilities(
-        json: &serde_json::Value,
-    ) -> Option<HashMap<Capability, Vec<Step>>> {
+    fn get_capabilities(json: &serde_json::Value) -> Option<HashMap<Capability, Vec<Step>>> {
         let caps = json.get("capabilities")?;
         match serde_json::from_value::<HashMap<Capability, Vec<Step>>>(caps.clone()) {
             Ok(c) => Some(c),
@@ -646,7 +644,10 @@ mod manifest_tests {
             Some("deadbeefdeadbeefdeadbeefdeadbeefdeadbeef")
         );
         assert_eq!(m.dropped.len(), 1);
-        assert_eq!(m.dropped[0].reason, "Fixed a whitespace-only lint; not a real invariant bug.");
+        assert_eq!(
+            m.dropped[0].reason,
+            "Fixed a whitespace-only lint; not a real invariant bug."
+        );
 
         let g = &m.tasks[0];
         let src = g.source.as_ref().expect("source");

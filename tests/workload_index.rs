@@ -40,7 +40,10 @@ fn tiny_index(name: &str, url: &str) -> String {
 #[serial]
 fn cached_index_overrides_bundled() {
     let fx = TestEtna::new();
-    write_index(fx.etna_home(), &tiny_index("fixture-wl", "https://example.com/x"));
+    write_index(
+        fx.etna_home(),
+        &tiny_index("fixture-wl", "https://example.com/x"),
+    );
 
     let idx = WorkloadIndex::load().expect("load should succeed");
     assert_eq!(idx.entries.len(), 1);
@@ -73,7 +76,10 @@ fn fetch_from_file_url_writes_cache() {
     std::env::remove_var(INDEX_URL_ENV);
 
     assert_eq!(idx.entries.len(), 1);
-    assert_eq!(idx.resolve("remote-wl").unwrap().url, "https://example.com/r");
+    assert_eq!(
+        idx.resolve("remote-wl").unwrap().url,
+        "https://example.com/r"
+    );
 
     let cached = std::fs::read_to_string(fx.etna_home().join("workloads-index.json"))
         .expect("cache should be written");
@@ -122,7 +128,10 @@ fn add_workload_resolves_catalog_name() {
 #[serial]
 fn unknown_name_in_catalog_is_helpful_error() {
     let fx = TestEtna::new();
-    write_index(fx.etna_home(), &tiny_index("something-else", "https://example.com/x"));
+    write_index(
+        fx.etna_home(),
+        &tiny_index("something-else", "https://example.com/x"),
+    );
 
     let mut mgr = Manager::load().expect("Manager::load");
     let info = exp_svc::create_experiment(
@@ -142,8 +151,14 @@ fn unknown_name_in_catalog_is_helpful_error() {
     let err = wl_svc::add_workload(&mgr, &meta, "nonexistent", None)
         .expect_err("unknown catalog name should fail");
     let msg = format!("{err:#}");
-    assert!(msg.contains("nonexistent"), "error should name the missing entry, got: {msg}");
-    assert!(msg.contains("catalog"), "error should mention the catalog, got: {msg}");
+    assert!(
+        msg.contains("nonexistent"),
+        "error should name the missing entry, got: {msg}"
+    );
+    assert!(
+        msg.contains("catalog"),
+        "error should mention the catalog, got: {msg}"
+    );
 }
 
 #[test]

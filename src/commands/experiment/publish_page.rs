@@ -31,10 +31,7 @@ use crate::workload::WorkloadManifest;
 fn summarise(payload: &ReportPayload, workload_name: &str) -> Vec<PropertySummary> {
     let mut by_prop: HashMap<String, StatusCounter> = HashMap::new();
     for row in &payload.metrics {
-        let row_workload = row
-            .get("workload")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
+        let row_workload = row.get("workload").and_then(|v| v.as_str()).unwrap_or("");
         if !row_workload.eq_ignore_ascii_case(workload_name) {
             continue;
         }
@@ -116,7 +113,10 @@ fn render_index(
         .collect();
 
     let crate_line = if let Some(c) = &manifest.crate_name {
-        format!("<div class=\"meta\"><strong>Crate:</strong> <code>{}</code></div>", h(c))
+        format!(
+            "<div class=\"meta\"><strong>Crate:</strong> <code>{}</code></div>",
+            h(c)
+        )
     } else {
         String::new()
     };
@@ -218,7 +218,10 @@ pub fn invoke(
 
     let workloads = experiment.workloads();
     if workloads.is_empty() {
-        anyhow::bail!("Experiment '{}' has no workloads to publish", experiment.name);
+        anyhow::bail!(
+            "Experiment '{}' has no workloads to publish",
+            experiment.name
+        );
     }
 
     // Single-workload experiments lay out at the dist root so
@@ -248,9 +251,8 @@ pub fn invoke(
         )?;
         for wl in iter {
             let sub = output.join("workloads").join(&wl.name);
-            fs::create_dir_all(&sub).with_context(|| {
-                format!("Failed to create directory '{}'", sub.display())
-            })?;
+            fs::create_dir_all(&sub)
+                .with_context(|| format!("Failed to create directory '{}'", sub.display()))?;
             write_workload_page(&sub, &mgr, &experiment, &wl.name, &payload, &html, &json)?;
         }
     }
@@ -277,23 +279,20 @@ fn write_workload_page(
         fs::copy(&experiment.store, out.join("store.jsonl"))
             .context("Failed to copy store.jsonl")?;
     } else {
-        fs::write(out.join("store.jsonl"), "")
-            .context("Failed to write empty store.jsonl")?;
+        fs::write(out.join("store.jsonl"), "").context("Failed to write empty store.jsonl")?;
     }
 
     let dir = experiment
         .workload_path(workload_name)
         .with_context(|| format!("Workload '{}' not found in experiment", workload_name))?;
-    let manifest = WorkloadManifest::read(&dir).with_context(|| {
-        format!("Failed to read etna.toml for workload '{}'", workload_name)
-    })?;
+    let manifest = WorkloadManifest::read(&dir)
+        .with_context(|| format!("Failed to read etna.toml for workload '{}'", workload_name))?;
 
     // Copy the raw etna.toml (pretty Rust-side serialisation would lose
     // user comments — the verbatim file is what consumers want).
     let etna_toml_src = dir.join("etna.toml");
     if etna_toml_src.is_file() {
-        fs::copy(&etna_toml_src, out.join("etna.toml"))
-            .context("Failed to copy etna.toml")?;
+        fs::copy(&etna_toml_src, out.join("etna.toml")).context("Failed to copy etna.toml")?;
     }
 
     let summary = summarise(payload, &manifest.name);

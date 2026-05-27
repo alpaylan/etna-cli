@@ -14,7 +14,10 @@ fn fixture_bootstraps_config() {
     let fx = TestEtna::new();
 
     let etna_home = fx.etna_home();
-    assert!(etna_home.join("config.json").exists(), "config.json missing");
+    assert!(
+        etna_home.join("config.json").exists(),
+        "config.json missing"
+    );
     assert!(
         etna_home.join("experiments.json").exists(),
         "experiments.json missing"

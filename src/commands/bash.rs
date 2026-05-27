@@ -351,4 +351,3 @@ fn to_bash(s: &Step, depth: usize) -> String {
         }
     }
 }
-

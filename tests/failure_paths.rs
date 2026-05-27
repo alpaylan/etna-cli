@@ -70,8 +70,7 @@ fn invalid_mode_json_fails_run() {
         let mgr = Manager::load().expect("Manager::load");
         let meta = mgr.get_experiment(&exp_name(&exp)).unwrap();
         let t1 = fx.plant_workload_repo("T1");
-        wl_svc::add_workload(&mgr, &meta, t1.to_str().unwrap(), None)
-            .expect("add_workload");
+        wl_svc::add_workload(&mgr, &meta, t1.to_str().unwrap(), None).expect("add_workload");
     }
 
     // Hand-write a tests/*.json with a bogus Mode discriminant — the file
@@ -123,8 +122,7 @@ fn cancel_flag_aborts_run() {
         let mgr = Manager::load().expect("Manager::load");
         let meta = mgr.get_experiment(&exp_name(&exp)).unwrap();
         let t1 = fx.plant_workload_repo("T1");
-        wl_svc::add_workload(&mgr, &meta, t1.to_str().unwrap(), None)
-            .expect("add_workload");
+        wl_svc::add_workload(&mgr, &meta, t1.to_str().unwrap(), None).expect("add_workload");
         // A Solve test with a larger trial count so we can set the flag
         // mid-flight — the driver checks the flag between trials.
         exp_svc::create_test(
@@ -164,7 +162,9 @@ fn cancel_flag_aborts_run() {
     *flag_flipper.write().unwrap() = true;
 
     let result = t.join().expect("run thread panicked");
-    let err = result.err().expect("run_experiment should report cancellation");
+    let err = result
+        .err()
+        .expect("run_experiment should report cancellation");
     let msg = format!("{err:?}").to_lowercase();
     assert!(
         msg.contains("cancel"),

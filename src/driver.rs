@@ -15,11 +15,10 @@ use crate::{
     git_driver,
     manager::Manager,
     open_pbt_format::Status,
+    process::run_command_tree_with_timeout,
     store::{Metric, Store},
     workload::{Capability, Command, Step, Steps, Workload, WorkloadManifest},
 };
-
-use process_control::{ChildExt, Control};
 
 use crate::error_context::Context;
 use crate::experiment::{CexSource, ExperimentMetadata, InputSource, Mode, Target, Test};
@@ -855,28 +854,28 @@ fn run_consumer_test(
 fn run_subprocess(
     mgr: Arc<Mutex<Manager>>,
     mut context: Object,
-    mut cmd: std::process::Command,
+    cmd: std::process::Command,
     step: &Command,
     run_config: &RunConfig,
 ) -> anyhow::Result<Status> {
     tracing::debug!("Running command: {}", step);
 
-    let output = cmd
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .with_context(|| format!("Failed to spawn '{}'", step))?
-        .controlled_with_output()
-        .time_limit(Duration::from_secs_f64(run_config.timeout))
-        .terminate_for_timeout()
-        .wait()
-        .context(format!("Failed to run command '{}'", step));
+    let output = run_command_tree_with_timeout(cmd, Duration::from_secs_f64(run_config.timeout))
+        .with_context(|| format!("Failed to run command '{}'", step));
 
     tracing::trace!("metadata: {:?}", context);
 
     match output {
-        Ok(None) => {
+        Ok(output) if output.timed_out => {
             tracing::warn!("Process timed out after {} seconds", run_config.timeout);
+            let stdout = output.stdout.join("\n");
+            let stderr = output.stderr.join("\n");
+            if !stdout.trim().is_empty() {
+                tracing::debug!("partial stdout before timeout: {}", stdout);
+            }
+            if !stderr.trim().is_empty() {
+                tracing::debug!("partial stderr before timeout: {}", stderr);
+            }
 
             context.insert(
                 "status".to_owned(),
@@ -890,14 +889,19 @@ fn run_subprocess(
 
             Ok(Status::TimedOut)
         }
-        Ok(Some(output)) => {
-            if !output.status.success() {
-                tracing::warn!("Command '{}' failed with status: {}", step, output.status);
+        Ok(output) => {
+            let status = output.status.ok_or_else(|| {
+                anyhow::anyhow!("command '{}' returned no status without timing out", step)
+            })?;
+            if !status.success() {
+                tracing::warn!("Command '{}' failed with status: {}", step, status);
             }
             let logs = {
                 let mut mgr = mgr.lock().unwrap();
-                log_process_output(
-                    &output.into_std_lossy(),
+                log_process_lines(
+                    Some(status),
+                    &output.stdout,
+                    &output.stderr,
                     mgr.require_store_mut()?,
                     &run_config.experiment_hash,
                     &context,
@@ -1057,11 +1061,11 @@ pub(crate) fn run_experiment(
         test
     );
     // Snapshot the current version of the workload
-    tracing::trace!("snapshotting current version of the workload...");
-    git_driver::commit(
-        &experiment.path,
-        &format!("running experiment {} with test {}", experiment.name, test),
-    )?;
+    // tracing::trace!("snapshotting current version of the workload...");
+    // git_driver::commit(
+    //     &experiment.path,
+    //     &format!("running experiment {} with test {}", experiment.name, test),
+    // )?;
 
     // If there is a local marauders configuration, use it.
     let custom_languages = if let Ok(project) = marauders::Project::new(&experiment.path, None) {
@@ -1128,7 +1132,7 @@ pub(crate) fn run_experiment(
         // Pick the capability steps that will be iterated each trial, and the tags used for
         // template expansion. For Cross, iterate producer.sample and pass consumer.test as
         // `consumer_test` in RunConfig (realized per-batch inside run_cross).
-        let (iter_steps, iter_tags, iter_dir): (Vec<Step>, HashMap<String, Vec<String>>, PathBuf) =
+        let (iter_steps, iter_tags, _iter_dir): (Vec<Step>, HashMap<String, Vec<String>>, PathBuf) =
             match &test.mode {
                 Mode::Solve => (
                     workload.steps.capability(Capability::Solve)?.clone(),
@@ -1355,9 +1359,6 @@ pub(crate) fn run_experiment(
             if let Err(e) = &result {
                 tracing::error!("Failed to run experiment: {}", e);
             }
-
-            // Silence the unused-read warning for iter_dir.
-            let _ = &iter_dir;
         }
 
         Ok(())
@@ -1392,11 +1393,33 @@ fn log_process_output(
 ) -> anyhow::Result<Vec<Object>> {
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
+    let stdout_lines = stdout.lines().map(str::to_owned).collect::<Vec<_>>();
+    let stderr_lines = stderr.lines().map(str::to_owned).collect::<Vec<_>>();
+    log_process_lines(
+        Some(output.status),
+        &stdout_lines,
+        &stderr_lines,
+        store,
+        experiment_hash,
+        context,
+    )
+}
+
+fn log_process_lines(
+    status: Option<std::process::ExitStatus>,
+    stdout_lines: &[String],
+    stderr_lines: &[String],
+    store: &mut Store,
+    experiment_hash: &str,
+    context: &Object,
+) -> anyhow::Result<Vec<Object>> {
+    let stdout = stdout_lines.join("\n");
+    let stderr = stderr_lines.join("\n");
     tracing::debug!("stdout: {}", stdout);
     tracing::debug!("stderr: {}", stderr);
 
-    if !output.status.success() {
-        tracing::error!("Process failed with status: {}", output.status);
+    if let Some(status) = status.filter(|status| !status.success()) {
+        tracing::error!("Process failed with status: {}", status);
         tracing::error!("stderr: {}", stderr);
         store.push(Metric {
             data: {
@@ -1411,7 +1434,7 @@ fn log_process_output(
                     "error".to_owned(),
                     Value::String(format!(
                         "Process failed with status: {}\nstderr: {}",
-                        output.status, stderr
+                        status, stderr
                     )),
                 );
                 error_context
@@ -1422,7 +1445,7 @@ fn log_process_output(
 
     // Look for JSON objects in the output
     let mut logs = Vec::new();
-    for line in stdout.lines().chain(stderr.lines()) {
+    for line in stdout_lines.iter().chain(stderr_lines.iter()) {
         if let Ok(json) = serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(line) {
             tracing::info!("Found JSON object: {:?}", json);
             let mut merged = context.clone();

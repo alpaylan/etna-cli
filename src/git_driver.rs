@@ -273,10 +273,7 @@ pub(crate) fn git_submodule_add(
     path_in_repo: &Path,
 ) -> anyhow::Result<()> {
     if std::env::var_os("ETNA_OFFLINE").is_some() && !is_local_git_url(url) {
-        anyhow::bail!(
-            "Cannot add submodule '{}' while ETNA_OFFLINE is set",
-            url
-        );
+        anyhow::bail!("Cannot add submodule '{}' while ETNA_OFFLINE is set", url);
     }
     let mut cmd = std::process::Command::new("git");
     cmd.arg("-C").arg(repo).arg("submodule").arg("add");

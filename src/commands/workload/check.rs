@@ -29,7 +29,11 @@ pub fn invoke(dir: PathBuf) -> anyhow::Result<()> {
     for f in &findings {
         eprintln!("{}: {}", label, f);
     }
-    anyhow::bail!("{} finding(s) for workload '{}'", findings.len(), manifest.name);
+    anyhow::bail!(
+        "{} finding(s) for workload '{}'",
+        findings.len(),
+        manifest.name
+    );
 }
 
 /// Run all checks against `manifest` + on-disk state at `dir`. Returns the
@@ -122,11 +126,7 @@ fn check_variant_set_matches_marauders(
     }
 }
 
-fn check_witnesses_and_properties(
-    manifest: &WorkloadManifest,
-    dir: &Path,
-    out: &mut Vec<String>,
-) {
+fn check_witnesses_and_properties(manifest: &WorkloadManifest, dir: &Path, out: &mut Vec<String>) {
     let src_text = collect_source_text(dir);
     for g in &manifest.tasks {
         for t in &g.tasks {
@@ -214,9 +214,7 @@ fn check_docs_idempotent(manifest: &WorkloadManifest, dir: &Path, out: &mut Vec<
     match std::fs::read_to_string(&bugs_path) {
         Ok(on_disk) => {
             if on_disk != generated.bugs_md {
-                out.push(
-                    "BUGS.md is out of sync with etna.toml (run `etna workload doc`)".into(),
-                );
+                out.push("BUGS.md is out of sync with etna.toml (run `etna workload doc`)".into());
             }
         }
         Err(_) => out.push("BUGS.md is missing (run `etna workload doc`)".into()),
@@ -224,20 +222,14 @@ fn check_docs_idempotent(manifest: &WorkloadManifest, dir: &Path, out: &mut Vec<
     match std::fs::read_to_string(&tasks_path) {
         Ok(on_disk) => {
             if on_disk != generated.tasks_md {
-                out.push(
-                    "TASKS.md is out of sync with etna.toml (run `etna workload doc`)".into(),
-                );
+                out.push("TASKS.md is out of sync with etna.toml (run `etna workload doc`)".into());
             }
         }
         Err(_) => out.push("TASKS.md is missing (run `etna workload doc`)".into()),
     }
 }
 
-fn check_variant_branches_descend(
-    manifest: &WorkloadManifest,
-    dir: &Path,
-    out: &mut Vec<String>,
-) {
+fn check_variant_branches_descend(manifest: &WorkloadManifest, dir: &Path, out: &mut Vec<String>) {
     let Some(base) = &manifest.base_commit else {
         return;
     };
@@ -321,8 +313,14 @@ mod tests {
 
     #[test]
     fn pascal_to_snake_basics() {
-        assert_eq!(pascal_to_snake("ArrayvecDebugMatchesSlice"), "arrayvec_debug_matches_slice");
-        assert_eq!(pascal_to_snake("FindIterPrefilterParity"), "find_iter_prefilter_parity");
+        assert_eq!(
+            pascal_to_snake("ArrayvecDebugMatchesSlice"),
+            "arrayvec_debug_matches_slice"
+        );
+        assert_eq!(
+            pascal_to_snake("FindIterPrefilterParity"),
+            "find_iter_prefilter_parity"
+        );
         assert_eq!(pascal_to_snake("X"), "x");
     }
 }

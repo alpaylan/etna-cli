@@ -197,14 +197,18 @@ pub(crate) fn run() -> anyhow::Result<()> {
                     mutation,
                 )
             }
-            ExperimentCommand::AmendTest { name: _, test, strategy, mutation, property } => {
+            ExperimentCommand::AmendTest {
+                name: _,
+                test,
+                strategies,
+                filter,
+            } => {
                 commands::experiment::amend_test::invoke(
                     mgr,
                     experiment.unwrap(),
                     test,
-                    strategy,
-                    mutation,
-                    property,
+                    strategies,
+                    filter,
                 )
             }
             ExperimentCommand::Visualize { name: _, figure, tests, groupby, aggby, metric, buckets, max, visualization_type, hatched, store } => {
@@ -382,15 +386,14 @@ enum ExperimentCommand {
         /// Test name from tests directory (with or without .json)
         #[clap(long)]
         test: String,
-        /// Strategy name to apply
+        /// Strategy names (`+STRATEGY` to add, `=STRATEGY` to replace, `!STRATEGY` to remove)
+        /// Multiple strategies are combined with `;` (e.g. `+strat1;!strat2;=strat3=strat4` applies all three operations in order).
         #[clap(long)]
-        strategy: String,
-        /// Optional mutation filter(s)
-        #[clap(long)]
-        mutation: Vec<String>,
-        /// Optional property filter(s)
-        #[clap(long)]
-        property: Vec<String>,
+        strategies: String,
+        /// Filters to select which tasks to amend (e.g. `workload=foo` or `property=bar`).
+        /// Multiple filters are combined with `;` (e.g. `workload=foo;property=bar` matches tasks with workload foo AND property bar).
+        #[clap(long, default_value = "")]
+        filter: String,
     },
     #[clap(name = "visualize", about = "Visualize the results of the experiment")]
     Visualize {

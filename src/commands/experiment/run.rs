@@ -18,7 +18,7 @@ use crate::{
     },
 };
 
-fn get_tests(tests: Vec<String>, experiment: &ExperimentMetadata) -> anyhow::Result<Vec<Test>> {
+fn get_tests(tests: &Vec<String>, experiment: &ExperimentMetadata) -> anyhow::Result<Vec<Test>> {
     if tests.is_empty() {
         anyhow::bail!("No tests provided. Please specify at least one test to run. Try running `etna experiment list-tests` to see available tests.");
     }
@@ -56,14 +56,14 @@ fn get_tests(tests: Vec<String>, experiment: &ExperimentMetadata) -> anyhow::Res
 pub fn invoke(
     mut mgr: Manager,
     experiment: ExperimentMetadata,
-    tests: Vec<String>,
+    test_names: Vec<String>,
     short_circuit: bool,
     parallel: bool,
     cli_params: Vec<(String, String)>,
 ) -> anyhow::Result<()> {
     tracing::trace!("running experiment with name '{:?}'", experiment.name);
     let mut tests =
-        get_tests(tests, &experiment).context("Failed to get tests for the experiment")?;
+        get_tests(&test_names, &experiment).context("Failed to get tests for the experiment")?;
 
     // Convert CLI params to HashMap
     let cli_params: HashMap<String, String> = cli_params.into_iter().collect();
@@ -72,7 +72,32 @@ pub fn invoke(
     mgr.set_store_path(experiment.store.clone())?;
     mgr.require_store_mut()?.load_metrics()?;
 
-    git_driver::commit(&experiment.path, "Running experiment")?;
+    git_driver::commit(
+        &experiment.path,
+        &format!(
+            "Running 'etna experiment run --name \"{}\" --tests \"{}\"{}{}{}'",
+            experiment.name,
+            test_names.join(", "),
+            if short_circuit {
+                " --short-circuit"
+            } else {
+                ""
+            },
+            if parallel { " --parallel" } else { "" },
+            if !cli_params.is_empty() {
+                format!(
+                    " {}",
+                    cli_params
+                        .iter()
+                        .map(|(k, v)| format!("--param {}={}", k, v))
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                )
+            } else {
+                "".to_string()
+            }
+        ),
+    )?;
 
     let mgr = Arc::new(Mutex::new(mgr));
 
@@ -93,6 +118,8 @@ pub fn invoke(
             None, // No cancel flag for CLI
         )?;
     }
+
+    git_driver::commit(&experiment.path, "Experiment is completed")?;
 
     Ok(())
 }

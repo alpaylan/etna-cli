@@ -35,8 +35,7 @@ fn build_experiment(fx: &TestEtna, name: &str, trials: usize) -> std::path::Path
     let mgr = Manager::load().expect("Manager::load");
     let meta = mgr.get_experiment(name).expect("experiment registered");
     let t1 = fx.plant_workload_repo("T1");
-    wl_svc::add_workload(&mgr, &meta, t1.to_str().unwrap(), None)
-        .expect("add_workload");
+    wl_svc::add_workload(&mgr, &meta, t1.to_str().unwrap(), None).expect("add_workload");
     exp_svc::create_test(
         &mgr,
         &meta,

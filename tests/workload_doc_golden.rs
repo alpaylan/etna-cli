@@ -28,10 +28,10 @@ fn assert_golden(case: &str) {
     let out = wl_service::generate_docs(&manifest)
         .unwrap_or_else(|| panic!("fixture '{}' should produce docs", case));
 
-    let expected_bugs = std::fs::read_to_string(dir.join("expected_BUGS.md"))
-        .expect("expected_BUGS.md");
-    let expected_tasks = std::fs::read_to_string(dir.join("expected_TASKS.md"))
-        .expect("expected_TASKS.md");
+    let expected_bugs =
+        std::fs::read_to_string(dir.join("expected_BUGS.md")).expect("expected_BUGS.md");
+    let expected_tasks =
+        std::fs::read_to_string(dir.join("expected_TASKS.md")).expect("expected_TASKS.md");
 
     assert_eq!(
         out.bugs_md, expected_bugs,

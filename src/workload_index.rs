@@ -164,12 +164,10 @@ fn cache_path() -> Option<std::path::PathBuf> {
 
 fn write_cache(path: &Path, body: &str) -> anyhow::Result<()> {
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).with_context(|| {
-            format!("Failed to create cache directory '{}'", parent.display())
-        })?;
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("Failed to create cache directory '{}'", parent.display()))?;
     }
-    std::fs::write(path, body)
-        .with_context(|| format!("Failed to write '{}'", path.display()))?;
+    std::fs::write(path, body).with_context(|| format!("Failed to write '{}'", path.display()))?;
     Ok(())
 }
 
