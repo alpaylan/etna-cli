@@ -12,7 +12,6 @@ use serde_json::{Map, Value};
 use std::time::Duration;
 
 use crate::{
-    git_driver,
     manager::Manager,
     open_pbt_format::Status,
     process::run_command_tree_with_timeout,
