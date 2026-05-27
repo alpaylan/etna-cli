@@ -186,7 +186,6 @@ jobs:
       # Skipped when `rocq-image` is set — that prebuilt container already
       # carries the AFL switch + Coq + QuickChick (see docker/rocq.Dockerfile).
       - name: Setup OCaml for Coq via opam
-        # Skip when a prebuilt rocq-image is supplied (the toolchain is baked in).
         if: steps.langs.outputs.rocq == '1' && inputs.rocq-image == ''
         uses: ocaml/setup-ocaml@v3
         with:
@@ -201,7 +200,6 @@ jobs:
             default: https://opam.ocaml.org
             coq-released: https://coq.inria.fr/opam/released
       - name: Install Coq + QuickChick + ExtLib
-        # Skip when a prebuilt rocq-image is supplied (the toolchain is baked in).
         if: steps.langs.outputs.rocq == '1' && inputs.rocq-image == ''
         shell: bash
         run: |
