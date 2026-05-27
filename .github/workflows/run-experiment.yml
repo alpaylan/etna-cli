@@ -76,6 +76,13 @@ jobs:
       - name: Re-init submodules over HTTPS
         shell: bash
         run: |
+          # When the job runs in a `rocq-image` container it runs as root, but
+          # the checked-out workspace (and every nested submodule working dir)
+          # is owned by the host-runner uid — so git aborts any operation with
+          # "detected dubious ownership". Whitelist all paths before touching
+          # git. Set globally so it also covers git the experiment run shells
+          # out to later. No-op on the host runner (which owns its workspace).
+          git config --global --add safe.directory '*'
           git config --global url."https://github.com/".insteadOf "git@github.com:"
           if [ -f .gitmodules ]; then
             git submodule sync --recursive
