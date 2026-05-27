@@ -102,6 +102,20 @@ pub fn invoke(
     let mgr = Arc::new(Mutex::new(mgr));
 
     for test in &mut tests {
+        // `trials` and `timeout` are top-level run-loop fields rather than
+        // step-template params, so apply them onto the test directly. This lets
+        // `--params trials=1 --params timeout=5` shorten a run (e.g. a smoke
+        // test) without editing the test file.
+        if let Some(v) = cli_params.get("trials") {
+            test.trials = v.parse().with_context(|| {
+                format!("--params trials must be a non-negative integer, got '{v}'")
+            })?;
+        }
+        if let Some(v) = cli_params.get("timeout") {
+            test.timeout = v.parse().with_context(|| {
+                format!("--params timeout must be a number of seconds, got '{v}'")
+            })?;
+        }
         info!("Running test: {}", test);
         for p in cli_params.iter() {
             test.params

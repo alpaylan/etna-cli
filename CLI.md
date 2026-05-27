@@ -71,7 +71,7 @@ Options:
       --params <KEY=VALUE>
 ```
 
-`--params` may be repeated; values passed here override parameters defined in the test JSON files. `--parallel` requires the tested run to be effect-free — effectful runs in parallel are not guaranteed to produce deterministic results.
+`--params` may be repeated; values passed here override parameters defined in the test JSON files. The keys `trials` and `timeout` are special-cased: they override the test's top-level `trials` (integer) and `timeout` (seconds) run-loop fields, so e.g. `--params trials=1 --params timeout=5` shortens a run without editing the test file. `--parallel` requires the tested run to be effect-free — effectful runs in parallel are not guaranteed to produce deterministic results.
 
 ### `experiment show`
 
