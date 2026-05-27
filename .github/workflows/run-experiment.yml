@@ -66,7 +66,7 @@ jobs:
     # Below GitHub's hard 6h (360 min) job kill, so when the timeout is hit the
     # job self-cancels with headroom for the always() commit step to push
     # partial results before the platform force-stops everything.
-    timeout-minutes: 350
+    timeout-minutes: 7
     permissions:
       contents: write
     env:
