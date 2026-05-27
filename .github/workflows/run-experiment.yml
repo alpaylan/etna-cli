@@ -50,7 +50,11 @@ on:
         default: ""
 
 concurrency:
-  group: run-experiment-${{ github.ref }}
+  # Include the test list so dispatching a run for one test doesn't cancel an
+  # in-flight run for a *different* test on the same branch — that lets e.g. the
+  # ifc variants run in parallel. Re-dispatching the same test still supersedes
+  # its own prior run.
+  group: run-experiment-${{ github.ref }}-${{ inputs.tests }}
   cancel-in-progress: true
 
 jobs:
@@ -59,7 +63,10 @@ jobs:
     # When rocq-image is set, the whole job runs inside that prebuilt toolchain
     # container (skipping the ~30-min Coq/QuickChick build). Empty = run on host.
     container: ${{ inputs.rocq-image }}
-    timeout-minutes: 360
+    # Below GitHub's hard 6h (360 min) job kill, so when the timeout is hit the
+    # job self-cancels with headroom for the always() commit step to push
+    # partial results before the platform force-stops everything.
+    timeout-minutes: 350
     permissions:
       contents: write
     env:
@@ -318,13 +325,23 @@ jobs:
       # the dispatcher should only enable it when they're sure the CI run
       # produced the canonical results for that store path (i.e. it isn't
       # a partial subset that would clobber accumulated local entries).
+      # always() so a job killed at the timeout (or cancelled) still commits the
+      # trials etna already flushed — store.push appends+flushes per trial, so a
+      # re-run resumes via the incremental dedup instead of starting over.
       - name: Commit + push updated store
-        if: ${{ inputs.commit-results && success() }}
+        if: ${{ inputs.commit-results && always() }}
         shell: bash
         run: |
           store_path="${{ inputs.store }}"
+          if [ ! -f "$store_path" ]; then
+            echo "No store at $store_path — nothing to commit."
+            exit 0
+          fi
           git config user.name 'etna-cli[bot]'
           git config user.email 'etna-cli@users.noreply.github.com'
+          # Flag partial (interrupted) stores so they're obvious in git history.
+          suffix=""
+          [ "${{ job.status }}" = "success" ] || suffix=" [partial: ${{ job.status }}]"
           # Stage the file (it may be untracked if the caller routed output
           # to a new path); skip the commit if nothing actually changed.
           git add -- "$store_path"
@@ -332,5 +349,19 @@ jobs:
             echo "$store_path unchanged — skipping commit."
             exit 0
           fi
-          git commit -m "ci: refresh $store_path from etna experiment run ($GITHUB_RUN_NUMBER)"
-          git push origin HEAD:"${GITHUB_REF#refs/heads/}"
+          git commit -m "ci: refresh $store_path from etna experiment run ($GITHUB_RUN_NUMBER)$suffix"
+          # Parallel experiment jobs push disjoint store files to the same
+          # branch, so a bare push is rejected as non-fast-forward for all but
+          # the first. Because each job touches a different store file, rebasing
+          # onto the updated branch never conflicts — so fetch + rebase + retry
+          # lets every job land its own results.
+          branch="${GITHUB_REF#refs/heads/}"
+          pushed=0
+          for attempt in 1 2 3 4 5; do
+            if git push origin "HEAD:$branch"; then pushed=1; break; fi
+            echo "push rejected (attempt $attempt) — rebasing onto origin/$branch"
+            git fetch origin "$branch"
+            git rebase "origin/$branch" \
+              || { echo "::error::unexpected rebase conflict pushing $store_path"; git rebase --abort; exit 1; }
+          done
+          [ "$pushed" = 1 ] || { echo "::error::could not push $store_path after retries"; exit 1; }
