@@ -66,7 +66,7 @@ jobs:
     # Below GitHub's hard 6h (360 min) job kill, so when the timeout is hit the
     # job self-cancels with headroom for the always() commit step to push
     # partial results before the platform force-stops everything.
-    timeout-minutes: 7
+    timeout-minutes: 3
     permissions:
       contents: write
     env:
@@ -344,7 +344,7 @@ jobs:
           [ "${{ job.status }}" = "success" ] || suffix=" [partial: ${{ job.status }}]"
           # Stage the file (it may be untracked if the caller routed output
           # to a new path); skip the commit if nothing actually changed.
-          echo "::debug::$(git status --porcelain -- "$store_path")"
+          echo "$(git status --porcelain -- "$store_path")"
           git add -- "$store_path"
           if git diff --cached --quiet -- "$store_path"; then
             echo "$store_path unchanged — skipping commit."
