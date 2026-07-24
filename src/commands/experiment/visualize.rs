@@ -95,37 +95,39 @@ pub(crate) fn write_row<W: std::io::Write>(
     writer.write_all(b"\n").context("Failed to write newline")
 }
 
-/// Sum discards/tests/shrinks/time across a group of metrics. Missing or
-/// non-numeric count fields contribute 0; an unparseable time panics, matching
-/// the strictness the driver applies when the metric is recorded.
-fn sum_metrics<'a>(metrics: impl IntoIterator<Item = &'a Metric>) -> (f64, f64, f64, f64) {
-    metrics.into_iter().fold((0.0, 0.0, 0.0, 0.0), |mut acc, m| {
-        acc.0 += m
-            .data
-            .get("discards")
-            .and_then(serde_json::Value::as_f64)
-            .unwrap_or(0.0);
-        acc.1 += m
-            .data
-            .get("tests")
-            .and_then(serde_json::Value::as_f64)
-            .unwrap_or(0.0);
-        acc.2 += m
-            .data
-            .get("shrinks")
-            .and_then(serde_json::Value::as_f64)
-            .unwrap_or(0.0);
-        acc.3 += m
+/// An optional count field: absent contributes 0, but a value that is present
+/// yet non-numeric is corruption and errors rather than silently counting 0.
+fn count_field(m: &Metric, field: &str) -> anyhow::Result<f64> {
+    match m.data.get(field) {
+        None => Ok(0.0),
+        Some(v) => v
+            .as_f64()
+            .with_context(|| format!("metric field '{field}' is not numeric: {m:?}")),
+    }
+}
+
+/// Sum discards/tests/shrinks/time across a group of metrics. Absent count
+/// fields contribute 0; any field that is present but malformed — a
+/// non-numeric count, or a missing/unparseable time — is a clean error rather
+/// than a silent 0 (counts) or a panic (time).
+fn sum_metrics<'a>(
+    metrics: impl IntoIterator<Item = &'a Metric>,
+) -> anyhow::Result<(f64, f64, f64, f64)> {
+    let mut acc = (0.0, 0.0, 0.0, 0.0);
+    for m in metrics {
+        acc.0 += count_field(m, "discards")?;
+        acc.1 += count_field(m, "tests")?;
+        acc.2 += count_field(m, "shrinks")?;
+        let time = m
             .data
             .get("time")
             .and_then(serde_json::Value::as_str)
-            .into_iter()
-            .flat_map(crate::duration::parse)
-            .next()
-            .map(|d| d.as_secs_f64())
-            .unwrap_or_else(|| panic!("Failed to parse time for metric: {:?}", m));
-        acc
-    })
+            .with_context(|| format!("metric has no string 'time' field: {m:?}"))?;
+        acc.3 += crate::duration::parse(time)
+            .with_context(|| format!("failed to parse time {time:?} for metric: {m:?}"))?
+            .as_secs_f64();
+    }
+    Ok(acc)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -316,7 +318,7 @@ fn get_agg_metrics(
 
     let agg_metrics = aggs
         .iter()
-        .filter_map(|agg| {
+        .map(|agg| -> anyhow::Result<Option<Map<String, Value>>> {
             let agg_metrics = metrics
                 .iter()
                 .filter(|m| {
@@ -335,7 +337,7 @@ fn get_agg_metrics(
 
             if agg_metrics.is_empty() {
                 tracing::trace!("No metrics found for group: {:?}", agg);
-                return None;
+                return Ok(None);
             }
             tracing::trace!("Group: {:#?}", agg);
             tracing::trace!("Number of metrics in agg: {}", agg_metrics.len());
@@ -373,7 +375,7 @@ fn get_agg_metrics(
                 let data = serde_json::Value::Object(data);
                 tracing::trace!("Returning timeout data: {:#?}", data);
                 let _ = write_row(&mut raw_data_file, &data, aggby);
-                return data.as_object().cloned();
+                return Ok(data.as_object().cloned());
             }
 
             let aborted = agg_metrics.iter().find_map(|m| {
@@ -405,7 +407,7 @@ fn get_agg_metrics(
                 let data = serde_json::Value::Object(data);
                 tracing::trace!("Returning aborted data: {:#?}", data);
                 let _ = write_row(&mut raw_data_file, &data, aggby);
-                return data.as_object().cloned();
+                return Ok(data.as_object().cloned());
             }
 
             // let aborted = agg_metrics.iter().any(|m| {
@@ -463,7 +465,7 @@ fn get_agg_metrics(
             //     return data.as_object().cloned();
             // }
 
-            let sums = sum_metrics(agg_metrics.iter().copied().copied());
+            let sums = sum_metrics(agg_metrics.iter().copied().copied())?;
             let avgs = (
                 sums.0 / agg_metrics.len() as f64,
                 sums.1 / agg_metrics.len() as f64,
@@ -499,8 +501,11 @@ fn get_agg_metrics(
             tracing::debug!("Writing to {}: {:#?}", raw_data_path.display(), data);
             let _ = write_row(&mut raw_data_file, &data, aggby);
 
-            data.as_object().cloned()
+            Ok(data.as_object().cloned())
         })
+        .collect::<anyhow::Result<Vec<_>>>()?
+        .into_iter()
+        .flatten()
         .collect::<Vec<_>>();
 
     tracing::trace!("Aggregated metrics: {:#?}", agg_metrics);
@@ -839,10 +844,14 @@ fn draw_buckets_line(
         cfg.bucket_height * 0.4
     };
 
+    // A single-bucket line has no gradient steps; clamp the divisor to 1 to
+    // avoid dividing by zero, and saturate the 240-fill subtraction so a light
+    // fill color can't underflow.
+    let steps = buckets.len().saturating_sub(1).max(1) as u8;
     let color_moves = [
-        (240u8 - cfg.fill_color[0]) / (buckets.len() - 1) as u8,
-        (240u8 - cfg.fill_color[1]) / (buckets.len() - 1) as u8,
-        (240u8 - cfg.fill_color[2]) / (buckets.len() - 1) as u8,
+        240u8.saturating_sub(cfg.fill_color[0]) / steps,
+        240u8.saturating_sub(cfg.fill_color[1]) / steps,
+        240u8.saturating_sub(cfg.fill_color[2]) / steps,
     ];
 
     let font = ab_glyph::FontRef::try_from_slice(include_bytes!(
@@ -1229,12 +1238,26 @@ pub struct BucketChartJson {
 }
 
 /// Parse a hex color string (e.g., "#6d0e56") to Rgb<u8>
+/// Parse a `#rrggbb` or `#rgb` hex color, falling back to black for any
+/// channel that is missing or non-hex. Never panics: chart colors come from an
+/// external `visualize-json` file, so a short or malformed string must not slice
+/// out of bounds.
 fn parse_hex_color(hex: &str) -> Rgb<u8> {
     let hex = hex.trim_start_matches('#');
-    let r = u8::from_str_radix(&hex[0..2], 16).unwrap_or(0);
-    let g = u8::from_str_radix(&hex[2..4], 16).unwrap_or(0);
-    let b = u8::from_str_radix(&hex[4..6], 16).unwrap_or(0);
-    Rgb([r, g, b])
+    let channel = |s: Option<&str>| s.and_then(|s| u8::from_str_radix(s, 16).ok()).unwrap_or(0);
+    match hex.len() {
+        6 => Rgb([
+            channel(hex.get(0..2)),
+            channel(hex.get(2..4)),
+            channel(hex.get(4..6)),
+        ]),
+        // #rgb shorthand: each digit is doubled (f -> ff)
+        3 if hex.is_ascii() => {
+            let dup = |i: usize| channel(hex.get(i..i + 1).map(|c| c.repeat(2)).as_deref());
+            Rgb([dup(0), dup(1), dup(2)])
+        }
+        _ => Rgb([0, 0, 0]),
+    }
 }
 
 /// Draw a bucket chart from a pre-computed JSON file
@@ -1349,7 +1372,24 @@ mod tests {
             metric(20.0, 2.0, 0.0, "2s"),
             metric(30.0, 3.0, 0.0, "500ms"),
         ];
-        assert_eq!(sum_metrics(metrics.iter()), (60.0, 6.0, 5.0, 3.5));
+        assert_eq!(sum_metrics(metrics.iter()).unwrap(), (60.0, 6.0, 5.0, 3.5));
+    }
+
+    /// A present-but-malformed field is a clean error, not a panic (time) or a
+    /// silent 0 (counts). An absent count still contributes 0.
+    #[test]
+    fn sum_metrics_errors_on_malformed_fields() {
+        let mut bad_time = metric(1.0, 1.0, 0.0, "1s");
+        bad_time.data.insert("time".into(), "not-a-duration".into());
+        assert!(sum_metrics([&bad_time]).is_err());
+
+        let mut bad_count = metric(1.0, 1.0, 0.0, "1s");
+        bad_count.data.insert("tests".into(), "N/A".into());
+        assert!(sum_metrics([&bad_count]).is_err());
+
+        let mut no_shrinks = metric(1.0, 1.0, 0.0, "1s");
+        no_shrinks.data.remove("shrinks");
+        assert_eq!(sum_metrics([&no_shrinks]).unwrap(), (1.0, 1.0, 0.0, 1.0));
     }
 
     /// Regression: rows were written tests-first while the header says
@@ -1391,6 +1431,21 @@ mod tests {
             String::from_utf8(out).unwrap(),
             "\"[\"\"a\"\",\"\"b\"\"]\",1.00,2.00,3.00,4.0000\n"
         );
+    }
+
+    /// Regression: byte-slicing panicked on short or non-ASCII hex strings
+    /// coming from an external visualize-json file.
+    #[test]
+    fn parse_hex_color_never_panics_on_bad_input() {
+        assert_eq!(parse_hex_color("#3366ff"), Rgb([0x33, 0x66, 0xff]));
+        assert_eq!(parse_hex_color("336699"), Rgb([0x33, 0x66, 0x99]));
+        assert_eq!(parse_hex_color("#f0a"), Rgb([0xff, 0x00, 0xaa]));
+        assert_eq!(parse_hex_color("#fff"), Rgb([0xff, 0xff, 0xff]));
+        // malformed inputs fall back to black instead of panicking
+        assert_eq!(parse_hex_color("#12"), Rgb([0, 0, 0]));
+        assert_eq!(parse_hex_color(""), Rgb([0, 0, 0]));
+        assert_eq!(parse_hex_color("#zzzzzz"), Rgb([0, 0, 0]));
+        assert_eq!(parse_hex_color("€€€"), Rgb([0, 0, 0]));
     }
 
     #[test]

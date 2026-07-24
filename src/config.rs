@@ -75,18 +75,7 @@ impl EtnaConfig {
     pub(crate) fn _save(&self) -> anyhow::Result<()> {
         tracing::trace!("saving etna configuration");
         let config_path = self.etna_dir.join("config.json");
-        let file = std::fs::File::create(&config_path).with_context(|| {
-            format!(
-                "Failed to create configuration file at '{}'",
-                config_path.display()
-            )
-        })?;
-        serde_json::to_writer_pretty(file, self).with_context(|| {
-            format!(
-                "Failed to write to the configuration file at '{}'",
-                config_path.display()
-            )
-        })
+        crate::fs_util::write_json_atomically(&config_path, self)
     }
 }
 

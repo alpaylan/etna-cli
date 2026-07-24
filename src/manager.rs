@@ -34,11 +34,7 @@ impl Manager {
 
     pub fn save_experiments(&self) -> anyhow::Result<()> {
         let experiments_json_path = self.config.experiments_path();
-        let file = std::fs::File::create(&experiments_json_path)
-            .with_context(|| format!("Failed to create '{}'", experiments_json_path.display()))?;
-        serde_json::to_writer_pretty(file, &self.experiments)
-            .with_context(|| format!("Failed to write'{}'", experiments_json_path.display()))?;
-        Ok(())
+        crate::fs_util::write_json_atomically(&experiments_json_path, &self.experiments)
     }
 
     pub fn get_experiment(&self, name: &str) -> Option<ExperimentMetadata> {

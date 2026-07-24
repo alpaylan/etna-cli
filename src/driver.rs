@@ -424,7 +424,7 @@ fn dispatch_step(
     tags: &HashMap<String, Vec<String>>,
     trial: usize,
 ) -> anyhow::Result<Status> {
-    let realized = step.decide(params, tags);
+    let realized = step.decide(params, tags)?;
     tracing::trace!("step '{step}' is evaluated to '{realized}' with params: {params:?}");
 
     let context = build_context(run_config, trial);
@@ -848,7 +848,7 @@ fn run_consumer_test(
 
     let mut last_stdout: Option<String> = None;
     for step in &realized {
-        let decided = step.decide(params, tags);
+        let decided = step.decide(params, tags)?;
         let cmd = std::process::Command::from(&decided);
         tracing::debug!("Running consumer step: {}", decided);
         let output = run_command_tree_with_timeout(cmd, timeout)
@@ -936,11 +936,36 @@ fn run_subprocess(
                 )?
             };
 
-            if logs.is_empty() {
-                tracing::warn!("No logs collected from command '{}'", step);
-            }
-            for log in logs {
+            for log in &logs {
                 tracing::debug!("log: {:?}", log);
+            }
+
+            // A successful process that emitted no recognizable metric line
+            // otherwise records nothing, so the trial looks incomplete and is
+            // re-run forever. Record an Aborted metric so it counts as
+            // attempted. (A failing process already pushed one above.)
+            if logs.is_empty() && status.success() {
+                tracing::warn!(
+                    "Command '{}' exited successfully but produced no recognizable metric output",
+                    step
+                );
+                context.insert(
+                    "status".to_owned(),
+                    Value::String(Status::Aborted.to_string()),
+                );
+                context.insert(
+                    "error".to_owned(),
+                    Value::String(format!(
+                        "command '{}' produced no recognizable metric output",
+                        step
+                    )),
+                );
+                let mut mgr = mgr.lock().unwrap();
+                mgr.require_store_mut()?.push(Metric {
+                    data: context.clone(),
+                    hash: run_config.experiment_hash.clone(),
+                })?;
+                return Ok(Status::Aborted);
             }
 
             Ok(Status::Unknown)
@@ -988,7 +1013,7 @@ pub(crate) fn build(
     for step in setup_steps.iter() {
         tracing::debug!("running setup step: {}", step);
         // Run the check command
-        let step = step.decide(params, tags);
+        let step = step.decide(params, tags)?;
         tracing::debug!("step is evaluated to '{step}'");
 
         let mut cmd = std::process::Command::from(&step);
@@ -1039,7 +1064,7 @@ pub(crate) fn build(
     for step in build_steps.iter() {
         // Run the build command
         tracing::debug!("running build step: {}", step);
-        let step = step.decide(params, tags);
+        let step = step.decide(params, tags)?;
         tracing::debug!("step is evaluated to '{step}'");
 
         let mut cmd = std::process::Command::from(&step);

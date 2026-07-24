@@ -3,6 +3,7 @@ pub mod config;
 pub mod driver;
 pub mod duration;
 pub mod error_context;
+pub mod fs_util;
 pub mod experiment;
 pub mod git_driver;
 pub mod manager;

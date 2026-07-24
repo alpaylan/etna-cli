@@ -80,7 +80,7 @@ impl Step {
         &self,
         params: &HashMap<String, String>,
         tags: &HashMap<String, Vec<String>>,
-    ) -> Command {
+    ) -> anyhow::Result<Command> {
         tracing::trace!("deciding step: {self} with params: {params:?} and tags: {tags:?}");
         match self {
             Step::Command {
@@ -89,15 +89,20 @@ impl Step {
                 run_at,
                 mitigation,
                 env,
-            } => Command {
+            } => Ok(Command {
                 command: command.clone(),
                 args: args.clone(),
                 run_at: run_at.clone(),
                 mitigation: mitigation.clone(),
                 env: env.clone(),
-            },
+            }),
             Step::Match { value, options } => {
-                let guard = params.get(value).unwrap();
+                let guard = params.get(value).ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "Match step guard '{value}' is not a known parameter (params: {:?})",
+                        params.keys().collect::<Vec<_>>()
+                    )
+                })?;
                 tracing::trace!("obtaining guard '{guard}' for tags_ {tags:?}");
 
                 if let Some(step) = options.get(guard) {
@@ -109,14 +114,16 @@ impl Step {
                     .iter()
                     .filter_map(|(k, v)| if v.contains(guard) { Some(k) } else { None })
                     .collect::<Vec<_>>();
-                // let tags_ = tags.get(guard).unwrap();
                 for (k, step) in options {
                     if tags_.contains(&k) {
                         return step.decide(params, tags);
                     }
                 }
 
-                panic!("None of the options fit")
+                anyhow::bail!(
+                    "no Match option fits guard '{guard}' (options: {:?})",
+                    options.keys().collect::<Vec<_>>()
+                )
             }
         }
     }
@@ -187,10 +194,16 @@ impl Step {
         let all_elaborations = elaborates
             .iter()
             .map(|key| {
-                tags.get(*key)
-                    .unwrap_or_else(|| panic!("missing tag {}", key))
-                    .clone()
+                tags.get(*key).cloned().ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "elaboration '!{{{key}}}' refers to '{key}', which is not a tag \
+                         (tags: {:?})",
+                        tags.keys().collect::<Vec<_>>()
+                    )
+                })
             })
+            .collect::<anyhow::Result<Vec<_>>>()?
+            .into_iter()
             .multi_cartesian_product()
             .collect::<Vec<Vec<_>>>();
 
@@ -705,5 +718,57 @@ mod manifest_tests {
         let inj = m.tasks[0].injection.as_ref().unwrap();
         assert!(matches!(inj.kind, InjectionKind::Patch));
         assert_eq!(inj.patch.as_deref(), Some("patches/ac_patched.patch"));
+    }
+}
+
+#[cfg(test)]
+mod step_tests {
+    use super::*;
+
+    fn cmd_step(command: &str) -> Step {
+        Step::Command {
+            command: command.to_string(),
+            args: vec![],
+            run_at: None,
+            mitigation: None,
+            env: HashMap::new(),
+        }
+    }
+
+    /// Regression: these paths panicked on malformed steps.json (poisoning the
+    /// manager mutex under --parallel); they now return clean errors.
+    #[test]
+    fn decide_errors_instead_of_panicking() {
+        let mut options = HashMap::new();
+        options.insert("a".to_string(), cmd_step("cmd_a"));
+        let matcher = Step::Match {
+            value: "strategy".to_string(),
+            options,
+        };
+        let tags = HashMap::new();
+
+        // Guard parameter is not set at all.
+        let err = matcher.decide(&HashMap::new(), &tags).err().expect("expected an error");
+        assert!(format!("{err}").contains("not a known parameter"));
+
+        // Guard is set but matches no option or tag.
+        let params = HashMap::from([("strategy".to_string(), "z".to_string())]);
+        let err = matcher.decide(&params, &tags).err().expect("expected an error");
+        assert!(format!("{err}").contains("no Match option fits"));
+
+        // A plain command resolves.
+        assert_eq!(
+            cmd_step("ok").decide(&params, &tags).unwrap().command,
+            "ok"
+        );
+    }
+
+    #[test]
+    fn realize_errors_when_elaboration_key_is_not_a_tag() {
+        // `!{p}` where p is a param, not a tag, used to panic("missing tag").
+        let step = cmd_step("run --x !{p}");
+        let params = HashMap::from([("p".to_string(), "v".to_string())]);
+        let err = step.realize(&params, &HashMap::new()).err().expect("expected an error");
+        assert!(format!("{err}").contains("not a tag"));
     }
 }

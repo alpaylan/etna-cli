@@ -37,16 +37,33 @@ impl Store {
 
     pub(crate) fn load_metrics(&mut self) -> anyhow::Result<()> {
         let content = std::fs::read_to_string(&self.path).context("Failed to read store file")?;
-        self.metrics = content
-            .lines()
-            .filter_map(|line| {
-                if line.trim().is_empty() {
-                    None
-                } else {
-                    serde_json::from_str::<Metric>(line).ok()
+        let mut metrics = Vec::new();
+        let mut dropped = 0usize;
+        for (i, line) in content.lines().enumerate() {
+            if line.trim().is_empty() {
+                continue;
+            }
+            match serde_json::from_str::<Metric>(line) {
+                Result::Ok(metric) => metrics.push(metric),
+                Err(e) => {
+                    dropped += 1;
+                    tracing::warn!(
+                        "Skipping unparseable metric at {}:{}: {}",
+                        self.path.display(),
+                        i + 1,
+                        e
+                    );
                 }
-            })
-            .collect();
+            }
+        }
+        if dropped > 0 {
+            tracing::warn!(
+                "Dropped {} unparseable line(s) while loading '{}'; affected trials will be treated as incomplete",
+                dropped,
+                self.path.display()
+            );
+        }
+        self.metrics = metrics;
         Ok(())
     }
 
