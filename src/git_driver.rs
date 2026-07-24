@@ -45,42 +45,6 @@ pub(crate) fn initialize_git_repo(path: &PathBuf, msg: &str) -> anyhow::Result<(
     Ok(())
 }
 
-pub(crate) fn _change_branch(repo_path: &PathBuf, branch: &str) -> anyhow::Result<()> {
-    // Change the branch of the etna repository
-    let git_repo = git2::Repository::open(repo_path).context("Failed to open git repository")?;
-    let mut remote = git_repo
-        .find_remote("origin")
-        .context("Failed to find remote")?;
-    remote
-        .fetch(&[branch], None, None)
-        .context("Failed to fetch remote")?;
-
-    debug!(
-        "list of branches: {:?}",
-        git_repo
-            .branches(None)
-            .unwrap()
-            .map(|branch| branch.unwrap().0.name().unwrap().unwrap().to_string())
-            .collect::<Vec<_>>()
-    );
-
-    let origin_branch = format!("origin/{}", branch);
-    let branch = git_repo
-        .find_branch(&origin_branch, git2::BranchType::Remote)
-        .context("Failed to find branch")?;
-    let branch = branch.into_reference();
-    let branch = branch
-        .peel_to_commit()
-        .context("Failed to peel to commit")?;
-    let branch = branch.into_object();
-
-    git_repo
-        .reset(&branch, git2::ResetType::Hard, None)
-        .context("Failed to reset branch")?;
-
-    Ok(())
-}
-
 /// Commit the entire repo with the given message.
 pub(crate) fn commit(repo_path: &Path, message: &str) -> anyhow::Result<String> {
     debug!("repo path: {}", repo_path.display());

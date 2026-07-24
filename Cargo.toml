@@ -16,9 +16,8 @@ axum = { version = "0.8", features = ["macros"] }
 chrono = { version = "0.4.38", features = ["serde"] }
 clap = { version = "4.5.17", features = ["derive"] }
 dirs = "5.0.1"
-env_logger = "0.11.5"
 flate2 = "1"
-git2 = { version = "0.19.0", default-features = false, features = ["https", "vendored-openssl"] }
+git2 = { version = "0.19.0", default-features = false }
 image = { version = "0.25.6", default-features = false, features = ["png"] }
 imageproc = { version = "0.25.0", default-features = false }
 itertools = { version = "0.14.0" }
@@ -32,7 +31,7 @@ serde_derive = { version = "1.0.210", default-features = false }
 serde_json = { version = "1.0.128", default-features = false, features = ["preserve_order"] }
 tabled = { version = "0.16.0", default-features = false, features = ["std"] }
 tempfile = "3.20.0"
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net"] }
 toml = { version = "0.8.19", default-features = false, features = ["parse"] }
 tower-http = { version = "0.6", features = ["cors", "trace"] }
 tracing = "0.1.41"
