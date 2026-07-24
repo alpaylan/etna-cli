@@ -427,7 +427,7 @@ enum ExperimentCommand {
         /// Type of visualization
         /// [default: "bucket"]
         /// [possible_values(line, bar, bucket)]
-        #[clap(short, long, default_value = "VisualizationType::Bucket")]
+        #[clap(short, long, default_value = "bucket")]
         visualization_type: VisualizationType,
         /// Indices of groups to render with hatched pattern (0-indexed, comma-separated)
         /// e.g., --hatched 1,3 for every other group starting from index 1

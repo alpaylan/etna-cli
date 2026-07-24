@@ -259,4 +259,23 @@ fn cross_mode_producer_feeds_consumer() {
         "cross metric missing producer_workload: {:#?}",
         metrics
     );
+    // Regression: batches that completed before the timeout contributed
+    // nothing to passed/tests, so terminal cross metrics reported tests=1
+    // regardless of how many consumer tests actually ran.
+    assert!(
+        metrics.iter().any(|m| {
+            let data = m.get("data");
+            let passed = data
+                .and_then(|d| d.get("passed"))
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
+            let tests = data
+                .and_then(|d| d.get("tests"))
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
+            passed >= 1 && tests >= 2
+        }),
+        "terminal cross metric is missing completed-batch counts: {:#?}",
+        metrics
+    );
 }

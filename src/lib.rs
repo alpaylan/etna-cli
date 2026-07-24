@@ -1,6 +1,7 @@
 pub mod commands;
 pub mod config;
 pub mod driver;
+pub mod duration;
 pub mod error_context;
 pub mod experiment;
 pub mod git_driver;

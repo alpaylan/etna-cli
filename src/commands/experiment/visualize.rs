@@ -12,7 +12,7 @@ use crate::{
     experiment::{ExperimentMetadata, Test},
     manager::Manager,
     open_pbt_format::Status,
-    store::Store,
+    store::{Metric, Store},
 };
 
 #[derive(Debug, Clone, Copy, clap::ValueEnum)]
@@ -56,6 +56,17 @@ pub enum VisualizationType {
     Line,
 }
 
+/// Quote a cell per RFC 4180 when it contains a comma, quote, or newline.
+fn csv_field(value: &str) -> String {
+    if value.contains(',') || value.contains('"') || value.contains('\n') {
+        format!("\"{}\"", value.replace('"', "\"\""))
+    } else {
+        value.to_string()
+    }
+}
+
+/// Writes metric cells in the same order as the header emitted by
+/// `get_agg_metrics`: aggby fields, then discards, tests, shrinks, time.
 pub(crate) fn write_row<W: std::io::Write>(
     writer: &mut W,
     metric: &serde_json::Value,
@@ -63,24 +74,18 @@ pub(crate) fn write_row<W: std::io::Write>(
 ) -> anyhow::Result<()> {
     let mut row = vec![];
     for a in aggby {
-        row.push(metric.get(a).map_or("".to_string(), |v| v.to_string()));
+        let cell = metric.get(a).map_or(String::new(), |v| match v {
+            serde_json::Value::String(s) => s.clone(),
+            other => other.to_string(),
+        });
+        row.push(csv_field(&cell));
     }
-    row.push(metric.get("tests").map_or("NaN".to_string(), |v| {
-        v.as_f64()
-            .map_or("NaN".to_string(), |t| format!("{:.2}", t))
-    }));
-    row.push(metric.get("discards").map_or("NaN".to_string(), |v| {
-        v.as_f64()
-            .map_or("NaN".to_string(), |t| format!("{:.2}", t))
-    }));
-    row.push(metric.get("shrinks").map_or("NaN".to_string(), |v| {
-        v.as_f64()
-            .map_or("NaN".to_string(), |t| format!("{:.2}", t))
-    }));
-    row.push(metric.get("time").map_or("NaN".to_string(), |v| {
-        v.as_f64()
-            .map_or("NaN".to_string(), |t| format!("{:.4}", t))
-    }));
+    for (field, precision) in [("discards", 2), ("tests", 2), ("shrinks", 2), ("time", 4)] {
+        row.push(metric.get(field).map_or("NaN".to_string(), |v| {
+            v.as_f64()
+                .map_or("NaN".to_string(), |t| format!("{:.*}", precision, t))
+        }));
+    }
 
     tracing::debug!("Writing row: {:?}", row);
     writer
@@ -88,6 +93,39 @@ pub(crate) fn write_row<W: std::io::Write>(
         .context("Failed to write row")?;
 
     writer.write_all(b"\n").context("Failed to write newline")
+}
+
+/// Sum discards/tests/shrinks/time across a group of metrics. Missing or
+/// non-numeric count fields contribute 0; an unparseable time panics, matching
+/// the strictness the driver applies when the metric is recorded.
+fn sum_metrics<'a>(metrics: impl IntoIterator<Item = &'a Metric>) -> (f64, f64, f64, f64) {
+    metrics.into_iter().fold((0.0, 0.0, 0.0, 0.0), |mut acc, m| {
+        acc.0 += m
+            .data
+            .get("discards")
+            .and_then(serde_json::Value::as_f64)
+            .unwrap_or(0.0);
+        acc.1 += m
+            .data
+            .get("tests")
+            .and_then(serde_json::Value::as_f64)
+            .unwrap_or(0.0);
+        acc.2 += m
+            .data
+            .get("shrinks")
+            .and_then(serde_json::Value::as_f64)
+            .unwrap_or(0.0);
+        acc.3 += m
+            .data
+            .get("time")
+            .and_then(serde_json::Value::as_str)
+            .into_iter()
+            .flat_map(crate::duration::parse)
+            .next()
+            .map(|d| d.as_secs_f64())
+            .unwrap_or_else(|| panic!("Failed to parse time for metric: {:?}", m));
+        acc
+    })
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -160,21 +198,6 @@ fn get_agg_metrics(
 ) -> anyhow::Result<Vec<serde_json::Map<std::string::String, serde_json::Value>>> {
     let figures_path = experiment.path.join("figures");
 
-    let raw_data_path = figures_path.join(format!("{}_raw.csv", figure_name));
-    let mut raw_data_file = std::fs::File::create(&raw_data_path).context(format!(
-        "Failed to create raw data file at {}",
-        raw_data_path.display()
-    ))?;
-
-    let mut top_row = aggby
-        .iter()
-        .map(|a| a.as_str())
-        .chain(["discards", "tests", "shrinks", "time"].iter().copied())
-        .collect::<Vec<_>>()
-        .join(",");
-    top_row.push('\n');
-    raw_data_file.write_all(top_row.as_bytes())?;
-
     let tests = tests
         .iter()
         .map(|test| {
@@ -244,6 +267,30 @@ fn get_agg_metrics(
             })
         })
         .collect::<Vec<_>>();
+
+    if metrics.is_empty() {
+        anyhow::bail!(
+            "none of the {} metrics in the store matched the requested tests; \
+             check that the store records carry the fields the filter matches on \
+             (workload, strategy, property, mutations, mode)",
+            store.metrics.len()
+        );
+    }
+
+    let raw_data_path = figures_path.join(format!("{}_raw.csv", figure_name));
+    let mut raw_data_file = std::fs::File::create(&raw_data_path).context(format!(
+        "Failed to create raw data file at {}",
+        raw_data_path.display()
+    ))?;
+
+    let mut top_row = aggby
+        .iter()
+        .map(|a| a.as_str())
+        .chain(["discards", "tests", "shrinks", "time"].iter().copied())
+        .collect::<Vec<_>>()
+        .join(",");
+    top_row.push('\n');
+    raw_data_file.write_all(top_row.as_bytes())?;
 
     tracing::debug!("Aggregated metrics by: {:#?}", aggby);
 
@@ -416,34 +463,7 @@ fn get_agg_metrics(
             //     return data.as_object().cloned();
             // }
 
-            let sums: (f64, f64, f64, f64) =
-                agg_metrics.iter().fold((0.0, 0.0, 0.0, 0.0), |mut acc, m| {
-                    acc.0 = m
-                        .data
-                        .get("discards")
-                        .and_then(serde_json::Value::as_f64)
-                        .unwrap_or(0.0);
-                    acc.1 += m
-                        .data
-                        .get("tests")
-                        .and_then(serde_json::Value::as_f64)
-                        .unwrap_or(0.0);
-                    acc.2 += m
-                        .data
-                        .get("shrinks")
-                        .and_then(serde_json::Value::as_f64)
-                        .unwrap_or(0.0);
-                    acc.3 += m
-                        .data
-                        .get("time")
-                        .and_then(serde_json::Value::as_str)
-                        .into_iter()
-                        .flat_map(parse_duration::parse)
-                        .next()
-                        .map(|d| d.as_secs_f64())
-                        .unwrap_or_else(|| panic!("Failed to parse time for metric: {:?}", m));
-                    acc
-                });
+            let sums = sum_metrics(agg_metrics.iter().copied().copied());
             let avgs = (
                 sums.0 / agg_metrics.len() as f64,
                 sums.1 / agg_metrics.len() as f64,
@@ -1302,4 +1322,82 @@ pub fn draw_bucket_chart_from_json(input_path: &Path, output_path: &Path) -> any
         .with_context(|| format!("Failed to save image to {}", output_path.display()))?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn metric(discards: f64, tests: f64, shrinks: f64, time: &str) -> Metric {
+        let mut data = serde_json::Map::new();
+        data.insert("discards".into(), discards.into());
+        data.insert("tests".into(), tests.into());
+        data.insert("shrinks".into(), shrinks.into());
+        data.insert("time".into(), time.into());
+        Metric {
+            data,
+            hash: "test".into(),
+        }
+    }
+
+    /// Regression: discards was assigned (`=`) instead of accumulated (`+=`),
+    /// so groups reported only the last record's discards.
+    #[test]
+    fn sum_metrics_sums_every_record() {
+        let metrics = [
+            metric(10.0, 1.0, 5.0, "1s"),
+            metric(20.0, 2.0, 0.0, "2s"),
+            metric(30.0, 3.0, 0.0, "500ms"),
+        ];
+        assert_eq!(sum_metrics(metrics.iter()), (60.0, 6.0, 5.0, 3.5));
+    }
+
+    /// Regression: rows were written tests-first while the header says
+    /// discards-first, swapping the two columns in every raw CSV.
+    #[test]
+    fn write_row_matches_header_order() {
+        let mut m = metric(1.0, 2.0, 3.0, "4s");
+        m.data.insert("workload".into(), "bst".into());
+        m.data.insert("time".into(), 4.0.into());
+        let mut out = Vec::new();
+        write_row(
+            &mut out,
+            &serde_json::Value::Object(m.data),
+            &["workload".to_string()],
+        )
+        .unwrap();
+        assert_eq!(
+            String::from_utf8(out).unwrap(),
+            "bst,1.00,2.00,3.00,4.0000\n"
+        );
+    }
+
+    /// Regression: cells were joined with no escaping, so a mutations array
+    /// (or any comma-containing value) shifted every downstream column.
+    #[test]
+    fn write_row_escapes_commas_in_cells() {
+        let mut m = metric(1.0, 2.0, 3.0, "4s");
+        m.data.insert("time".into(), 4.0.into());
+        m.data
+            .insert("mutations".into(), serde_json::json!(["a", "b"]));
+        let mut out = Vec::new();
+        write_row(
+            &mut out,
+            &serde_json::Value::Object(m.data),
+            &["mutations".to_string()],
+        )
+        .unwrap();
+        assert_eq!(
+            String::from_utf8(out).unwrap(),
+            "\"[\"\"a\"\",\"\"b\"\"]\",1.00,2.00,3.00,4.0000\n"
+        );
+    }
+
+    #[test]
+    fn csv_field_escapes_special_characters() {
+        assert_eq!(csv_field("plain"), "plain");
+        assert_eq!(csv_field("a,b"), "\"a,b\"");
+        assert_eq!(csv_field("say \"hi\""), "\"say \"\"hi\"\"\"");
+        assert_eq!(csv_field("two\nlines"), "\"two\nlines\"");
+    }
 }

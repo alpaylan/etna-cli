@@ -700,8 +700,9 @@ fn run_cross(
                     passed + discarded
                 };
 
+                let mut timed_out_mid_batch = false;
                 for (i, d) in durations.iter().take(time_cutoff).enumerate() {
-                    let d = parse_duration::parse(d)
+                    let d = crate::duration::parse(d)
                         .with_context(|| format!("Failed to parse duration: {}", d))?;
 
                     total_time += d;
@@ -711,9 +712,16 @@ fn run_cross(
                         total_passed += passed * i / time_cutoff;
                         total_discards += discarded * i / time_cutoff;
                         total_samples += i;
+                        timed_out_mid_batch = true;
                         tracing::info!("Timeout reached after {:?}, stopping the run", total_time);
                         break;
                     }
+                }
+
+                if !timed_out_mid_batch {
+                    total_passed += passed;
+                    total_discards += discarded;
+                    total_samples += time_cutoff;
                 }
 
                 tracing::debug!(
@@ -798,6 +806,18 @@ fn run_cross(
     context.insert(
         "samples".to_owned(),
         serde_json::Value::Number(total_samples.into()),
+    );
+    context.insert(
+        "passed".to_owned(),
+        serde_json::Value::Number(total_passed.into()),
+    );
+    context.insert(
+        "discarded".to_owned(),
+        serde_json::Value::Number(total_discards.into()),
+    );
+    context.insert(
+        "tests".to_owned(),
+        serde_json::Value::Number((total_passed + total_discards).into()),
     );
 
     let mut mgr = mgr.lock().unwrap();
