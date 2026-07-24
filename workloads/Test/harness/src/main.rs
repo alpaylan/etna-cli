@@ -46,6 +46,16 @@ fn parse_opts(args: &[String]) -> Opts {
     opts
 }
 
+/// Properties containing the marker wedge the command forever, simulating a
+/// hung workload so the driver's subprocess timeouts can be integration-tested.
+fn maybe_hang(property: &str, marker: &str) {
+    if property.contains(marker) {
+        loop {
+            std::thread::sleep(std::time::Duration::from_secs(3600));
+        }
+    }
+}
+
 fn would_fail(property: &str, invert: bool) -> bool {
     let base = property.contains("crash");
     if invert {
@@ -91,6 +101,7 @@ fn cmd_solve(args: &[String]) -> String {
 
 fn cmd_sample(args: &[String]) -> String {
     let opts = parse_opts(args);
+    maybe_hang(&opts.property, "hang_sample");
     let trials = if opts.trials == 0 { 10 } else { opts.trials };
     let mut out = String::from("[");
     for i in 0..trials {
@@ -153,6 +164,7 @@ fn count_inputs(content: &str) -> usize {
 
 fn cmd_test(args: &[String]) -> Result<String, String> {
     let opts = parse_opts(args);
+    maybe_hang(&opts.property, "hang_test");
     let inputs_path = opts
         .inputs
         .as_deref()

@@ -570,11 +570,26 @@ pub fn list_tests(experiment_path: &std::path::Path) -> ServiceResult<Vec<TestIn
     Ok(tests)
 }
 
+/// Test names become path segments under `<experiment>/tests/`. HTTP handlers
+/// pass them straight from percent-decoded URL segments, so reject anything
+/// that could escape that directory (`../`, separators, absolute paths).
+fn validate_test_name(test_name: &str) -> ServiceResult<()> {
+    if test_name.is_empty()
+        || test_name.contains('/')
+        || test_name.contains('\\')
+        || test_name.contains("..")
+    {
+        bail!("Invalid test name: {:?}", test_name);
+    }
+    Ok(())
+}
+
 /// Get the content of a specific test file
 pub fn get_test_content(
     experiment_path: &std::path::Path,
     test_name: &str,
 ) -> ServiceResult<Vec<crate::experiment::Test>> {
+    validate_test_name(test_name)?;
     let test_path = experiment_path
         .join("tests")
         .join(test_name)
@@ -599,6 +614,7 @@ pub fn save_test(
     test_name: &str,
     tests: &[crate::experiment::Test],
 ) -> ServiceResult<()> {
+    validate_test_name(test_name)?;
     let test_path = experiment_path
         .join("tests")
         .join(test_name)
@@ -632,6 +648,7 @@ pub fn create_test(
     mode: crate::experiment::Mode,
     mutations: Vec<String>,
 ) -> ServiceResult<()> {
+    validate_test_name(test_name)?;
     let test_path = experiment
         .path
         .join("tests")
@@ -687,6 +704,7 @@ pub fn create_test(
 
 /// Delete a test file
 pub fn delete_test(experiment_path: &std::path::Path, test_name: &str) -> ServiceResult<()> {
+    validate_test_name(test_name)?;
     let test_path = experiment_path
         .join("tests")
         .join(test_name)
@@ -726,4 +744,36 @@ pub fn get_experiment_from_current_dir(mgr: &Manager) -> ServiceResult<Experimen
         workloads: experiment.workloads(),
         last_activity: last_commit_time(&experiment.path),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Regression: test names arrive percent-decoded from URL segments and
+    /// were joined into filesystem paths unchecked, allowing `../` traversal
+    /// out of the experiment's tests/ directory for read, write, and delete.
+    #[test]
+    fn test_names_with_traversal_are_rejected() {
+        for bad in ["../evil", "..", "a/b", "a\\b", "/etc/passwd", ""] {
+            assert!(validate_test_name(bad).is_err(), "accepted {bad:?}");
+        }
+        for good in ["t", "rust-3way", "bst_haskell.v2"] {
+            assert!(validate_test_name(good).is_ok(), "rejected {good:?}");
+        }
+    }
+
+    #[test]
+    fn save_test_refuses_to_write_outside_tests_dir() {
+        let tmp = tempfile::tempdir().unwrap();
+        let exp = tmp.path().join("exp");
+        std::fs::create_dir_all(exp.join("tests")).unwrap();
+
+        let err = save_test(&exp, "../escaped", &[]).unwrap_err();
+        assert!(format!("{err:?}").contains("Invalid test name"));
+        assert!(
+            !tmp.path().join("escaped.json").exists(),
+            "traversal escaped the tests directory"
+        );
+    }
 }

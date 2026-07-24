@@ -171,3 +171,73 @@ fn cancel_flag_aborts_run() {
         "expected 'cancel' in err, got: {msg}"
     );
 }
+
+/// Shared body for the hung-subprocess tests: build a T1→T2 cross experiment
+/// whose fixture harness hangs (marker chosen by `property`), run it with a
+/// 2s timeout, and require the run to terminate and record the outcome.
+fn run_cross_with_hang(exp_label: &str, property: &str, expected_in_store: &str) {
+    let (fx, exp) = fresh(exp_label);
+    {
+        let mgr = Manager::load().expect("Manager::load");
+        let meta = mgr.get_experiment(&exp_name(&exp)).unwrap();
+        let t1 = fx.plant_workload_repo("T1");
+        let t2 = fx.plant_workload_repo("T2");
+        wl_svc::add_workload(&mgr, &meta, t1.to_str().unwrap(), None).expect("add_workload T1");
+        wl_svc::add_workload(&mgr, &meta, t2.to_str().unwrap(), None).expect("add_workload T2");
+    }
+
+    let test = format!(
+        r#"[
+      {{
+        "workload": "T2",
+        "trials": 1,
+        "timeout": 2.0,
+        "mutations": [],
+        "mode": {{"Cross": {{"producer": {{"workload": "T1"}}, "consumer": {{"workload": "T2"}}}}}},
+        "tasks": [{{"property": "{property}"}}]
+      }}
+    ]"#
+    );
+    std::fs::write(exp.join("tests").join("hang.json"), test).unwrap();
+
+    let start = std::time::Instant::now();
+    let mgr = Manager::load().expect("Manager::load");
+    exp_svc::run_experiment(
+        mgr,
+        RunExperimentOptions {
+            experiment_name: exp_name(&exp),
+            tests: vec!["hang".into()],
+            short_circuit: false,
+            parallel: false,
+            params: vec![],
+        },
+        None,
+    )
+    .expect("run_experiment should complete despite the hung subprocess");
+    assert!(
+        start.elapsed() < Duration::from_secs(30),
+        "hung subprocess was not killed by the timeout (took {:?})",
+        start.elapsed()
+    );
+
+    let store = std::fs::read_to_string(exp.join("store.jsonl")).unwrap();
+    assert!(
+        store.contains(expected_in_store),
+        "expected {expected_in_store:?} in the store after a hung subprocess: {store}"
+    );
+}
+
+/// Regression: the cross-mode producer sampler ran with no wall-clock cap, so
+/// a wedged workload hung the harness forever.
+#[test]
+#[serial]
+fn cross_hanging_sampler_times_out() {
+    run_cross_with_hang("exp_hangs", "hang_sample", "timed_out");
+}
+
+/// Regression: cross-mode consumer steps ran with no wall-clock cap either.
+#[test]
+#[serial]
+fn cross_hanging_consumer_aborts_with_timeout_error() {
+    run_cross_with_hang("exp_hangc", "hang_test", "timed out");
+}

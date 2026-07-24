@@ -29,8 +29,8 @@
       {
         "Command": {
           "command": "${workload_path}/harness/target/release/etna_test_harness",
-          "args": ["sample", "--trials", "3"],
-          "params": ["workload_path"]
+          "args": ["sample", "--trials", "3", "--property", "${property}"],
+          "params": ["workload_path", "property"]
         }
       }
     ],

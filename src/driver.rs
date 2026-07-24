@@ -2,7 +2,6 @@ use std::{
     collections::HashMap,
     io::Write as _,
     path::{Path, PathBuf},
-    process::Stdio,
     sync::{Arc, Mutex, RwLock},
 };
 
@@ -129,7 +128,7 @@ fn metric_matches<'a>(
         m.data.get("mutations").is_some_and(|v| {
             v.as_array().is_some_and(|arr| {
                 arr.iter()
-                    .all(|mv| muts.contains(&mv.as_str().unwrap().to_string()))
+                    .all(|mv| mv.as_str().is_some_and(|s| muts.contains(&s.to_string())))
             })
         })
     });
@@ -432,7 +431,7 @@ fn dispatch_step(
 
     let cmd = std::process::Command::from(&realized);
     match &run_config.mode {
-        Mode::Cross { .. } => run_cross(mgr, context, cmd, &realized, run_config, params, tags),
+        Mode::Cross { .. } => run_cross(mgr, context, &realized, run_config, params, tags),
         Mode::Solve | Mode::Sample { .. } | Mode::Test { .. } | Mode::Shrink { .. } => {
             run_subprocess(mgr, context, cmd, &realized, run_config)
         }
@@ -552,7 +551,6 @@ fn run_remaining_trials_parallel(
 fn run_cross(
     mgr: Arc<Mutex<Manager>>,
     mut context: Object,
-    mut cmd: std::process::Command,
     step: &Command,
     run_config: &RunConfig,
     params: &HashMap<String, String>,
@@ -571,30 +569,32 @@ fn run_cross(
     let mut total_samples = 0;
 
     while total_time < timeout {
-        // sample the command
+        // sample the command; a wall-clock cap keeps a hung producer from
+        // stalling the harness past the experiment timeout
         tracing::debug!("sampling command: {}", step);
-        let child = cmd
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .map_err(|e| {
-                tracing::error!("Failed to spawn command '{}': {}", step, e);
-                e
-            })
-            .with_context(|| format!("Failed to spawn '{}'", step))?
-            .wait_with_output()
-            .map_err(|e| {
-                tracing::error!("Failed to run command '{}': {}", step, e);
-                e
-            })
+        let sampler = run_command_tree_with_timeout(std::process::Command::from(step), timeout)
             .with_context(|| format!("Failed to run command '{}'", step));
 
-        match child {
+        match sampler {
             Ok(output) => {
+                if output.timed_out {
+                    tracing::warn!(
+                        "Sampler '{}' timed out after {:?}, stopping the run",
+                        step,
+                        timeout
+                    );
+                    break;
+                }
+                let status = output.status.ok_or_else(|| {
+                    anyhow::anyhow!("sampler '{}' returned no status without timing out", step)
+                })?;
+
                 let logs = {
                     let mut mgr = mgr.lock().unwrap();
-                    log_process_output(
-                        &output,
+                    log_process_lines(
+                        Some(status),
+                        &output.stdout,
+                        &output.stderr,
                         mgr.require_store_mut()?,
                         &run_config.experiment_hash,
                         &context,
@@ -608,10 +608,10 @@ fn run_cross(
                     tracing::debug!("log: {:?}", log);
                 }
 
-                let stdout = String::from_utf8_lossy(&output.stdout);
+                let stdout = output.stdout.join("\n");
 
-                if !output.status.success() {
-                    tracing::error!("Sampler '{}' failed with status: {}", step, output.status);
+                if !status.success() {
+                    tracing::error!("Sampler '{}' failed with status: {}", step, status);
                     context.insert(
                         "status".to_owned(),
                         Value::String(Status::Aborted.to_string()),
@@ -620,7 +620,7 @@ fn run_cross(
                         "error".to_owned(),
                         Value::String(format!(
                             "sampler '{}' exited with status {}",
-                            step, output.status
+                            step, status
                         )),
                     );
                     let mut mgr = mgr.lock().unwrap();
@@ -663,7 +663,8 @@ fn run_cross(
                     temp_file.path().display()
                 );
 
-                let results = run_consumer_test(&consumer.steps, &cparams, &consumer.tags);
+                let results =
+                    run_consumer_test(&consumer.steps, &cparams, &consumer.tags, timeout);
 
                 let Ok(results) = results else {
                     tracing::error!("Failed to run consumer test");
@@ -835,6 +836,7 @@ fn run_consumer_test(
     steps: &[Step],
     params: &HashMap<String, String>,
     tags: &HashMap<String, Vec<String>>,
+    timeout: Duration,
 ) -> anyhow::Result<Object> {
     let realized: Vec<Step> = steps
         .iter()
@@ -847,21 +849,28 @@ fn run_consumer_test(
     let mut last_stdout: Option<String> = None;
     for step in &realized {
         let decided = step.decide(params, tags);
-        let mut cmd = std::process::Command::from(&decided);
-        cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+        let cmd = std::process::Command::from(&decided);
         tracing::debug!("Running consumer step: {}", decided);
-        let output = cmd
-            .output()
+        let output = run_command_tree_with_timeout(cmd, timeout)
             .with_context(|| format!("Failed to run consumer step '{}'", decided))?;
-        if !output.status.success() {
+        if output.timed_out {
+            anyhow::bail!("consumer step '{}' timed out after {:?}", decided, timeout);
+        }
+        let status = output.status.ok_or_else(|| {
+            anyhow::anyhow!(
+                "consumer step '{}' returned no status without timing out",
+                decided
+            )
+        })?;
+        if !status.success() {
             anyhow::bail!(
                 "consumer step '{}' exited with status {}: {}",
                 decided,
-                output.status,
-                String::from_utf8_lossy(&output.stderr)
+                status,
+                output.stderr.join("\n")
             );
         }
-        last_stdout = Some(String::from_utf8_lossy(&output.stdout).into_owned());
+        last_stdout = Some(output.stdout.join("\n"));
     }
 
     let stdout =
@@ -1404,26 +1413,6 @@ pub(crate) fn run_experiment(
     result
 }
 
-fn log_process_output(
-    output: &std::process::Output,
-    store: &mut Store,
-    experiment_hash: &str,
-    context: &Object,
-) -> anyhow::Result<Vec<Object>> {
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    let stdout_lines = stdout.lines().map(str::to_owned).collect::<Vec<_>>();
-    let stderr_lines = stderr.lines().map(str::to_owned).collect::<Vec<_>>();
-    log_process_lines(
-        Some(output.status),
-        &stdout_lines,
-        &stderr_lines,
-        store,
-        experiment_hash,
-        context,
-    )
-}
-
 fn log_process_lines(
     status: Option<std::process::ExitStatus>,
     stdout_lines: &[String],
@@ -1481,4 +1470,38 @@ fn log_process_lines(
     }
 
     Ok(logs)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn metric_with_mutations(mutations: serde_json::Value) -> Metric {
+        let mut data = Object::new();
+        data.insert("mutations".into(), mutations);
+        Metric {
+            data,
+            hash: "h".into(),
+        }
+    }
+
+    /// Regression: a non-string element in a stored mutations array panicked
+    /// (poisoning the manager mutex under --parallel) instead of simply not
+    /// matching.
+    #[test]
+    fn metric_matches_tolerates_non_string_mutations() {
+        let muts = vec!["insert_1".to_string()];
+        let task = HashMap::new();
+
+        let good = metric_with_mutations(serde_json::json!(["insert_1"]));
+        assert!(
+            metric_matches(&good, None, None, Some(&muts), &task, None, None, None, None)
+                .is_some()
+        );
+
+        let bad = metric_with_mutations(serde_json::json!([1]));
+        assert!(
+            metric_matches(&bad, None, None, Some(&muts), &task, None, None, None, None).is_none()
+        );
+    }
 }
