@@ -175,7 +175,7 @@ else if y <?? x then balance rb a y vy (ins x vx b)
 else T rb a y vx b
 (* no_balance_insert_2 *)
 if x <?? y then balance rb (ins x vx a) y vy b
-else if y <?? x then T rb a y vy (insert x vx b)
+else if y <?? x then T rb a y vy (ins x vx b)
 else T rb a y vx b
 ```
 
